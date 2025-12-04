@@ -39,6 +39,7 @@ Personal hub for: shopping lists, project tracking, workouts, recipes, life, and
 - Use links and tags over folders when it makes sense
 
 ## How Iris Should Behave
+- **Always respond in English** - regardless of what language the user writes in
 - **Ask before making changes** - confirm before creating, editing, or deleting notes
 - Keep responses concise
 - Follow the lowercase-dashes naming convention
@@ -49,6 +50,9 @@ Personal hub for: shopping lists, project tracking, workouts, recipes, life, and
 - `work/ironrainbow/` - Custom parts customizer
 - `work/elevathor/` - TBD
 - `work/colormecrazy/` - TBD
+
+### Project Context
+When working on a project, **always read that project's CLAUDE.md first** (if it exists) to understand project-specific conventions, architecture, and guidelines.
 
 ## Common Tasks
 - Shopping lists: simple checkbox format
