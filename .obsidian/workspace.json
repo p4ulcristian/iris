@@ -1,0 +1,225 @@
+{
+  "main": {
+    "id": "f63f59c6b88acc35",
+    "type": "split",
+    "children": [
+      {
+        "id": "44901453cf883152",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "aa41cd7cb5b879ce",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "work/ironrainbow/tasks.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "tasks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "bdf161b6f4b34ee5",
+    "type": "split",
+    "children": [
+      {
+        "id": "37788bb05b223480",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "de63c38cd636053f",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "0714b5351c3cbba1",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "fcbebcd0234344e7",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "87920958f7e830ad",
+    "type": "split",
+    "children": [
+      {
+        "id": "522a95fe0b360e0b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "cc68a45a88de88ef",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "shopping-list.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for shopping-list"
+            }
+          },
+          {
+            "id": "646d0fec40bfcdfd",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "shopping-list.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from shopping-list"
+            }
+          },
+          {
+            "id": "43d4e94fe9e3c8a0",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "59bfb55e44f3fd1a",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "de53b49f7332a7f9",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "shopping-list.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of shopping-list"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "aa41cd7cb5b879ce",
+  "lastOpenFiles": [
+    "work/elevathor/tasks.md",
+    "work/ironrainbow/tasks.md",
+    "work/colormecrazy/tasks.md",
+    "work/colormecrazy/tasks.md.tmp.12357.1764878432257",
+    "work/elevathor/tasks.md.tmp.12357.1764878432163",
+    "CLAUDE.md",
+    "work/ironrainbow/tasks.md.tmp.12357.1764878104488",
+    "work/colormecrazy",
+    "work/elevathor",
+    "work/ironrainbow",
+    "napi/shopping-list.md",
+    "daily/smoking-reduction.md",
+    "daily/morning-yoga.md",
+    "recipes/tea-recipes/thyme.md",
+    "recipes/tea-recipes/mint-ginger.md",
+    "recipes/tea-recipes/cinnamon-clove.md",
+    "recipes/tea-recipes/turmeric-golden.md",
+    "recipes/tea-recipes/ginger-lemon.md",
+    "recipes/tea-recipes/spiced-forest-fruit.md",
+    "recipes/tea-recipes/mentas-gyomberes.md",
+    "recipes/tea-recipes/kurkumas-arany-tea.md",
+    "recipes/tea-recipes/kakukkfuves.md",
+    "recipes/tea-recipes/gyomberes-citromos.md",
+    "recipes/tea-recipes/fahejas-szegfuszeges.md",
+    "recipes/tea-recipes/erdei-gyumolcs-fuszerezett.md",
+    "recipes/tea-recipes",
+    "recipes/honey-mustard-chicken.md",
+    "daily/shopping-list.md",
+    "daily/reggeli-joga.md",
+    "daily/dohanyzes-csokkentes.md",
+    "daily",
+    "recipes/tea-receptek/mentas-gyomberes.md",
+    "recipes/tea-receptek/kurkumas-arany-tea.md",
+    "recipes/tea-receptek/kakukkfuves.md",
+    "recipes/tea-receptek",
+    "recipes"
+  ]
+}
