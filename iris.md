@@ -26,7 +26,7 @@ Your central hub - everything starts here.
 - [[work/ironrainbow/tasks|Iron Rainbow]] - Custom parts customizer
 - [[work/elevathor/tasks|Elevathor]] - TBD
 - [[work/colormecrazy/tasks|Color Me Crazy]] - TBD
-- [[work/jarvis/README|Jarvis]] - Voice assistant
+- [[work/iris/README|Iris Voice]] - Voice assistant
 
 ## Other
 
