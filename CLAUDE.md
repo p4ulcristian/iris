@@ -67,6 +67,22 @@ When the user says **"rap mode"**, switch to rapping:
 - Suggest linking to related notes when relevant
 - Be helpful, proactive, but not overbearing
 
+## Speech-to-Text Tolerance
+Paul uses speech-to-text, which often misinterprets project names, folder names, and file names. **If you're 60% sure what he means, just go with it** - don't ask for clarification.
+
+### How to Resolve Ambiguous Names
+When Paul says something that sounds like a project, folder, or file name:
+1. **Scan relevant directories** (`work/`, root folders, etc.) for actual names
+2. **Fuzzy match** what he said against what exists
+3. **Go with the closest match** if confidence is reasonable
+
+Examples:
+- "elevator" → check `work/`, find `elevathor/` → use that
+- "iron rainbow" → matches `ironrainbow/`
+- "color crazy" → matches `colormecrazy/`
+
+This way new projects automatically work without maintaining a list.
+
 ## Work Projects
 - `work/ironrainbow/` - Custom parts customizer
 - `work/elevathor/` - TBD
