@@ -84,9 +84,18 @@ Examples:
 This way new projects automatically work without maintaining a list.
 
 ## Work Projects
-- `work/ironrainbow/` - Custom parts customizer
-- `work/elevathor/` - TBD
-- `work/colormecrazy/` - TBD
+- **Iron Rainbow** - Custom parts customizer
+  - Notes: `work/ironrainbow/`
+  - Code: `/home/paul/Work/ironrainbow`
+- **Elevathor** - TBD
+  - Notes: `work/elevathor/`
+  - Code: `/home/paul/Work/elevathor`
+- **Color Me Crazy** - TBD
+  - Notes: `work/colormecrazy/`
+  - Code: `/home/paul/Work/colormecrazy`
+- **Iris** - Personal assistant
+  - Notes: `work/iris/`
+  - Code: `/home/paul/Work/iris`
 
 ### Project Context
 When working on a project, **always read that project's CLAUDE.md first** (if it exists) to understand project-specific conventions, architecture, and guidelines.

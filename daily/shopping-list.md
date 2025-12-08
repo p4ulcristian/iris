@@ -25,3 +25,17 @@
 - [ ] Csillagánizs
 - [ ] Kardamom
 - [x] Szegfűszeg
+
+### [[recipes/tom-kha-gai|Tom Kha Gai leveshez]] (Ázsiai bolt)
+- [ ] Citromfű (2 szál)
+- [ ] Galangál (kis darab)
+- [ ] Kaffir lime levél (4-5 db)
+- [ ] Halszósz (fish sauce)
+- [ ] Thai chili (2-3 db)
+
+### [[recipes/tom-kha-gai|Tom Kha Gai leveshez]] (Szupermarket)
+- [ ] Kókusztej (1 doboz, 400ml)
+- [ ] Csirkemell (400g)
+- [ ] Gomba - shiitake vagy sampinyon (200g)
+- [ ] Lime (1 db)
+- [ ] Friss koriander (1 csokor)
