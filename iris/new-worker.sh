@@ -9,7 +9,7 @@
 
 # Colors for workers (rotate through these)
 COLORS=("#2a1a1a" "#1a2a2a" "#2a2a1a" "#1a2a22" "#2a1a2a" "#1a222a")
-COLOR_NAMES=("red" "teal" "yellow" "mint" "plum" "sky")
+COLOR_NAMES=("Fred" "Neil" "Mellow" "Clint" "Chum" "Kai")
 
 # Parse arguments
 PROJECT=""
