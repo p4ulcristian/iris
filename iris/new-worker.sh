@@ -10,6 +10,7 @@
 # Colors for workers (rotate through these)
 COLORS=("#2a1a1a" "#1a2a2a" "#2a2a1a" "#1a2a22" "#2a1a2a" "#1a222a")
 COLOR_NAMES=("Fred" "Neil" "Mellow" "Clint" "Chum" "Kai")
+HEADER_COLORS=("#8b3a3a" "#2a6a6a" "#8a8a2a" "#2a6a4a" "#6a2a5a" "#2a4a6a")
 
 # Parse arguments
 PROJECT=""
@@ -57,9 +58,11 @@ PANE_COUNT=$(tmux list-panes -t iris | wc -l)
 COLOR_INDEX=$(( (PANE_COUNT - 1) % ${#COLORS[@]} ))
 COLOR="${COLORS[$COLOR_INDEX]}"
 COLOR_NAME="${COLOR_NAMES[$COLOR_INDEX]}"
+HEADER_COLOR="${HEADER_COLORS[$COLOR_INDEX]}"
 
-# Set pane color
+# Set pane color and title
 tmux select-pane -t "$PANE_ID" -P "bg=$COLOR"
+tmux select-pane -t "$PANE_ID" -T "#[bg=$HEADER_COLOR,fg=white,bold] $COLOR_NAME - $TASK "
 
 # Refocus master
 tmux select-pane -t %0
@@ -72,7 +75,7 @@ tmux resize-pane -t iris:0.0 -x 60%
 sleep 3
 
 # Send init and task
-tmux send-keys -t "$PANE_ID" "You are worker $PANE_ID ($COLOR_NAME). Never use ./say.sh - only master speaks. Your task: $TASK"
+tmux send-keys -t "$PANE_ID" "You are $COLOR_NAME ($PANE_ID). Never use ./say.sh directly. Update title: ./iris/set-worker-title.sh $PANE_ID $COLOR_NAME \"$HEADER_COLOR\" \"task\". When done: ./iris/worker-done.sh $PANE_ID $COLOR_NAME \"$HEADER_COLOR\" \"summary\". Your task: $TASK"
 tmux send-keys -t "$PANE_ID" Enter
 
 echo "$PANE_ID"
