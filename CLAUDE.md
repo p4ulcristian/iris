@@ -136,6 +136,7 @@ Iris can spawn and manage multiple Claude Code workers in tmux sessions. Each wo
 - **Make changes** - Edit files, create features, fix bugs
 - **Run tests/builds** - Execute project commands
 - **Update their status** - Keep their status file current
+- **NEVER spawn other workers** - Only Iris can spawn workers. If a task seems too big, do what you can and report back to Iris.
 
 #### The Rule
 When Paul asks Iris to fix a bug, add a feature, or do any coding work:
@@ -248,3 +249,84 @@ If you're a worker instance (spawned via tmux), you should:
 2. **Read Think's CLAUDE.md** - you already have it since you started from Think
 3. **Read the project's CLAUDE.md** if it exists in your `--add-dir` path
 4. **Focus on your assigned project** - don't manage other sessions
+5. **Save session notes** when your work would benefit another worker (see below)
+
+### Session Notes (Continuity Between Workers)
+
+Workers should save detailed notes to `iris/sessions/notes/` so any future worker can pick up where they left off.
+
+#### When to Save Session Notes
+
+**Always save notes when:**
+- Completing a significant task (feature, bug fix, investigation)
+- Making architectural decisions or trade-offs
+- Discovering important patterns or gotchas in the codebase
+- Leaving a task incomplete (blocked, ran out of time, needs more work)
+- Finding information that took effort to uncover
+
+**Skip notes for:**
+- Trivial one-liner fixes
+- Tasks fully described in commit messages
+- Work that doesn't benefit from additional context
+
+#### File Naming Convention
+
+```
+iris/sessions/notes/[project]-[topic]-[YYYY-MM-DD].md
+```
+
+Examples:
+- `ironrainbow-shader-optimization-2025-01-09.md`
+- `elevathor-auth-flow-investigation-2025-01-09.md`
+- `iris-worker-handoff-2025-01-09.md`
+
+Use lowercase-dashes. Topic should be 1-3 words describing the work.
+
+#### What to Include
+
+```markdown
+# [Project]: [Brief Title]
+
+**Worker:** [name]
+**Date:** [YYYY-MM-DD]
+**Status:** completed | in-progress | blocked
+
+## Summary
+[1-2 sentences: what was done or attempted]
+
+## Key Findings
+- [Important discoveries, patterns noticed]
+- [Gotchas or non-obvious behaviors]
+- [Files that were key to understanding]
+
+## Changes Made
+- [List of files modified, if applicable]
+- [Commits: hash + message]
+
+## Next Steps
+- [What remains to be done, if anything]
+- [Blockers or questions for Paul]
+
+## Context for Future Workers
+[Anything a future worker picking this up should know first.
+What took you time to figure out? What's the mental model?]
+```
+
+#### Quick Reference
+
+| Scenario | Save notes? | What to include |
+|----------|-------------|-----------------|
+| Fixed a bug | If non-trivial | Root cause, files touched, gotchas |
+| New feature | Yes | Architecture decisions, where things live |
+| Investigation | Yes | What you learned, even if no code changed |
+| Blocked | Yes | What you tried, what's needed to proceed |
+| Handed off by another worker | Read their notes first | Add to their file or create new one |
+
+#### Reading Existing Notes
+
+Before starting a task, check for relevant notes:
+```bash
+ls iris/sessions/notes/ | grep [project]
+```
+
+Read any matching files to get context from previous workers

@@ -1,0 +1,8 @@
+{
+  "name": "worker-yellow",
+  "status": "done",
+  "current_task": "Fixed Labs forms Package/Part forms titles - added missing CSS rules for .labs-modal, .labs-modal__header, .labs-modal__title, .labs-modal__close using tokens.css variables",
+  "last_update": "2025-12-09T12:15:00",
+  "color": "#f7dc6f",
+  "project_dir": "~/Work/ironrainbow"
+}

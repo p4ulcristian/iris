@@ -1,39 +1,37 @@
 #!/bin/bash
-# Kill an Iris worker by color
-# Usage: kill-worker.sh <color>
+# Kill an Iris worker by name
+# Usage: kill-worker.sh <name>
+# Example: kill-worker.sh Neil
 
-SESSIONS_DIR="$HOME/Think/iris/sessions"
+NAME="$1"
 
-COLOR="$1"
-
-if [ -z "$COLOR" ]; then
-    echo "Usage: kill-worker.sh <color>"
+if [ -z "$NAME" ]; then
+    echo "Usage: kill-worker.sh <name>"
+    echo "Available workers:"
+    tmux list-panes -t iris -F '#{pane_id} #{pane_title}' | grep -v '%0 ' | sed 's/.*bold\] /  /' | sed 's/ -.*//'
     exit 1
 fi
 
-# Check if worker exists
-if [ ! -f "$SESSIONS_DIR/worker-$COLOR.json" ]; then
-    echo "Worker $COLOR doesn't exist!"
+# Find pane by name in title
+PANE_ID=$(tmux list-panes -t iris -F '#{pane_id} #{pane_title}' | grep -i "$NAME" | head -1 | awk '{print $1}')
+
+if [ -z "$PANE_ID" ]; then
+    echo "Worker '$NAME' not found"
+    echo "Available workers:"
+    tmux list-panes -t iris -F '#{pane_id} #{pane_title}' | grep -v '%0 ' | sed 's/.*bold\] /  /' | sed 's/ -.*//'
     exit 1
 fi
 
-# Find and kill the pane
-PANES=$(tmux list-panes -t iris:master -F '#{pane_index}')
+# Don't kill master pane
+if [ "$PANE_ID" = "%0" ]; then
+    echo "Can't kill master pane!"
+    exit 1
+fi
 
-for pane in $PANES; do
-    if [ "$pane" = "0" ]; then
-        continue
-    fi
+# Kill the pane
+tmux kill-pane -t "$PANE_ID"
+echo "Killed worker $NAME ($PANE_ID)"
 
-    CAPTURE=$(tmux capture-pane -t iris:master.$pane -p | head -20)
-    if echo "$CAPTURE" | grep -q "worker $COLOR"; then
-        tmux kill-pane -t iris:master.$pane
-        rm -f "$SESSIONS_DIR/worker-$COLOR.json"
-        echo "Killed worker $COLOR"
-        exit 0
-    fi
-done
-
-# If pane not found but JSON exists, just remove the JSON
-rm -f "$SESSIONS_DIR/worker-$COLOR.json"
-echo "Removed worker $COLOR (pane was already gone)"
+# Realign layout for remaining panes
+sleep 0.2
+./iris/smart-layout.sh iris
