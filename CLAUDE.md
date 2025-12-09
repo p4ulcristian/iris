@@ -100,6 +100,9 @@ This way new projects automatically work without maintaining a list.
 ### Project Context
 When working on a project, **always read that project's CLAUDE.md first** (if it exists) to understand project-specific conventions, architecture, and guidelines.
 
+### Task Lists
+Task lists and to-dos live in the **project's `vision/todo/` folder**, not in this vault. When asked about project tasks, check there.
+
 ### Git Context
 Git operations (commits, pushes, branches, etc.) should target the **project directory**, not this Think vault. Only operate on Think's git when explicitly asked (e.g., "push Think" or "commit the vault").
 
@@ -109,3 +112,99 @@ Git operations (commits, pushes, branches, etc.) should target the **project dir
 - Workouts: log format with exercises/sets/reps
 - Recipes: ingredients + steps
 - General notes: whatever fits
+
+---
+
+## Multi-Session Orchestration
+
+Iris can spawn and manage multiple Claude Code workers in tmux sessions. Each worker handles a specific project while Iris (master) coordinates.
+
+### Architecture
+
+```
+[Voice] → [Canary STT] → [Iris (master)] → [tmux sessions (workers)]
+                               ↓
+                        [Kokoro TTS] ← response
+```
+
+### Session Management
+
+#### Create a new worker session
+```bash
+# Create tmux session
+tmux new-session -d -s [session-name]
+
+# Start Claude worker from Think, adding project directory
+tmux send-keys -t [session-name] "cd ~/Think && claude --add-dir [project-path]" Enter
+```
+
+#### Send commands to a worker
+```bash
+tmux send-keys -t [session-name] "[command or instruction]" Enter
+```
+
+#### Check session output
+```bash
+tmux capture-pane -t [session-name] -p | tail -50
+```
+
+#### Kill a session
+```bash
+tmux kill-session -t [session-name]
+```
+
+#### List all sessions
+```bash
+tmux list-sessions
+```
+
+### Session Colors
+
+Apply colors to distinguish sessions visually:
+```bash
+tmux set-option -t [session-name] status-style "bg=[hex-color]"
+tmux set-option -t [session-name] pane-active-border-style "fg=[hex-color]"
+```
+
+Color palette is in `iris/colors.json`.
+
+### Worker Status Tracking
+
+Workers write status to `iris/sessions/[session-name].json`:
+
+```json
+{
+  "name": "session-name",
+  "status": "working|idle|error|done",
+  "current_task": "what I'm doing now",
+  "last_update": "2025-01-09T14:32:00",
+  "color": "#ff6b6b",
+  "project_dir": "~/Work/project"
+}
+```
+
+**Update status when:**
+- Starting a task
+- Completing a task
+- Encountering an error
+- Going idle
+
+### Voice Commands (examples)
+
+| Command | Action |
+|---------|--------|
+| "new session for iron rainbow" | Spawn worker for that project |
+| "tell iron rainbow to fix the shader bug" | Send instruction to worker |
+| "what's the status on elevathor?" | Read session status JSON |
+| "switch focus to colormecrazy" | Attach to that tmux session |
+| "kill the test session" | Terminate session |
+| "list sessions" | Show all active workers |
+
+### As a Worker
+
+If you're a worker instance (spawned via tmux), you should:
+
+1. **Update your status file** at `~/Think/iris/sessions/[your-session-name].json`
+2. **Read Think's CLAUDE.md** - you already have it since you started from Think
+3. **Read the project's CLAUDE.md** if it exists in your `--add-dir` path
+4. **Focus on your assigned project** - don't manage other sessions

@@ -1,0 +1,20 @@
+{
+  "palette": [
+    {"name": "red", "hex": "#ff6b6b"},
+    {"name": "teal", "hex": "#4ecdc4"},
+    {"name": "yellow", "hex": "#ffe66d"},
+    {"name": "mint", "hex": "#95e1d3"},
+    {"name": "plum", "hex": "#dda0dd"},
+    {"name": "sky", "hex": "#87ceeb"},
+    {"name": "orange", "hex": "#f39c12"},
+    {"name": "lavender", "hex": "#a29bfe"},
+    {"name": "coral", "hex": "#ff7f50"},
+    {"name": "lime", "hex": "#32cd32"},
+    {"name": "pink", "hex": "#ff69b4"},
+    {"name": "gold", "hex": "#ffd700"},
+    {"name": "cyan", "hex": "#00ced1"},
+    {"name": "peach", "hex": "#ffdab9"},
+    {"name": "violet", "hex": "#ee82ee"},
+    {"name": "seafoam", "hex": "#20b2aa"}
+  ]
+}
