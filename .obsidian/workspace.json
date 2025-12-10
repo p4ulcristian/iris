@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "CLAUDE.md",
+                "file": "iris/sessions/notes/iris-worker-spawn-optimization-2025-12-09.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "CLAUDE"
+              "title": "iris-worker-spawn-optimization-2025-12-09"
             }
           }
         ]
@@ -185,12 +185,15 @@
   },
   "active": "aa41cd7cb5b879ce",
   "lastOpenFiles": [
+    "iris/sessions/notes/iris-mythology-analogies-2025-12-09.md",
+    "CLAUDE.md",
+    "iris/glow.sh",
+    "iris/glow.sh.tmp.354755.1765328736842",
     "3d-printer/filament-dryer.md",
     "daily/shopping-list.md",
     "recipes/honey-mustard-chicken.md",
     "recipes/tom-kha-gai.md",
     "iris.md",
-    "CLAUDE.md",
     "work/iris/tasks.md",
     "work/iris/checkpoint.md",
     "daily/smoking-reduction.md",
@@ -205,8 +208,6 @@
     "work/jarvis/tasks.md.tmp.63214.1764890132142",
     "work/jarvis",
     "secrets/ironrainbow",
-    "secrets",
-    "work/jarvis/tasks.md.tmp.63214.1764889328917",
     "recipes/tea-recipes/ginger-lemon.md",
     "work/jarvis/README.md",
     "index.md",
@@ -219,7 +220,6 @@
     "recipes/tea-recipes/thyme.md",
     "recipes/tea-recipes/mint-ginger.md",
     "recipes/tea-recipes/turmeric-golden.md",
-    "recipes/tea-recipes/spiced-forest-fruit.md",
-    "recipes/tea-recipes/mentas-gyomberes.md"
+    "recipes/tea-recipes/spiced-forest-fruit.md"
   ]
 }

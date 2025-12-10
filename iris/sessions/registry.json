@@ -12,32 +12,6 @@
       "spawned_at": "2025-12-10T01:55:58+01:00",
       "status": "starting",
       "last_update": "2025-12-10T01:55:58+01:00"
-    },
-    "cyan-20251210-015749-4146": {
-      "name": "Cyan",
-      "uuid": "cyan-20251210-015749-4146",
-      "pane_id": "%1",
-      "task": "You're a ray of Iris, working on Iron Rainbow. What would you like me to do?",
-      "project": "ironrainbow",
-      "project_dir": "/home/paul/Work/ironrainbow",
-      "color": "#00ced1",
-      "bg_color": "#1a2a2a",
-      "spawned_at": "2025-12-10T01:57:49+01:00",
-      "status": "starting",
-      "last_update": "2025-12-10T01:57:49+01:00"
-    },
-    "violet-20251210-020125-1b0e": {
-      "name": "Violet",
-      "uuid": "violet-20251210-020125-1b0e",
-      "pane_id": "%2",
-      "task": "What would you like me to work on?",
-      "project": "ironrainbow",
-      "project_dir": "/home/paul/Work/ironrainbow",
-      "color": "#8b00ff",
-      "bg_color": "#2a1a2a",
-      "spawned_at": "2025-12-10T02:01:25+01:00",
-      "status": "starting",
-      "last_update": "2025-12-10T02:01:25+01:00"
     }
   },
   "history": [
@@ -193,6 +167,52 @@
       "died_at": "2025-12-10T01:15:29+01:00",
       "outcome": "completed",
       "summary": "Committed and pushed Iron Rainbow changes: catalog import updates, DB pool config, frontend card styling, schema updates (18 files, +1393/-444 lines)"
+    },
+    {
+      "name": "Violet",
+      "uuid": "violet-20251210-020125-1b0e",
+      "pane_id": "%2",
+      "task": "What would you like me to work on?",
+      "project": "ironrainbow",
+      "project_dir": "/home/paul/Work/ironrainbow",
+      "color": "#8b00ff",
+      "bg_color": "#2a1a2a",
+      "spawned_at": "2025-12-10T02:01:25+01:00",
+      "status": "starting",
+      "last_update": "2025-12-10T02:01:25+01:00",
+      "died_at": "2025-12-10T02:10:15+01:00",
+      "outcome": "killed"
+    },
+    {
+      "name": "Cyan",
+      "uuid": "cyan-20251210-015749-4146",
+      "pane_id": "%1",
+      "task": "You're a ray of Iris, working on Iron Rainbow. What would you like me to do?",
+      "project": "ironrainbow",
+      "project_dir": "/home/paul/Work/ironrainbow",
+      "color": "#00ced1",
+      "bg_color": "#1a2a2a",
+      "spawned_at": "2025-12-10T01:57:49+01:00",
+      "status": "starting",
+      "last_update": "2025-12-10T01:57:49+01:00",
+      "died_at": "2025-12-10T02:10:15+01:00",
+      "outcome": "killed"
+    },
+    {
+      "name": "Ruby",
+      "uuid": "ruby-20251210-021019-2f4d",
+      "pane_id": "%3",
+      "task": "What would you like me to work on?",
+      "project": "ironrainbow",
+      "project_dir": "/home/paul/Work/ironrainbow",
+      "color": "#dc143c",
+      "bg_color": "#2a1a1a",
+      "spawned_at": "2025-12-10T02:10:19+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T02:10:39+01:00",
+      "current_task": "Awaiting task",
+      "died_at": "2025-12-10T02:19:42+01:00",
+      "outcome": "killed"
     }
   ]
 }
