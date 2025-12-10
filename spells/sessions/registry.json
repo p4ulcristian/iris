@@ -1,0 +1,95 @@
+{
+  "active": {
+    "ruby-20251210-034858-7436": {
+      "uuid": "ruby-20251210-034858-7436",
+      "pane_id": "%6",
+      "name": "Ruby",
+      "task": "Research all tmux-like terminal multiplexer tools and compare them. Include: tmux, screen, zellij, byobu, dvtm, abduco, mtm, and any other modern alternatives. Compare: features, performance, configuration, plugin ecosystem, status bar capabilities, pane management, session handling, and overall UX. Write findings to shadows/notes/terminal-multiplexer-comparison-2025-12-10.md",
+      "project": "",
+      "spawned_at": "2025-12-10T03:48:58+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T04:02:00+01:00",
+      "current_task": "Fulfilled"
+    }
+  },
+  "history": [
+    {
+      "uuid": "ruby-20251210-033407-bdc5",
+      "pane_id": "%1",
+      "name": "Ruby",
+      "task": "Review the spells directory and confirm everything is modular and consistent",
+      "project": "",
+      "spawned_at": "2025-12-10T03:34:07+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T03:34:27+01:00",
+      "current_task": "Reviewing spells",
+      "died_at": "2025-12-10T03:39:53+01:00",
+      "outcome": "killed"
+    },
+    {
+      "uuid": "amber-20251210-033915-1244",
+      "pane_id": "%2",
+      "name": "Amber",
+      "task": "Research the best modern solution for giving each worker pane its own status bar. Options to compare: 1) Nested tmux sessions inside panes, 2) Zellij instead of tmux, 3) Running zellij inside tmux panes, 4) Any other modern approaches. Consider: ease of implementation, keybinding conflicts, visual appearance, maintainability. Write findings to shadows/notes/per-pane-statusbar-research-2025-12-10.md",
+      "project": "",
+      "spawned_at": "2025-12-10T03:39:15+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T03:39:34+01:00",
+      "current_task": "Researching per-pane status bars",
+      "died_at": "2025-12-10T03:42:27+01:00",
+      "outcome": "completed",
+      "summary": "Researched per-pane status bars: Recommend tmux pane-border-status (native, zero conflicts, lightweight). Findings written to shadows/notes/per-pane-statusbar-research-2025-12-10.md"
+    },
+    {
+      "uuid": "ruby-20251210-034236-15ab",
+      "pane_id": "%3",
+      "name": "Ruby",
+      "task": "Say hello",
+      "project": "",
+      "spawned_at": "2025-12-10T03:42:36+01:00",
+      "status": "starting",
+      "died_at": "2025-12-10T03:42:56+01:00",
+      "outcome": "killed"
+    },
+    {
+      "uuid": "ruby-20251210-034442-eee9",
+      "pane_id": "%4",
+      "name": "Ruby",
+      "task": "Say hello and nothing else",
+      "project": "",
+      "spawned_at": "2025-12-10T03:44:42+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T03:44:49+01:00",
+      "current_task": "Saying hello",
+      "died_at": "2025-12-10T03:44:54+01:00",
+      "outcome": "completed",
+      "summary": "Said hello"
+    },
+    {
+      "uuid": "amber-20251210-034504-477d",
+      "pane_id": "%5",
+      "name": "Amber",
+      "task": "Research the best modern solution for giving each worker pane its own status bar. Options to compare: 1) Nested tmux sessions inside panes, 2) Zellij instead of tmux, 3) Running zellij inside tmux panes, 4) Any other modern approaches. Consider: ease of implementation, keybinding conflicts, visual appearance, maintainability. Write findings to shadows/notes/per-pane-statusbar-research-2025-12-10.md",
+      "project": "",
+      "spawned_at": "2025-12-10T03:45:04+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T03:45:11+01:00",
+      "current_task": "Researching per-pane statusbar solutions",
+      "died_at": "2025-12-10T03:50:00+01:00",
+      "outcome": "killed"
+    },
+    {
+      "uuid": "amber-20251210-035050-ba2c",
+      "pane_id": "%7",
+      "name": "Amber",
+      "task": "Research if Claude Code CLI has options to hide or customize the footer/status bar that shows 'bypass permission zone', 'plan mode', 'shift+tab to cycle', etc. Check CLI flags, config files, settings, themes, or any way to remove or minimize this UI element. Write findings to shadows/notes/claude-code-footer-customization-2025-12-10.md",
+      "project": "",
+      "spawned_at": "2025-12-10T03:50:50+01:00",
+      "status": "working",
+      "last_update": "2025-12-10T03:52:43+01:00",
+      "current_task": "Done: Claude Code footer research",
+      "died_at": "2025-12-10T03:53:34+01:00",
+      "outcome": "killed"
+    }
+  ]
+}

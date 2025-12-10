@@ -1,6 +1,6 @@
 #!/bin/bash
-# Send a message to a worker pane and press Enter
-# Usage: send-to-worker.sh <pane_id> <message>
+# Send a message to a shade pane and press Enter
+# Usage: send.sh <pane_id> <message>
 #
 # Uses tmux set-buffer + paste-buffer for faster text input
 # (send-keys sends character by character which can be slow for long messages)
@@ -10,7 +10,7 @@ shift
 MESSAGE="$*"
 
 if [ -z "$PANE_ID" ] || [ -z "$MESSAGE" ]; then
-    echo "Usage: send-to-worker.sh <pane_id> <message>"
+    echo "Usage: send.sh <pane_id> <message>"
     exit 1
 fi
 

@@ -24,6 +24,6 @@ tmux select-pane -t "$PANE_ID" -P "bg=#1a1a1a"
 tmux select-pane -t "$PANE_ID" -T "#[bg=#888888,fg=white,bold] Glow "
 
 # Apply layout and refocus master
-"$SCRIPT_DIR/smart-layout.sh" iris 2>/dev/null
+"$SCRIPT_DIR/layout.sh" iris 2>/dev/null
 
 echo "$PANE_ID"

@@ -86,7 +86,7 @@ Paul: "Fix the shader bug in Iron Rainbow"
 Iris (wrong): *starts reading shader code and making edits*
 
 Iris (correct):
-1. Summon shade: ./spells/open-iris.sh spawn --project ironrainbow "Fix the shader bug"
+1. Summon shade: ./spells/iris.sh spawn --project ironrainbow "Fix the shader bug"
 2. Report: "I've summoned a shade for the shader bug. I'll let you know when it's fulfilled."
 3. Glimpse: Check status periodically
 ```
@@ -105,39 +105,39 @@ Iris (correct):
 
 ### Summon a new shade
 ```bash
-./spells/open-iris.sh spawn [--project <name>] "<task>"
+./spells/iris.sh spawn [--project <name>] "<task>"
 ```
 
 ### Bind a task to a shade
 ```bash
-./spells/open-iris.sh send <shade-name> "<instruction>"
+./spells/iris.sh send <shade-name> "<instruction>"
 ```
 
 ### Glimpse a shade's output
 ```bash
-./spells/open-iris.sh peek <shade-name> [lines]
+./spells/iris.sh peek <shade-name> [lines]
 ```
 
 ### Banish a shade
 ```bash
-./spells/open-iris.sh kill <shade-name>
+./spells/iris.sh kill <shade-name>
 ```
 
 ### List all shades
 ```bash
-./spells/open-iris.sh status
+./spells/iris.sh status
 ```
 
 ### Stop Iris entirely
 ```bash
-./spells/open-iris.sh stop
+./spells/iris.sh stop
 ```
 
 ### Session Colors
 
-Apply colors to distinguish shades visually. Color palette is in `spells/colors.json`.
+Apply colors to distinguish shades visually. Color palette is in `config/shades.json`.
 
-Shade names: Fred, Neil, Mellow, Clint, Chum, Kai
+Shade names: Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta, Crimson, Gold
 
 ---
 
@@ -163,7 +163,7 @@ Shades write status to `shadows/[session-name].json`:
 | Command | Action |
 |---------|--------|
 | "summon a shade for iron rainbow" | Summon shade for that project |
-| "bind the shader bug to Fred" | Send instruction to shade |
+| "bind the shader bug to Ruby" | Send instruction to shade |
 | "glimpse elevathor" | Check shade status |
 | "banish the test shade" | Terminate session |
 | "list shades" | Show all active shades |

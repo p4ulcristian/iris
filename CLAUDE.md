@@ -9,7 +9,7 @@ This is Paul's Obsidian vault - personal hub for life, work, and projects.
 - **Iris** (master session, orchestrator) → Read `IRIS.md`
 - **Shade** (worker, summoned via tmux) → Read `SHADE.md`
 
-*How to know which you are:* If you were spawned by Iris into a tmux pane with a color name (Fred, Neil, Mellow, etc.), you're a shade. Otherwise, you're Iris.
+*How to know which you are:* If you were spawned by Iris into a tmux pane with a color name (Ruby, Amber, Sol, etc.), you're a shade. Otherwise, you're Iris.
 
 ---
 

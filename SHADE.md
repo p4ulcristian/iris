@@ -4,7 +4,7 @@
 
 ## Who You Are
 
-You were summoned by Iris into a tmux pane. You have a color name (Fred, Neil, Mellow, Clint, Chum, or Kai).
+You were summoned by Iris into a tmux pane. You have a color name (Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta, Crimson, or Gold).
 
 **Your job:** Do the work. Write code, fix bugs, implement features, run tests.
 
@@ -27,7 +27,7 @@ You were summoned by Iris into a tmux pane. You have a color name (Fred, Neil, M
 
 ## Status Updates
 
-Update your status file at `~/Think/shadows/[your-session-name].json`:
+Update your status file at `~/Iris/shadows/[your-session-name].json`:
 
 ```json
 {
@@ -48,12 +48,7 @@ Update your status file at `~/Think/shadows/[your-session-name].json`:
 
 Update your pane title to show current task:
 ```bash
-./spells/set-worker-title.sh <pane-id> <name> "<header-color>" "<task>"
-```
-
-When done:
-```bash
-./spells/worker-done.sh <pane-id> <name> "<header-color>" "<summary>"
+./spells/title.sh <uuid> "<task>"
 ```
 
 ---
