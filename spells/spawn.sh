@@ -62,12 +62,12 @@ INIT_MSG="${INIT_MSG//\{\{TASK\}\}/$TASK}"
 
 # Build claude command with message as argument (instant start, no paste delay)
 # Escape single quotes in init message for safe embedding
-# Export SHADE_UUID so hooks know this is a shade (not Iris)
+# Export SHADE_UUID and SHADE_NAME so report.sh can identify the shade
 ESCAPED_MSG="${INIT_MSG//\'/\'\\\'\'}"
 if [ -n "$PROJECT_DIR" ]; then
-    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' claude --dangerously-skip-permissions --add-dir '$PROJECT_DIR' -- '$ESCAPED_MSG'"
+    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude --dangerously-skip-permissions --add-dir '$PROJECT_DIR' -- '$ESCAPED_MSG'"
 else
-    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' claude --dangerously-skip-permissions -- '$ESCAPED_MSG'"
+    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude --dangerously-skip-permissions -- '$ESCAPED_MSG'"
 fi
 
 # === COMPOSE MODULES ===
