@@ -118,8 +118,13 @@ case "$1" in
            "$REGISTRY" > "/tmp/registry.$$.json" && mv "/tmp/registry.$$.json" "$REGISTRY"
         ;;
 
+    clear)
+        init_registry
+        echo '{"active":{},"history":[]}' > "$REGISTRY"
+        ;;
+
     *)
-        echo "Usage: registry.sh <add|remove|complete|lookup|get|list|update>" >&2
+        echo "Usage: registry.sh <add|remove|complete|lookup|get|list|update|clear>" >&2
         exit 1
         ;;
 esac

@@ -1,8 +1,8 @@
 #!/bin/bash
-# Kill a shade by name or UUID
+# Kill a shade by name or UUID (WezTerm native)
 # Usage: kill.sh <name-or-uuid>
 #
-# Composes: registry.sh, pane.sh, layout.sh
+# Composes: registry.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -35,20 +35,10 @@ fi
 PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
 NAME=$(echo "$SHADE_JSON" | jq -r '.name')
 
-# Don't kill master
-if [ "$PANE_ID" = "%0" ]; then
-    echo "Cannot kill master pane"
-    exit 1
-fi
-
 # Remove from registry
 "$SCRIPT_DIR/registry.sh" remove "$UUID"
 
-# Kill pane
-"$SCRIPT_DIR/pane.sh" kill "$PANE_ID"
+# Kill WezTerm pane (which closes the tab if it's the only pane)
+wezterm cli kill-pane --pane-id "$PANE_ID" 2>/dev/null || true
 
-echo "Killed $NAME ($PANE_ID)"
-
-# Reapply layout
-sleep 0.2
-"$SCRIPT_DIR/layout.sh" iris
+echo "Killed $NAME (pane $PANE_ID)"

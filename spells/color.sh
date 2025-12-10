@@ -1,5 +1,5 @@
 #!/bin/bash
-# Color operations - reads from shades.json
+# Color operations - reads from shades.json (WezTerm native)
 # Usage:
 #   color.sh next              - Get next available color (JSON)
 #   color.sh get <name>        - Get color by name (JSON)
@@ -7,12 +7,12 @@
 
 IRIS_DIR="$HOME/Iris"
 SHADES="$IRIS_DIR/config/shades.json"
-SESSION="iris"
 
 case "$1" in
     next)
-        # Get colors currently in use from pane titles
-        USED=$(tmux list-panes -t "$SESSION" -F '#{pane_title}' 2>/dev/null | \
+        # Get colors currently in use from WezTerm tab titles
+        USED=$(wezterm cli list --format json 2>/dev/null | \
+               jq -r '.[].tab_title // empty' | \
                grep -oE '(Ruby|Amber|Sol|Jade|Azure|Indigo|Violet|Coral|Cyan|Magenta|Crimson|Gold)' || true)
 
         # Find first available color
@@ -23,7 +23,7 @@ case "$1" in
         ' "$SHADES" | head -1)
 
         if [ -z "$AVAILABLE" ]; then
-            # All used, pick random
+            # All used, pick first
             jq '.shades[0]' "$SHADES"
         else
             echo "$AVAILABLE"

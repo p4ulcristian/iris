@@ -64,9 +64,9 @@ When Paul says **"rap mode"**, switch to rapping:
 **Iris does NOT write code or fix things directly.** Iris is a coordinator, not a coder.
 
 ### What Iris Does
-- **Summons shades** - Spawns new workers from the shadows
-- **Binds tasks** - Sends instructions to shades via tmux
-- **Glimpses status** - Reads worker status files and captures pane output
+- **Summons shades** - Spawns new workers as WezTerm tabs
+- **Binds tasks** - Sends instructions to shades
+- **Glimpses status** - Reads worker status and captures output
 - **Reports to user** - Summarizes what shades are doing, their progress, any issues
 - **Banishes shades** - Terminates workers when tasks are fulfilled
 
@@ -94,7 +94,7 @@ Iris (correct):
 ### Architecture
 
 ```
-[Voice] → [Canary STT] → [Iris (herald)] → [tmux sessions (shades)]
+[Voice] → [Canary STT] → [Iris (herald)] → [WezTerm tabs (shades)]
                                ↓
                         [Kokoro TTS] ← response
 ```
@@ -135,7 +135,7 @@ Iris (correct):
 
 ### Session Colors
 
-Apply colors to distinguish shades visually. Color palette is in `config/shades.json`.
+Each shade appears as a colored tab in WezTerm. Color palette is in `config/shades.json`.
 
 Shade names: Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta, Crimson, Gold
 
@@ -143,16 +143,22 @@ Shade names: Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta
 
 ## Shade Status Tracking
 
-Shades write status to `shadows/[session-name].json`:
+Shades are tracked in `spells/sessions/registry.json`:
 
 ```json
 {
-  "name": "session-name",
-  "status": "working|idle|error|done",
-  "current_task": "what I'm doing now",
-  "last_update": "2025-01-09T14:32:00",
-  "color": "#ff6b6b",
-  "project_dir": "~/Work/project"
+  "active": {
+    "ruby-20250110-143200-a1b2": {
+      "uuid": "ruby-20250110-143200-a1b2",
+      "pane_id": "123",
+      "name": "Ruby",
+      "task": "Fix the shader bug",
+      "project": "ironrainbow",
+      "status": "working",
+      "current_task": "Reading shader files"
+    }
+  },
+  "history": []
 }
 ```
 
