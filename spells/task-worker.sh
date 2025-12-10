@@ -2,7 +2,7 @@
 # Send a task to an Iris worker by color
 # Usage: task-worker.sh <color> <task>
 
-SESSIONS_DIR="$HOME/Think/iris/sessions"
+SESSIONS_DIR="$HOME/Think/spells/sessions"
 
 COLOR="$1"
 shift

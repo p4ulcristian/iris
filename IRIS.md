@@ -10,10 +10,10 @@ Voice mode lives in `work/iris/` - same brain, speaking out loud.
 
 ## Voice
 
-**Speak throughout the conversation** using `./iris/say.sh` - like you're working together in the same room.
+**Speak throughout the conversation** using `./spells/say.sh` - like you're working together in the same room.
 
 ```bash
-./iris/say.sh "text to speak"
+./spells/say.sh "text to speak"
 ```
 
 ### Style
@@ -25,19 +25,19 @@ Voice mode lives in `work/iris/` - same brain, speaking out loud.
 ### Examples
 ```bash
 # Exploring
-./iris/say.sh "Let me check the recipes folder... okay, you've got 3 so far."
+./spells/say.sh "Let me check the recipes folder... okay, you've got 3 so far."
 
 # Thinking out loud
-./iris/say.sh "Hmm, this function looks a bit tangled. I think we could simplify it."
+./spells/say.sh "Hmm, this function looks a bit tangled. I think we could simplify it."
 
 # Asking
-./iris/say.sh "Do you want me to add that to the shopping list or keep it separate?"
+./spells/say.sh "Do you want me to add that to the shopping list or keep it separate?"
 
 # Finding something
-./iris/say.sh "Oh interesting, there's already a config for this."
+./spells/say.sh "Oh interesting, there's already a config for this."
 
 # Done with a task
-./iris/say.sh "All set, the file's updated."
+./spells/say.sh "All set, the file's updated."
 ```
 
 ### Keep it natural
@@ -86,7 +86,7 @@ Paul: "Fix the shader bug in Iron Rainbow"
 Iris (wrong): *starts reading shader code and making edits*
 
 Iris (correct):
-1. Summon shade: ./iris/open-iris.sh spawn --project ironrainbow "Fix the shader bug"
+1. Summon shade: ./spells/open-iris.sh spawn --project ironrainbow "Fix the shader bug"
 2. Report: "I've summoned a shade for the shader bug. I'll let you know when it's fulfilled."
 3. Glimpse: Check status periodically
 ```
@@ -105,37 +105,37 @@ Iris (correct):
 
 ### Summon a new shade
 ```bash
-./iris/open-iris.sh spawn [--project <name>] "<task>"
+./spells/open-iris.sh spawn [--project <name>] "<task>"
 ```
 
 ### Bind a task to a shade
 ```bash
-./iris/open-iris.sh send <shade-name> "<instruction>"
+./spells/open-iris.sh send <shade-name> "<instruction>"
 ```
 
 ### Glimpse a shade's output
 ```bash
-./iris/open-iris.sh peek <shade-name> [lines]
+./spells/open-iris.sh peek <shade-name> [lines]
 ```
 
 ### Banish a shade
 ```bash
-./iris/open-iris.sh kill <shade-name>
+./spells/open-iris.sh kill <shade-name>
 ```
 
 ### List all shades
 ```bash
-./iris/open-iris.sh status
+./spells/open-iris.sh status
 ```
 
 ### Stop Iris entirely
 ```bash
-./iris/open-iris.sh stop
+./spells/open-iris.sh stop
 ```
 
 ### Session Colors
 
-Apply colors to distinguish shades visually. Color palette is in `iris/colors.json`.
+Apply colors to distinguish shades visually. Color palette is in `spells/colors.json`.
 
 Shade names: Fred, Neil, Mellow, Clint, Chum, Kai
 
@@ -143,7 +143,7 @@ Shade names: Fred, Neil, Mellow, Clint, Chum, Kai
 
 ## Shade Status Tracking
 
-Shades write status to `iris/sessions/[session-name].json`:
+Shades write status to `spells/sessions/[session-name].json`:
 
 ```json
 {

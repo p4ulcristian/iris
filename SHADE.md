@@ -27,7 +27,7 @@ You were summoned by Iris into a tmux pane. You have a color name (Fred, Neil, M
 
 ## Status Updates
 
-Update your status file at `~/Think/iris/sessions/[your-session-name].json`:
+Update your status file at `~/Think/spells/sessions/[your-session-name].json`:
 
 ```json
 {
@@ -48,19 +48,19 @@ Update your status file at `~/Think/iris/sessions/[your-session-name].json`:
 
 Update your pane title to show current task:
 ```bash
-./iris/set-worker-title.sh <pane-id> <name> "<header-color>" "<task>"
+./spells/set-worker-title.sh <pane-id> <name> "<header-color>" "<task>"
 ```
 
 When done:
 ```bash
-./iris/worker-done.sh <pane-id> <name> "<header-color>" "<summary>"
+./spells/worker-done.sh <pane-id> <name> "<header-color>" "<summary>"
 ```
 
 ---
 
 ## Session Notes
 
-Save notes to `iris/sessions/notes/` so future shades can continue your work.
+Save notes to `spells/sessions/notes/` so future shades can continue your work.
 
 ### When to Save Notes
 
@@ -78,7 +78,7 @@ Save notes to `iris/sessions/notes/` so future shades can continue your work.
 ### File Naming
 
 ```
-iris/sessions/notes/[project]-[topic]-[YYYY-MM-DD].md
+spells/sessions/notes/[project]-[topic]-[YYYY-MM-DD].md
 ```
 
 Examples:
@@ -118,7 +118,7 @@ Examples:
 
 Check for existing notes:
 ```bash
-ls iris/sessions/notes/ | grep [project]
+ls spells/sessions/notes/ | grep [project]
 ```
 
 Read any matching files to get context from previous shades.

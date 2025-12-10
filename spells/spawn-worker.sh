@@ -3,8 +3,8 @@
 # Usage: spawn-worker.sh [color]
 # If no color given, picks the next available from palette
 
-SESSIONS_DIR="$HOME/Think/iris/sessions"
-COLORS_FILE="$HOME/Think/iris/colors.json"
+SESSIONS_DIR="$HOME/Think/spells/sessions"
+COLORS_FILE="$HOME/Think/spells/colors.json"
 
 # All available colors
 COLORS=(red teal yellow mint plum sky orange lavender coral lime pink gold cyan peach violet seafoam)
@@ -79,7 +79,7 @@ tmux send-keys -t iris:master.$PANE_ID "You are worker $COLOR. You are a silent 
 
 Rules:
 - NEVER use ./say.sh - only master speaks
-- Write your status to ~/Think/iris/sessions/worker-$COLOR.json
+- Write your status to ~/Think/spells/sessions/worker-$COLOR.json
 - Update the JSON when you start a task, complete it, or hit an error
 
 Status JSON format:

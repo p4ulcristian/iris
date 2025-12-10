@@ -19,7 +19,7 @@
 set -e
 
 THINK_DIR="$HOME/Think"
-IRIS_DIR="$THINK_DIR/iris"
+SPELLS_DIR="$THINK_DIR/spells"
 SESSION="iris"
 
 # Iris theme colors
@@ -230,7 +230,7 @@ cmd_spawn() {
     tmux select-pane -t "$pane_id" -T "#[bg=$header_color,fg=white,bold] $name - $task "
 
     # Apply smart layout
-    "$IRIS_DIR/smart-layout.sh" $SESSION
+    "$SPELLS_DIR/smart-layout.sh" $SESSION
 
     # Wait for Claude to load
     local max_wait=30
@@ -245,7 +245,7 @@ cmd_spawn() {
     done
 
     # Send init and task
-    tmux send-keys -t "$pane_id" "You are $name ($pane_id). Never use ./say.sh directly. Update title: ./iris/set-worker-title.sh $pane_id $name \"$header_color\" \"task\". When done: ./iris/worker-done.sh $pane_id $name \"$header_color\" \"summary\". Your task: $task"
+    tmux send-keys -t "$pane_id" "You are $name ($pane_id). Never use ./say.sh directly. Update title: ./spells/set-worker-title.sh $pane_id $name \"$header_color\" \"task\". When done: ./spells/worker-done.sh $pane_id $name \"$header_color\" \"summary\". Your task: $task"
     tmux send-keys -t "$pane_id" Enter
 
     echo -e "${GREEN}Spawned worker ${BOLD}$name${NC}${GREEN} ($pane_id)${NC}"
@@ -279,7 +279,7 @@ cmd_kill() {
         if [ $count -gt 0 ]; then
             echo -e "${GREEN}Killed $count worker(s)${NC}"
             sleep 0.2
-            "$IRIS_DIR/smart-layout.sh" $SESSION
+            "$SPELLS_DIR/smart-layout.sh" $SESSION
         else
             echo -e "${YELLOW}No workers to kill${NC}"
         fi
@@ -304,7 +304,7 @@ cmd_kill() {
     echo -e "${GREEN}Killed worker $name ($pane_id)${NC}"
 
     sleep 0.2
-    "$IRIS_DIR/smart-layout.sh" $SESSION
+    "$SPELLS_DIR/smart-layout.sh" $SESSION
 }
 
 # Send message to worker
@@ -361,7 +361,7 @@ cmd_peek() {
 # List session notes
 cmd_notes() {
     local project="$1"
-    local notes_dir="$IRIS_DIR/sessions/notes"
+    local notes_dir="$SPELLS_DIR/sessions/notes"
 
     if [ ! -d "$notes_dir" ]; then
         echo -e "${YELLOW}No session notes found${NC}"

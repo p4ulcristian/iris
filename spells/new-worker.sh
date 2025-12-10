@@ -132,7 +132,7 @@ tmux select-pane -t "$PANE_ID" -T "#[bg=$HEADER_COLOR,fg=white,bold] $COLOR_NAME
 "$SCRIPT_DIR/smart-layout.sh" iris
 
 # Build the init message (now includes UUID)
-INIT_MSG="You are $COLOR_NAME ($PANE_ID). Your UUID is $WORKER_UUID. Never use ./say.sh directly. Update title: ./iris/set-worker-title.sh $WORKER_UUID \"task\". When done: ./iris/worker-done.sh $WORKER_UUID \"summary\". Your task: $TASK"
+INIT_MSG="You are $COLOR_NAME ($PANE_ID). Your UUID is $WORKER_UUID. Never use ./say.sh directly. Update title: ./spells/set-worker-title.sh $WORKER_UUID \"task\". When done: ./spells/worker-done.sh $WORKER_UUID \"summary\". Your task: $TASK"
 
 # Function to wait for Claude and send the task
 wait_and_send() {
