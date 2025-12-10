@@ -5,10 +5,12 @@ A voice-controlled orchestration system where **Iris** (the herald) coordinates 
 ## Core Concepts
 
 ```
-[User] → [Voice/Canary STT] → [Iris] → [Shades via tmux]
-                                 ↓
-                          [Kokoro TTS] ← responses
+[User] → [Echo (STT/TTS)] → [Iris] → [Shades via tmux]
+              ↑                          ↓
+              └──────── responses ───────┘
 ```
+
+**Echo** is Iris's voice - her ears and mouth. Lives in `echo/` and handles speech-to-text (Canary) and text-to-speech (Kokoro).
 
 **Iris** is the orchestrator running in the master tmux pane. She delegates tasks to shades but never writes code herself.
 
@@ -33,16 +35,25 @@ iris (session)
 
 ```
 ~/Iris/
+├── echo/                # Voice system (STT/TTS)
+│   ├── echo.sh          # Start/stop Echo server
+│   ├── echo/            # Python package
+│   │   ├── server.py    # HTTP API + PTT listener
+│   │   ├── bubble.py    # Visual overlay (GTK4)
+│   │   └── ...
+│   ├── speak.sh         # CLI for TTS
+│   └── listen.sh        # CLI for STT
 ├── spells/              # Shell scripts for orchestration
 │   ├── iris.sh          # Main CLI (spawn, status, kill, send, peek, stop)
 │   ├── spawn.sh         # Creates new shade panes
 │   ├── report.sh        # Shade-to-Iris messaging
 │   ├── messenger.sh     # Delivers queued reports to Iris when idle
 │   ├── change-detector.sh  # Tracks pane activity for idle detection
-│   ├── pane.sh          # Low-level tmux pane operations
-│   ├── layout.sh        # Manages pane sizing
+│   ├── pane.sh          # Low-level tmux pane create/kill
+│   ├── layout.sh        # Restructures panes (break-pane/join-pane)
 │   ├── title.sh         # Updates shade status/title
 │   ├── list.sh          # Lists active/historical shades
+│   ├── say.sh           # Speak via Echo
 │   └── kill.sh          # Terminates shades
 ├── shadows/             # State for each shade
 │   ├── <uuid>/          # Per-shade folder

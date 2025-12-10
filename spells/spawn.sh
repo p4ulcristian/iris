@@ -56,6 +56,14 @@ WORKER_UUID="${COLOR_NAME,,}-$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 2)"
 # Build init message from settings.json template
 # Use bash parameter expansion instead of sed - handles multiline TASK safely
 SHADE_PROMPT=$(jq -r '.prompts.shade' "$SETTINGS")
+
+# Check if reporting is enabled
+REPORT_ENABLED=$(jq -r '.shades.report // true' "$SETTINGS")
+if [ "$REPORT_ENABLED" = "false" ]; then
+    # Strip report instructions from prompt
+    SHADE_PROMPT=$(echo "$SHADE_PROMPT" | sed 's/Report to Iris using \.\/spells\/report\.sh "message" - report whenever you have something useful to share: discoveries, questions, blockers, progress updates, or when done\. //')
+fi
+
 INIT_MSG="${SHADE_PROMPT//\{\{COLOR_NAME\}\}/$COLOR_NAME}"
 INIT_MSG="${INIT_MSG//\{\{WORKER_UUID\}\}/$WORKER_UUID}"
 INIT_MSG="${INIT_MSG//\{\{TASK\}\}/$TASK}"

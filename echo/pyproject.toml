@@ -1,0 +1,25 @@
+[project]
+name = "echo"
+version = "0.2.0"
+description = "Push-to-talk voice assistant for Wayland with STT and TTS"
+requires-python = ">=3.10"
+dependencies = [
+    "nemo_toolkit[asr]",
+    "sounddevice",
+    "numpy",
+    "evdev",
+    "flask",
+    "librosa",
+    "llama-cpp-python",
+    "torch",
+    "snac @ git+https://github.com/hubertsiuzdak/snac.git",
+    "soundfile",
+    "huggingface-hub",
+]
+
+[project.scripts]
+echo = "echo.server:main"
+echo-download-gguf = "echo.download_gguf:main"
+
+[tool.setuptools.packages.find]
+include = ["echo*"]

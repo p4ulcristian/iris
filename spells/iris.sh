@@ -141,22 +141,35 @@ cmd_kill() {
     fi
 
     if [ "$name" = "all" ]; then
-        local panes=$("$SPELLS_DIR/pane.sh" list)
+        # Get shade info before killing
         local count=0
+        while IFS=: read -r pane_id title; do
+            [[ "$pane_id" == "%0" ]] && continue
+            [[ "$title" != *"|"* ]] && continue
 
-        for pane in $panes; do
-            "$SPELLS_DIR/pane.sh" kill "$pane" 2>/dev/null && ((count++)) || true
-        done
+            IFS='|' read -r shade_name uuid project <<< "$title"
+            [[ -z "$uuid" ]] && continue
+
+            # Record outcome
+            local shadow_dir="$IRIS_DIR/shadows/$uuid"
+            if [ -d "$shadow_dir" ]; then
+                echo "killed" > "$shadow_dir/outcome.txt"
+                date -Iseconds > "$shadow_dir/died.txt"
+            fi
+
+            # Stop pipe-pane and kill
+            tmux pipe-pane -t "$pane_id"
+            "$SPELLS_DIR/pane.sh" kill "$pane_id" 2>/dev/null && ((count++)) || true
+        done < <(tmux list-panes -t $SESSION -F '#{pane_id}:#{pane_title}' 2>/dev/null)
 
         if [ $count -gt 0 ]; then
             echo -e "${GREEN}Killed $count shade(s)${NC}"
-            sleep 0.2
-            "$SPELLS_DIR/layout.sh" $SESSION
         else
             echo -e "${YELLOW}No shades to kill${NC}"
         fi
     else
         "$SPELLS_DIR/kill.sh" "$name"
+        "$SPELLS_DIR/layout.sh" $SESSION
     fi
 }
 

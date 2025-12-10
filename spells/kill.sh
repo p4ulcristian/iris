@@ -66,7 +66,3 @@ tmux pipe-pane -t "$PANE_ID"
 "$SCRIPT_DIR/pane.sh" kill "$PANE_ID"
 
 echo "Killed $NAME ($PANE_ID)"
-
-# Reapply layout
-sleep 0.2
-"$SCRIPT_DIR/layout.sh" iris
