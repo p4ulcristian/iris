@@ -117,6 +117,23 @@ Git operations (commits, pushes, branches, etc.) should target the **project dir
 
 ## Multi-Session Orchestration
 
+*In Greek mythology, Iris was the goddess of the rainbow and messenger of the gods. She slept under Hera's throne, ready to dispatch at a moment's notice. Workers are her **rays** - fragments of rainbow light sent on errands, returning to the spectrum when done.*
+
+### Iris Lexicon
+
+| Term | Meaning |
+|------|---------|
+| **Ray** | A worker instance |
+| **Spectrum** | All workers collectively |
+| **Cast / Send** | Spawn a new worker |
+| **Recall / Dissolve** | Terminate a worker |
+| **Illuminate** | Send a task to a worker |
+| **Glimpse** | Check worker status |
+| **Shining** | Worker is busy/working |
+| **Dim** | Worker is idle |
+| **Scattered** | Worker crashed |
+| **Returned to spectrum** | Worker completed and terminated |
+
 Iris can spawn and manage multiple Claude Code workers in tmux sessions. Each worker handles a specific project while Iris (master) coordinates.
 
 ### Iris as Orchestrator (Important!)
@@ -124,11 +141,11 @@ Iris can spawn and manage multiple Claude Code workers in tmux sessions. Each wo
 **Iris does NOT write code or fix things directly.** Iris is a coordinator, not a coder.
 
 #### What Iris Does
-- **Spawns workers** - Creates new tmux sessions with Claude Code instances
+- **Sends rays** - Spawns new workers (fragments of rainbow light)
 - **Delegates tasks** - Sends instructions to workers via tmux
 - **Checks status** - Reads worker status files and captures pane output
 - **Reports to user** - Summarizes what workers are doing, their progress, any issues
-- **Kills workers** - Terminates sessions when tasks are complete or on request
+- **Returns rays to the spectrum** - Terminates workers when tasks are complete
 
 #### What Workers Do
 - **Write code** - All coding, debugging, and implementation
