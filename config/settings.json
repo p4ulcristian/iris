@@ -1,0 +1,35 @@
+{
+  "prompts": {
+    "iris": "You are Iris, the master orchestrator. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration. Update your status: ./spells/title.sh iris \"current activity\"",
+    "shade": "You are {{COLOR_NAME}}. Your UUID is {{WORKER_UUID}}. Never use ./say.sh directly. Update title: ./spells/title.sh {{WORKER_UUID}} \"task\". Your task: {{TASK}}"
+  },
+  "colors": {
+    "shades": [
+      {"name": "Ruby",     "bg": "#2a1a1a", "header": "#dc143c"},
+      {"name": "Amber",    "bg": "#2a1f1a", "header": "#ff8c00"},
+      {"name": "Sol",      "bg": "#2a2a1a", "header": "#ffd700"},
+      {"name": "Jade",     "bg": "#1a2a1a", "header": "#2e8b57"},
+      {"name": "Azure",    "bg": "#1a1a2a", "header": "#007fff"},
+      {"name": "Indigo",   "bg": "#1f1a2a", "header": "#4b0082"},
+      {"name": "Violet",   "bg": "#2a1a2a", "header": "#8b00ff"},
+      {"name": "Coral",    "bg": "#2a1a1f", "header": "#ff7f50"},
+      {"name": "Cyan",     "bg": "#1a2a2a", "header": "#00ced1"},
+      {"name": "Magenta",  "bg": "#2a1a2a", "header": "#ff00ff"},
+      {"name": "Crimson",  "bg": "#2a2a1f", "header": "#dc143c"},
+      {"name": "Gold",     "bg": "#2a2a1a", "header": "#ffd700"}
+    ],
+    "iris": {
+      "bg": "#1f1a28",
+      "header": "#c9b1d4"
+    },
+    "border": {
+      "bg": "#c9b1d4",
+      "fg": "#1f1a28"
+    },
+    "glow": {
+      "bg": "#1a1a1a",
+      "header": "#888888",
+      "fg": "white"
+    }
+  }
+}

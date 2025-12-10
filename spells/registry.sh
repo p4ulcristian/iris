@@ -83,9 +83,9 @@ case "$1" in
         jq -r --arg name "$NAME" '
             .active | to_entries |
             map(select(.value.name | ascii_downcase == $name)) |
-            if length == 1 then .[0].key
-            elif length == 0 then empty
-            else error("Multiple matches")
+            sort_by(.value.spawned_at) |
+            if length >= 1 then .[-1].key
+            else empty
             end
         ' "$REGISTRY"
         ;;

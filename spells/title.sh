@@ -3,8 +3,21 @@
 # Usage:
 #   title.sh <pane_id> <name> <color_hex> <task>   - Direct mode
 #   title.sh <uuid> <task>                          - UUID mode (looks up registry)
+#   title.sh iris <task>                            - Iris mode (targets main pane)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Handle Iris special case
+if [[ "$1" == "iris" ]]; then
+    shift
+    TASK="$*"
+    if [ -z "$TASK" ]; then
+        tmux select-pane -t "iris:0.0" -T "Iris"
+    else
+        tmux select-pane -t "iris:0.0" -T "Iris - $TASK"
+    fi
+    exit 0
+fi
 
 # Detect UUID format
 if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
@@ -42,4 +55,4 @@ else
     fi
 fi
 
-tmux select-pane -t "$PANE_ID" -T "#[bg=$COLOR,fg=white,bold] $NAME - $TASK "
+tmux select-pane -t "$PANE_ID" -T "$NAME - $TASK"

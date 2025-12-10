@@ -18,11 +18,8 @@ set -e
 
 IRIS_DIR="$HOME/Iris"
 SPELLS_DIR="$IRIS_DIR/spells"
+SETTINGS="$IRIS_DIR/config/settings.json"
 SESSION="iris"
-
-# Iris theme colors
-IRIS_HEADER="#c9b1d4"  # Silver-violet
-IRIS_BG="#1f1a28"      # Nebula
 
 # Terminal colors
 RED='\033[0;31m'
@@ -32,26 +29,54 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# Start queue daemon
+start_daemon() {
+    nohup "$SPELLS_DIR/queue-daemon.sh" > /dev/null 2>&1 &
+}
+
+# Stop queue daemon
+stop_daemon() {
+    if [ -f /tmp/iris/daemon.pid ]; then
+        kill "$(cat /tmp/iris/daemon.pid)" 2>/dev/null || true
+        rm -f /tmp/iris/daemon.pid
+    fi
+}
+
 # Start Iris session
 cmd_start() {
     if ! tmux has-session -t $SESSION 2>/dev/null; then
         tmux new-session -d -s $SESSION
 
-        # Style status bar
-        tmux set-option -t $SESSION status on
-        tmux set-option -t $SESSION status-position top
-        tmux set-option -t $SESSION status-style "bg=$IRIS_HEADER,fg=#000000"
-        tmux set-option -t $SESSION status-left " Iris "
-        tmux set-option -t $SESSION status-left-length 50
-        tmux set-option -t $SESSION status-right ""
-        tmux set-option -t $SESSION window-status-format ""
-        tmux set-option -t $SESSION window-status-current-format ""
+        # Load colors from config
+        IRIS_JSON=$("$SPELLS_DIR/color.sh" iris)
+        IRIS_BG=$(echo "$IRIS_JSON" | jq -r '.bg')
+
+        BORDER_JSON=$("$SPELLS_DIR/color.sh" border)
+        BORDER_BG=$(echo "$BORDER_JSON" | jq -r '.bg')
+        BORDER_FG=$(echo "$BORDER_JSON" | jq -r '.fg')
+
+        # Status bar off - using pane title bars instead
+        tmux set-option -t $SESSION status off
+
+        # Style borders
+        tmux set-option -t $SESSION pane-border-status top
+        tmux set-option -t $SESSION pane-border-lines heavy
+        tmux set-option -t $SESSION pane-border-style "fg=$BORDER_BG,bg=$BORDER_BG"
+        tmux set-option -t $SESSION pane-active-border-style "fg=$BORDER_BG,bg=$BORDER_BG"
+        tmux set-option -t $SESSION pane-border-format "#[bg=$BORDER_BG,fg=$BORDER_FG,bold] #{pane_title} "
 
         # Style pane
         tmux select-pane -t $SESSION -P "bg=$IRIS_BG"
+        tmux select-pane -t $SESSION -T "Iris"
         tmux set-option -t $SESSION allow-set-title off
 
-        tmux send-keys -t $SESSION "cd ~/Iris && claude --dangerously-skip-permissions" Enter
+        # Start queue daemon for shade notifications
+        start_daemon
+
+        # Load Iris prompt from settings
+        IRIS_PROMPT=$(jq -r '.prompts.iris' "$SETTINGS")
+        ESCAPED_PROMPT="${IRIS_PROMPT//\'/\'\\\'\'}"
+        tmux send-keys -t $SESSION "cd ~/Iris && claude --dangerously-skip-permissions -- '$ESCAPED_PROMPT'" Enter
         echo -e "${GREEN}Iris session started${NC}"
         sleep 1
     fi
@@ -172,6 +197,7 @@ cmd_stop() {
 
     echo -e "${YELLOW}Stopping Iris...${NC}"
     cmd_kill "all"
+    stop_daemon
     tmux kill-session -t $SESSION 2>/dev/null && echo -e "${GREEN}Iris stopped${NC}"
 }
 
@@ -211,6 +237,7 @@ main() {
     case "$cmd" in
         start|open)       cmd_start ;;
         spawn|new)        cmd_spawn "$@" ;;
+        run)              "$SPELLS_DIR/run.sh" "$@" ;;
         status|list|ls)   "$SPELLS_DIR/list.sh" ;;
         kill|rm)          cmd_kill "$@" ;;
         send|msg)         cmd_send "$@" ;;

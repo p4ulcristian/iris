@@ -1,12 +1,14 @@
 #!/bin/bash
-# Color operations - reads from shades.json
+# Color operations - reads from settings.json
 # Usage:
-#   color.sh next              - Get next available color (JSON)
-#   color.sh get <name>        - Get color by name (JSON)
-#   color.sh list              - List all color names
+#   color.sh next              - Get next available shade color (JSON)
+#   color.sh get <name>        - Get shade color by name (JSON)
+#   color.sh list              - List all shade names
+#   color.sh iris              - Get iris colors (JSON)
+#   color.sh border            - Get border colors (JSON)
 
 IRIS_DIR="$HOME/Iris"
-SHADES="$IRIS_DIR/config/shades.json"
+SETTINGS="$IRIS_DIR/config/settings.json"
 SESSION="iris"
 
 case "$1" in
@@ -15,16 +17,16 @@ case "$1" in
         USED=$(tmux list-panes -t "$SESSION" -F '#{pane_title}' 2>/dev/null | \
                grep -oE '(Ruby|Amber|Sol|Jade|Azure|Indigo|Violet|Coral|Cyan|Magenta|Crimson|Gold)' || true)
 
-        # Find first available color
+        # Get available colors, shuffle randomly, pick first
         AVAILABLE=$(jq -r --arg used "$USED" '
-            .shades[] |
+            .colors.shades[] |
             select(.name as $n | ($used | contains($n) | not)) |
             @json
-        ' "$SHADES" | head -1)
+        ' "$SETTINGS" | shuf | head -1)
 
         if [ -z "$AVAILABLE" ]; then
-            # All used, pick first
-            jq '.shades[0]' "$SHADES"
+            # All used, pick random from all
+            jq -r '.colors.shades[] | @json' "$SETTINGS" | shuf | head -1
         else
             echo "$AVAILABLE"
         fi
@@ -35,13 +37,22 @@ case "$1" in
             echo "Usage: color.sh get <name>" >&2
             exit 1
         fi
-        jq -r --arg name "$NAME" '.shades[] | select(.name == $name)' "$SHADES"
+        jq -r --arg name "$NAME" '.colors.shades[] | select(.name == $name)' "$SETTINGS"
         ;;
     list)
-        jq -r '.shades[].name' "$SHADES"
+        jq -r '.colors.shades[].name' "$SETTINGS"
+        ;;
+    iris)
+        jq -r '.colors.iris' "$SETTINGS"
+        ;;
+    border)
+        jq -r '.colors.border' "$SETTINGS"
+        ;;
+    glow)
+        jq -r '.colors.glow' "$SETTINGS"
         ;;
     *)
-        echo "Usage: color.sh <next|get|list>" >&2
+        echo "Usage: color.sh <next|get|list|iris|border|glow>" >&2
         exit 1
         ;;
 esac

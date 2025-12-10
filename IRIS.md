@@ -158,6 +158,22 @@ Shades write status to `shadows/[session-name].json`:
 
 ---
 
+## Dev Environments
+
+When Paul says **"dev [project]"**, start the dev environment:
+
+```bash
+# Iron Rainbow - runs all frontends by default
+./spells/run.sh ironrainbow ./start-dev.sh customizer labs site flex
+
+# Or specific frontends
+./spells/run.sh ironrainbow ./start-dev.sh customizer
+```
+
+Project aliases: `ironrainbow`/`ir`, `elevathor`/`el`, `colormecrazy`/`cmc`
+
+---
+
 ## Voice Commands (examples)
 
 | Command | Action |

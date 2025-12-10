@@ -13,6 +13,10 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
+# Load colors from config
+GLOW_JSON=$("$SCRIPT_DIR/color.sh" glow)
+GLOW_BG=$(echo "$GLOW_JSON" | jq -r '.bg')
+
 # Build glow command with pager mode and mouse scrolling
 GLOW_CMD="LESS='-R --mouse' glow -p $*"
 
@@ -20,8 +24,8 @@ GLOW_CMD="LESS='-R --mouse' glow -p $*"
 PANE_ID=$(tmux split-window -t iris -h -d -P -F '#{pane_id}' "$GLOW_CMD")
 
 # Set a distinct color for glow panes
-tmux select-pane -t "$PANE_ID" -P "bg=#1a1a1a"
-tmux select-pane -t "$PANE_ID" -T "#[bg=#888888,fg=white,bold] Glow "
+tmux select-pane -t "$PANE_ID" -P "bg=$GLOW_BG"
+tmux select-pane -t "$PANE_ID" -T "Glow"
 
 # Apply layout and refocus master
 "$SCRIPT_DIR/layout.sh" iris 2>/dev/null

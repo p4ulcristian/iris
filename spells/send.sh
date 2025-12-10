@@ -19,4 +19,5 @@ fi
 BUFFER_NAME="worker-msg-$$-$PANE_ID"
 tmux set-buffer -b "$BUFFER_NAME" "$MESSAGE"
 tmux paste-buffer -t "$PANE_ID" -b "$BUFFER_NAME" -d
+sleep 0.1
 tmux send-keys -t "$PANE_ID" Enter
