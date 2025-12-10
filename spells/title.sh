@@ -1,12 +1,14 @@
 #!/bin/bash
-# Set shade tab title (WezTerm native)
+# Set shade pane title
 # Usage:
-#   title.sh <uuid> <task>   - UUID mode (recommended)
+#   title.sh <pane_id> <name> <color_hex> <task>   - Direct mode
+#   title.sh <uuid> <task>                          - UUID mode (looks up registry)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Expect UUID format
+# Detect UUID format
 if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
+    # UUID mode
     UUID="$1"
     shift
     TASK="$*"
@@ -20,18 +22,24 @@ if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
     PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
     NAME=$(echo "$SHADE_JSON" | jq -r '.name')
 
-    # Truncate task for tab title
-    SHORT_TASK="${TASK:0:40}"
-    [ ${#TASK} -gt 40 ] && SHORT_TASK="${SHORT_TASK}..."
-
-    # Set WezTerm tab title
-    wezterm cli set-tab-title --pane-id "$PANE_ID" "$NAME: $SHORT_TASK"
+    COLOR_JSON=$("$SCRIPT_DIR/color.sh" get "$NAME")
+    COLOR=$(echo "$COLOR_JSON" | jq -r '.header')
 
     # Update registry status
     "$SCRIPT_DIR/registry.sh" update "$UUID" "status" "working"
     "$SCRIPT_DIR/registry.sh" update "$UUID" "current_task" "$TASK"
 else
-    echo "Usage: title.sh <uuid> <task>" >&2
-    echo "  UUID format: name-YYYYMMDD-HHMMSS-xxxx" >&2
-    exit 1
+    # Direct mode
+    PANE_ID="$1"
+    NAME="$2"
+    COLOR="$3"
+    shift 3
+    TASK="$*"
+
+    if [ -z "$PANE_ID" ] || [ -z "$NAME" ] || [ -z "$COLOR" ]; then
+        echo "Usage: title.sh <pane_id> <name> <color_hex> <task>" >&2
+        exit 1
+    fi
 fi
+
+tmux select-pane -t "$PANE_ID" -T "#[bg=$COLOR,fg=white,bold] $NAME - $TASK "

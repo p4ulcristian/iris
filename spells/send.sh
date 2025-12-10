@@ -1,6 +1,9 @@
 #!/bin/bash
-# Send a message to a shade pane (WezTerm native)
+# Send a message to a shade pane and press Enter
 # Usage: send.sh <pane_id> <message>
+#
+# Uses tmux set-buffer + paste-buffer for faster text input
+# (send-keys sends character by character which can be slow for long messages)
 
 PANE_ID="$1"
 shift
@@ -11,7 +14,9 @@ if [ -z "$PANE_ID" ] || [ -z "$MESSAGE" ]; then
     exit 1
 fi
 
-# Send text to pane, then send Enter
-wezterm cli send-text --pane-id "$PANE_ID" --no-paste "$MESSAGE"
-# Send Enter key
-wezterm cli send-text --pane-id "$PANE_ID" --no-paste $'\n'
+# Use buffer for faster pasting (especially for long messages)
+# Buffer name includes pane_id to avoid conflicts with concurrent sends
+BUFFER_NAME="worker-msg-$$-$PANE_ID"
+tmux set-buffer -b "$BUFFER_NAME" "$MESSAGE"
+tmux paste-buffer -t "$PANE_ID" -b "$BUFFER_NAME" -d
+tmux send-keys -t "$PANE_ID" Enter
