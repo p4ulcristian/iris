@@ -143,7 +143,7 @@ Shade names: Fred, Neil, Mellow, Clint, Chum, Kai
 
 ## Shade Status Tracking
 
-Shades write status to `spells/sessions/[session-name].json`:
+Shades write status to `shadows/[session-name].json`:
 
 ```json
 {

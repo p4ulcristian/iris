@@ -361,7 +361,7 @@ cmd_peek() {
 # List session notes
 cmd_notes() {
     local project="$1"
-    local notes_dir="$SPELLS_DIR/sessions/notes"
+    local notes_dir="$THINK_DIR/shadows/notes"
 
     if [ ! -d "$notes_dir" ]; then
         echo -e "${YELLOW}No session notes found${NC}"

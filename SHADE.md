@@ -27,7 +27,7 @@ You were summoned by Iris into a tmux pane. You have a color name (Fred, Neil, M
 
 ## Status Updates
 
-Update your status file at `~/Think/spells/sessions/[your-session-name].json`:
+Update your status file at `~/Think/shadows/[your-session-name].json`:
 
 ```json
 {
@@ -60,7 +60,7 @@ When done:
 
 ## Session Notes
 
-Save notes to `spells/sessions/notes/` so future shades can continue your work.
+Save notes to `shadows/notes/` so future shades can continue your work.
 
 ### When to Save Notes
 
@@ -78,7 +78,7 @@ Save notes to `spells/sessions/notes/` so future shades can continue your work.
 ### File Naming
 
 ```
-spells/sessions/notes/[project]-[topic]-[YYYY-MM-DD].md
+shadows/notes/[project]-[topic]-[YYYY-MM-DD].md
 ```
 
 Examples:
@@ -118,7 +118,7 @@ Examples:
 
 Check for existing notes:
 ```bash
-ls spells/sessions/notes/ | grep [project]
+ls shadows/notes/ | grep [project]
 ```
 
 Read any matching files to get context from previous shades.
