@@ -29,16 +29,17 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Start queue daemon
-start_daemon() {
-    nohup "$SPELLS_DIR/queue-daemon.sh" > /dev/null 2>&1 &
+# Start messenger and change detector
+start_messenger() {
+    "$SPELLS_DIR/change-detector.sh"
+    nohup "$SPELLS_DIR/messenger.sh" > /dev/null 2>&1 &
 }
 
-# Stop queue daemon
-stop_daemon() {
-    if [ -f /tmp/iris/daemon.pid ]; then
-        kill "$(cat /tmp/iris/daemon.pid)" 2>/dev/null || true
-        rm -f /tmp/iris/daemon.pid
+# Stop messenger
+stop_messenger() {
+    if [ -f /tmp/iris/messenger.pid ]; then
+        kill "$(cat /tmp/iris/messenger.pid)" 2>/dev/null || true
+        rm -f /tmp/iris/messenger.pid
     fi
 }
 
@@ -67,11 +68,11 @@ cmd_start() {
 
         # Style pane
         tmux select-pane -t $SESSION -P "bg=$IRIS_BG"
-        tmux select-pane -t $SESSION -T "Iris"
+        tmux select-pane -t $SESSION -T "𓂀 Iris"
         tmux set-option -t $SESSION allow-set-title off
 
-        # Start queue daemon for shade notifications
-        start_daemon
+        # Start messenger for shade notifications
+        start_messenger
 
         # Load Iris prompt from settings
         IRIS_PROMPT=$(jq -r '.prompts.iris' "$SETTINGS")
@@ -217,7 +218,7 @@ cmd_stop() {
 
     echo -e "${YELLOW}Stopping Iris...${NC}"
     cmd_kill "all"
-    stop_daemon
+    stop_messenger
     tmux kill-session -t $SESSION 2>/dev/null && echo -e "${GREEN}Iris stopped${NC}"
 }
 

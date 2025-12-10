@@ -5,18 +5,18 @@
   },
   "colors": {
     "shades": [
-      {"name": "Ruby",     "bg": "#2a1a1a", "header": "#dc143c"},
-      {"name": "Amber",    "bg": "#2a1f1a", "header": "#ff8c00"},
-      {"name": "Sol",      "bg": "#2a2a1a", "header": "#ffd700"},
-      {"name": "Jade",     "bg": "#1a2a1a", "header": "#2e8b57"},
-      {"name": "Azure",    "bg": "#1a1a2a", "header": "#007fff"},
-      {"name": "Indigo",   "bg": "#1f1a2a", "header": "#4b0082"},
-      {"name": "Violet",   "bg": "#2a1a2a", "header": "#8b00ff"},
-      {"name": "Coral",    "bg": "#2a1a1f", "header": "#ff7f50"},
-      {"name": "Cyan",     "bg": "#1a2a2a", "header": "#00ced1"},
-      {"name": "Magenta",  "bg": "#2a1a2a", "header": "#ff00ff"},
-      {"name": "Crimson",  "bg": "#2a2a1f", "header": "#dc143c"},
-      {"name": "Gold",     "bg": "#2a2a1a", "header": "#ffd700"}
+      {"name": "Ruby",     "bg": "#301515", "header": "#dc143c"},
+      {"name": "Amber",    "bg": "#2d2010", "header": "#ff8c00"},
+      {"name": "Sol",      "bg": "#28280a", "header": "#ffd700"},
+      {"name": "Jade",     "bg": "#0f241a", "header": "#2e8b57"},
+      {"name": "Azure",    "bg": "#101828", "header": "#007fff"},
+      {"name": "Indigo",   "bg": "#1a1030", "header": "#4b0082"},
+      {"name": "Violet",   "bg": "#241428", "header": "#8b00ff"},
+      {"name": "Coral",    "bg": "#2e1a18", "header": "#ff7f50"},
+      {"name": "Cyan",     "bg": "#0a2828", "header": "#00ced1"},
+      {"name": "Magenta",  "bg": "#280a20", "header": "#ff00ff"},
+      {"name": "Crimson",  "bg": "#251010", "header": "#dc143c"},
+      {"name": "Gold",     "bg": "#242008", "header": "#ffd700"}
     ],
     "iris": {
       "bg": "#1f1a28",

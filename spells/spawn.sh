@@ -79,6 +79,7 @@ echo "$TASK" > "$SHADOWS_DIR/task.txt"
 echo "$COLOR_NAME" > "$SHADOWS_DIR/name.txt"
 [ -n "$PROJECT" ] && echo "$PROJECT" > "$SHADOWS_DIR/project.txt"
 date -Iseconds > "$SHADOWS_DIR/spawned.txt"
+echo "laboring" > "$SHADOWS_DIR/status.txt"
 
 # 2. Create pane (Claude starts immediately with the task)
 PANE_ID=$("$SCRIPT_DIR/pane.sh" create "$CLAUDE_CMD")

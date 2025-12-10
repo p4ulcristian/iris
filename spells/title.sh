@@ -1,11 +1,18 @@
 #!/bin/bash
-# Set shade pane title
+# Set shade pane title and status
 # Usage:
 #   title.sh <uuid> <task>                          - Shade updates its displayed task
+#   title.sh <uuid> --status <status>               - Update shade status only
 #   title.sh iris <task>                            - Iris mode (targets main pane)
 #
+# Status icons:
+#   laboring  ▶  (working)
+#   dormant   ◉  (idle)
+#   fulfilled ✦  (done)
+#   scattered ⚡ (crashed)
+#
 # Note: The pane title stores metadata (Name|uuid|project)
-# This script updates a "current_task.txt" in shadows/ for display purposes
+# Task/status stored in shadows/<uuid>/ for display purposes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IRIS_DIR="$HOME/Iris"
@@ -16,17 +23,40 @@ if [[ "$1" == "iris" ]]; then
     shift
     TASK="$*"
     if [ -z "$TASK" ]; then
-        tmux select-pane -t "iris:0.0" -T "Iris"
+        tmux select-pane -t "iris:0.0" -T "𓂀 Iris"
     else
-        tmux select-pane -t "iris:0.0" -T "Iris - $TASK"
+        tmux select-pane -t "iris:0.0" -T "𓂀 Iris - $TASK"
     fi
     exit 0
 fi
 
-# UUID mode - shade updating its task
+# Status icon mapping
+get_status_icon() {
+    case "$1" in
+        laboring|working|busy) echo "▶" ;;
+        dormant|idle)          echo "◉" ;;
+        fulfilled|done)        echo "✦" ;;
+        scattered|crashed)     echo "⚡" ;;
+        *)                     echo "▶" ;;  # default to laboring
+    esac
+}
+
+# UUID mode - shade updating its task or status
 if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
     UUID="$1"
     shift
+
+    # Check for --status flag
+    if [[ "$1" == "--status" ]]; then
+        shift
+        STATUS="$1"
+        SHADOW_DIR="$SHADOWS_DIR/$UUID"
+        if [ -d "$SHADOW_DIR" ]; then
+            echo "$STATUS" > "$SHADOW_DIR/status.txt"
+        fi
+        exit 0
+    fi
+
     TASK="$*"
 
     # Find pane by UUID in tmux titles
@@ -47,15 +77,12 @@ if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
         exit 1
     fi
 
-    # Store current task in shadows folder
+    # Store current task in shadows folder and set status to laboring
     SHADOW_DIR="$SHADOWS_DIR/$UUID"
     if [ -d "$SHADOW_DIR" ]; then
         echo "$TASK" > "$SHADOW_DIR/current_task.txt"
+        echo "laboring" > "$SHADOW_DIR/status.txt"
     fi
-
-    # The pane title keeps the metadata - we can't change it without breaking lookups
-    # But we could optionally update it for visual purposes if desired
-    # For now, the task display comes from shadows/uuid/current_task.txt
 
     exit 0
 fi

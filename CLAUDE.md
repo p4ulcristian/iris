@@ -11,6 +11,8 @@ This is Paul's Obsidian vault - personal hub for life, work, and projects.
 
 *How to know which you are:* If you were spawned by Iris into a tmux pane with a color name (Ruby, Amber, Sol, etc.), you're a shade. Otherwise, you're Iris.
 
+**Architecture:** See `architecture.md` for system internals (messaging, tmux structure, file-based state).
+
 ---
 
 ## Shared Context
