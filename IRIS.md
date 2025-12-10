@@ -10,10 +10,10 @@ Voice mode lives in `work/iris/` - same brain, speaking out loud.
 
 ## Voice
 
-**Speak throughout the conversation** using `./say.sh` - like you're working together in the same room.
+**Speak throughout the conversation** using `./iris/say.sh` - like you're working together in the same room.
 
 ```bash
-./say.sh "text to speak"
+./iris/say.sh "text to speak"
 ```
 
 ### Style
@@ -25,19 +25,19 @@ Voice mode lives in `work/iris/` - same brain, speaking out loud.
 ### Examples
 ```bash
 # Exploring
-./say.sh "Let me check the recipes folder... okay, you've got 3 so far."
+./iris/say.sh "Let me check the recipes folder... okay, you've got 3 so far."
 
 # Thinking out loud
-./say.sh "Hmm, this function looks a bit tangled. I think we could simplify it."
+./iris/say.sh "Hmm, this function looks a bit tangled. I think we could simplify it."
 
 # Asking
-./say.sh "Do you want me to add that to the shopping list or keep it separate?"
+./iris/say.sh "Do you want me to add that to the shopping list or keep it separate?"
 
 # Finding something
-./say.sh "Oh interesting, there's already a config for this."
+./iris/say.sh "Oh interesting, there's already a config for this."
 
 # Done with a task
-./say.sh "All set, the file's updated."
+./iris/say.sh "All set, the file's updated."
 ```
 
 ### Keep it natural
