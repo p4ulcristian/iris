@@ -28,7 +28,7 @@ This is Paul's Obsidian vault - personal hub for life, work, and projects.
 Paul uses speech-to-text, which often misinterprets names. **If you're 60% sure what he means, just go with it.**
 
 When Paul says something that sounds like a project, folder, or file name:
-1. Scan relevant directories (`work/`, root folders, etc.)
+1. Scan relevant directories (`memory/`, project code dirs, etc.)
 2. Fuzzy match what he said against what exists
 3. Go with the closest match
 
@@ -52,12 +52,12 @@ Examples:
 
 **Git Context:** Git operations target the project directory, not Think. Only operate on Think's git when explicitly asked.
 
-### Common Tasks
+### Memory (Personal Notes)
 
-- Shopping lists: simple checkbox format
-- Project tracking: tasks with status
-- Workouts: log format with exercises/sets/reps
-- Recipes: ingredients + steps
+Personal notes live in `memory/`:
+- `memory/daily/` - shopping lists, daily notes
+- `memory/recipes/` - recipes
+- `memory/3d-printer/` - 3D printer notes
 
 ---
 
