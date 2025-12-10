@@ -2,7 +2,8 @@
 # Spawn a new shade with a task
 # Usage: spawn.sh [--project <project>] <task>
 #
-# Composes: pane.sh, color.sh, registry.sh, title.sh
+# Composes: pane.sh, color.sh, title.sh
+# State: tmux pane titles are source of truth, shadows/<uuid>/ stores logs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IRIS_DIR="$HOME/Iris"
@@ -53,11 +54,11 @@ COLOR_HEADER=$(echo "$COLOR_JSON" | jq -r '.header')
 WORKER_UUID="${COLOR_NAME,,}-$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 2)"
 
 # Build init message from settings.json template
+# Use bash parameter expansion instead of sed - handles multiline TASK safely
 SHADE_PROMPT=$(jq -r '.prompts.shade' "$SETTINGS")
-INIT_MSG=$(echo "$SHADE_PROMPT" | sed \
-    -e "s|{{COLOR_NAME}}|$COLOR_NAME|g" \
-    -e "s|{{WORKER_UUID}}|$WORKER_UUID|g" \
-    -e "s|{{TASK}}|$TASK|g")
+INIT_MSG="${SHADE_PROMPT//\{\{COLOR_NAME\}\}/$COLOR_NAME}"
+INIT_MSG="${INIT_MSG//\{\{WORKER_UUID\}\}/$WORKER_UUID}"
+INIT_MSG="${INIT_MSG//\{\{TASK\}\}/$TASK}"
 
 # Build claude command with message as argument (instant start, no paste delay)
 # Escape single quotes in init message for safe embedding
@@ -71,22 +72,32 @@ fi
 
 # === COMPOSE MODULES ===
 
-# 1. Create pane (Claude starts immediately with the task)
+# 1. Create shadows folder for this shade
+SHADOWS_DIR="$IRIS_DIR/shadows/$WORKER_UUID"
+mkdir -p "$SHADOWS_DIR"
+echo "$TASK" > "$SHADOWS_DIR/task.txt"
+echo "$COLOR_NAME" > "$SHADOWS_DIR/name.txt"
+[ -n "$PROJECT" ] && echo "$PROJECT" > "$SHADOWS_DIR/project.txt"
+date -Iseconds > "$SHADOWS_DIR/spawned.txt"
+
+# 2. Create pane (Claude starts immediately with the task)
 PANE_ID=$("$SCRIPT_DIR/pane.sh" create "$CLAUDE_CMD")
 
-# 2. Register shade
-"$SCRIPT_DIR/registry.sh" add "$WORKER_UUID" "$PANE_ID" "$COLOR_NAME" "$TASK" "$PROJECT"
+# 3. Set pane title with structured metadata: Name|uuid|project
+# tmux pane title is now the source of truth for active shades
+TITLE_META="$COLOR_NAME|$WORKER_UUID|${PROJECT:-none}"
+tmux select-pane -t "$PANE_ID" -T "$TITLE_META"
 
-# 3. Set pane appearance
+# 4. Set pane appearance
 tmux select-pane -t "$PANE_ID" -P "bg=$COLOR_BG"
-SHORT_TASK="${TASK:0:50}"
-[ ${#TASK} -gt 50 ] && SHORT_TASK="${SHORT_TASK}..."
-"$SCRIPT_DIR/title.sh" "$PANE_ID" "$COLOR_NAME" "$COLOR_HEADER" "$SHORT_TASK"
 
-# 4. Ensure tmux settings
+# 5. Start pipe-pane logging to shadows folder
+tmux pipe-pane -t "$PANE_ID" "cat >> '$SHADOWS_DIR/output.log'"
+
+# 6. Ensure tmux settings
 tmux set-option -t iris allow-set-title off 2>/dev/null
 
-# 5. Apply layout
+# 7. Apply layout
 "$SCRIPT_DIR/layout.sh" iris
 
 echo "$WORKER_UUID"

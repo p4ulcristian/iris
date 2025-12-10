@@ -89,6 +89,21 @@ cmd_start() {
     fi
 }
 
+# Find shade by name from tmux pane titles (Name|uuid|project)
+find_shade() {
+    local search="${1,,}"  # lowercase
+    while IFS=: read -r pane_id title; do
+        [[ "$title" != *"|"* ]] && continue
+        IFS='|' read -r name uuid project <<< "$title"
+        [[ -z "$uuid" ]] && continue
+        if [[ "${name,,}" == "$search" ]]; then
+            echo "$pane_id:$name:$uuid"
+            return 0
+        fi
+    done < <(tmux list-panes -t $SESSION -F '#{pane_id}:#{pane_title}' 2>/dev/null)
+    return 1
+}
+
 # Spawn - delegates to spawn.sh
 cmd_spawn() {
     if ! tmux has-session -t $SESSION 2>/dev/null; then
@@ -97,10 +112,17 @@ cmd_spawn() {
     fi
 
     UUID=$("$SPELLS_DIR/spawn.sh" "$@")
-    SHADE_JSON=$("$SPELLS_DIR/registry.sh" get "$UUID")
-    NAME=$(echo "$SHADE_JSON" | jq -r '.name')
-    PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
-    TASK=$(echo "$SHADE_JSON" | jq -r '.task')
+
+    # Read info from shadows folder
+    SHADOWS_DIR="$IRIS_DIR/shadows/$UUID"
+    NAME=$(cat "$SHADOWS_DIR/name.txt" 2>/dev/null || echo "Unknown")
+    TASK=$(cat "$SHADOWS_DIR/task.txt" 2>/dev/null || echo "")
+
+    # Find pane ID from tmux
+    PANE_ID=""
+    while IFS=: read -r pid title; do
+        [[ "$title" == *"$UUID"* ]] && { PANE_ID="$pid"; break; }
+    done < <(tmux list-panes -t $SESSION -F '#{pane_id}:#{pane_title}' 2>/dev/null)
 
     echo -e "${GREEN}Spawned ${BOLD}$NAME${NC}${GREEN} ($PANE_ID)${NC}"
     echo -e "  Task: $TASK"
@@ -149,17 +171,16 @@ cmd_send() {
         exit 1
     fi
 
-    UUID=$("$SPELLS_DIR/registry.sh" lookup "$name")
-    if [ -z "$UUID" ]; then
+    SHADE_INFO=$(find_shade "$name")
+    if [ -z "$SHADE_INFO" ]; then
         echo -e "${RED}Shade '$name' not found${NC}"
         exit 1
     fi
 
-    SHADE_JSON=$("$SPELLS_DIR/registry.sh" get "$UUID")
-    PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
+    IFS=: read -r PANE_ID SHADE_NAME UUID <<< "$SHADE_INFO"
 
     "$SPELLS_DIR/send.sh" "$PANE_ID" "$message"
-    echo -e "${GREEN}Sent to $name:${NC} $message"
+    echo -e "${GREEN}Sent to $SHADE_NAME:${NC} $message"
 }
 
 # Peek at shade output
@@ -173,16 +194,15 @@ cmd_peek() {
         exit 1
     fi
 
-    UUID=$("$SPELLS_DIR/registry.sh" lookup "$name")
-    if [ -z "$UUID" ]; then
+    SHADE_INFO=$(find_shade "$name")
+    if [ -z "$SHADE_INFO" ]; then
         echo -e "${RED}Shade '$name' not found${NC}"
         exit 1
     fi
 
-    SHADE_JSON=$("$SPELLS_DIR/registry.sh" get "$UUID")
-    PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
+    IFS=: read -r PANE_ID SHADE_NAME UUID <<< "$SHADE_INFO"
 
-    echo -e "${BOLD}Output from $name ($PANE_ID):${NC}"
+    echo -e "${BOLD}Output from $SHADE_NAME ($PANE_ID):${NC}"
     echo "─────────────────────────────────────────"
     tmux capture-pane -t "$PANE_ID" -p | tail -"$lines"
     echo "─────────────────────────────────────────"

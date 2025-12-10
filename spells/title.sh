@@ -1,11 +1,15 @@
 #!/bin/bash
 # Set shade pane title
 # Usage:
-#   title.sh <pane_id> <name> <color_hex> <task>   - Direct mode
-#   title.sh <uuid> <task>                          - UUID mode (looks up registry)
+#   title.sh <uuid> <task>                          - Shade updates its displayed task
 #   title.sh iris <task>                            - Iris mode (targets main pane)
+#
+# Note: The pane title stores metadata (Name|uuid|project)
+# This script updates a "current_task.txt" in shadows/ for display purposes
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IRIS_DIR="$HOME/Iris"
+SHADOWS_DIR="$IRIS_DIR/shadows"
 
 # Handle Iris special case
 if [[ "$1" == "iris" ]]; then
@@ -19,40 +23,42 @@ if [[ "$1" == "iris" ]]; then
     exit 0
 fi
 
-# Detect UUID format
+# UUID mode - shade updating its task
 if [[ "$1" =~ ^[a-z]+-[0-9]{8}-[0-9]{6}-[a-f0-9]{4}$ ]]; then
-    # UUID mode
     UUID="$1"
     shift
     TASK="$*"
 
-    SHADE_JSON=$("$SCRIPT_DIR/registry.sh" get "$UUID")
-    if [ -z "$SHADE_JSON" ]; then
+    # Find pane by UUID in tmux titles
+    PANE_ID=""
+    NAME=""
+    while IFS=: read -r pid title; do
+        [[ "$title" != *"|"* ]] && continue
+        IFS='|' read -r n u p <<< "$title"
+        if [[ "$u" == "$UUID" ]]; then
+            PANE_ID="$pid"
+            NAME="$n"
+            break
+        fi
+    done < <(tmux list-panes -t iris -F '#{pane_id}:#{pane_title}' 2>/dev/null)
+
+    if [ -z "$PANE_ID" ]; then
         echo "Shade '$UUID' not found" >&2
         exit 1
     fi
 
-    PANE_ID=$(echo "$SHADE_JSON" | jq -r '.pane_id')
-    NAME=$(echo "$SHADE_JSON" | jq -r '.name')
-
-    COLOR_JSON=$("$SCRIPT_DIR/color.sh" get "$NAME")
-    COLOR=$(echo "$COLOR_JSON" | jq -r '.header')
-
-    # Update registry status
-    "$SCRIPT_DIR/registry.sh" update "$UUID" "status" "working"
-    "$SCRIPT_DIR/registry.sh" update "$UUID" "current_task" "$TASK"
-else
-    # Direct mode
-    PANE_ID="$1"
-    NAME="$2"
-    COLOR="$3"
-    shift 3
-    TASK="$*"
-
-    if [ -z "$PANE_ID" ] || [ -z "$NAME" ] || [ -z "$COLOR" ]; then
-        echo "Usage: title.sh <pane_id> <name> <color_hex> <task>" >&2
-        exit 1
+    # Store current task in shadows folder
+    SHADOW_DIR="$SHADOWS_DIR/$UUID"
+    if [ -d "$SHADOW_DIR" ]; then
+        echo "$TASK" > "$SHADOW_DIR/current_task.txt"
     fi
+
+    # The pane title keeps the metadata - we can't change it without breaking lookups
+    # But we could optionally update it for visual purposes if desired
+    # For now, the task display comes from shadows/uuid/current_task.txt
+
+    exit 0
 fi
 
-tmux select-pane -t "$PANE_ID" -T "$NAME - $TASK"
+echo "Usage: title.sh <uuid> <task>  OR  title.sh iris <task>" >&2
+exit 1

@@ -53,7 +53,9 @@ while true; do
     # Send each message to Iris pane
     while IFS= read -r msg; do
       [ -z "$msg" ] && continue
-      tmux send-keys -t iris:0.0 "# $msg" Enter
+      tmux send-keys -t iris:0.0 "# $msg"
+      sleep 0.1
+      tmux send-keys -t iris:0.0 Enter
       echo "[$(date -Iseconds)] Sent: $msg" >> "$LOG_FILE"
       sleep 0.5  # Small delay between messages
     done <<< "$MESSAGES"
