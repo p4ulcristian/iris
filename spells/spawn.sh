@@ -98,7 +98,7 @@ tmux pipe-pane -t "$PANE_ID" "cat >> '$SHADOWS_DIR/output.log'"
 # 6. Ensure tmux settings
 tmux set-option -t iris allow-set-title off 2>/dev/null
 
-# 7. Apply layout
-"$SCRIPT_DIR/layout.sh" iris
+# 7. Apply layout (uses main-vertical for single column, keeps it simple)
+"$SCRIPT_DIR/layout.sh" iris 2>/dev/null || true
 
 echo "$WORKER_UUID"
