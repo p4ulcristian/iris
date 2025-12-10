@@ -11,6 +11,7 @@
 #   send <name> <message>              Send a message to a worker
 #   peek <name> [lines]                View recent output from a worker
 #   notes [project]                    List session notes (optionally filter by project)
+#   stop                               Kill all workers and the iris tmux session
 #   help                               Show this help message
 #
 
@@ -332,6 +333,26 @@ cmd_notes() {
     fi
 }
 
+# Stop Iris - kill all workers and the session
+cmd_stop() {
+    echo -e "${YELLOW}Stopping Iris...${NC}"
+
+    # Kill all worker panes first
+    local panes=$(tmux list-panes -t iris -F '#{pane_id}' 2>/dev/null | grep -v '^%0$')
+    local count=0
+
+    for pane in $panes; do
+        tmux kill-pane -t "$pane" 2>/dev/null && ((count++))
+    done
+
+    if [ $count -gt 0 ]; then
+        echo -e "  Killed $count worker(s)"
+    fi
+
+    # Kill the iris session
+    tmux kill-session -t iris 2>/dev/null && echo -e "${GREEN}Iris session terminated${NC}" || echo -e "${YELLOW}Iris session not found${NC}"
+}
+
 # Show help
 cmd_help() {
     echo -e "${BOLD}Iris CLI${NC} - Worker management for Iris orchestration"
@@ -357,6 +378,9 @@ cmd_help() {
     echo ""
     echo -e "  ${CYAN}notes${NC} [project]"
     echo "        List session notes (optionally filter by project)"
+    echo ""
+    echo -e "  ${CYAN}stop${NC}"
+    echo "        Kill all workers and the iris tmux session"
     echo ""
     echo -e "  ${CYAN}help${NC}"
     echo "        Show this help message"
@@ -394,6 +418,9 @@ main() {
             ;;
         notes)
             cmd_notes "$@"
+            ;;
+        stop|quit|exit)
+            cmd_stop
             ;;
         help|--help|-h)
             cmd_help
