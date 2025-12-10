@@ -152,4 +152,31 @@ if [ "$NUM_COLS" -eq 3 ] && [ -n "$COL2_TOP" ]; then
     tmux resize-pane -t "$COL2_TOP" -x "$COL_WIDTH" 2>/dev/null
 fi
 
+# Step 4: Equalize heights within each column
+equalize_column_heights() {
+    local col_x=$1
+    local tolerance=5
+
+    # Get all panes in this column (within tolerance of x position)
+    local col_panes=($(tmux list-panes -t "$SESSION:0" -F '#{pane_id} #{pane_left}' | \
+        awk -v x="$col_x" -v t="$tolerance" '$2 >= x-t && $2 <= x+t {print $1}'))
+
+    local pane_count=${#col_panes[@]}
+    [ "$pane_count" -le 1 ] && return
+
+    # Calculate target height (window height / panes, accounting for borders)
+    local available_height=$((WIN_HEIGHT - pane_count + 1))
+    local target_height=$((available_height / pane_count))
+
+    # Resize all but last pane (last gets remaining space)
+    for i in $(seq 0 $((pane_count - 2))); do
+        tmux resize-pane -t "${col_panes[$i]}" -y "$target_height" 2>/dev/null
+    done
+}
+
+# Equalize heights in each column
+[ -n "$COL1_TOP" ] && equalize_column_heights "$(tmux display -p -t "$COL1_TOP" '#{pane_left}')"
+[ -n "$COL2_TOP" ] && equalize_column_heights "$(tmux display -p -t "$COL2_TOP" '#{pane_left}')"
+[ -n "$COL3_TOP" ] && equalize_column_heights "$(tmux display -p -t "$COL3_TOP" '#{pane_left}')"
+
 tmux select-pane -t "$MASTER"
