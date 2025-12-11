@@ -9,7 +9,6 @@ import threading
 import queue
 import subprocess
 import time
-import socket
 import json as jsonlib
 from pathlib import Path
 
@@ -28,6 +27,7 @@ sys.stdout = sys.stderr = open(os.devnull, 'w')
 import torch
 import numpy as np
 import soundfile as sf
+import sounddevice as sd
 from flask import Flask, request, jsonify
 import nemo.collections.asr as nemo_asr
 
@@ -87,7 +87,6 @@ def set_state(state: str):
 TTS_VOICE = _config.get("tts", {}).get("voice", "Female voice in the 20s, american accent, energetic, fast pacing.")
 TTS_TEMPERATURE = _config.get("tts", {}).get("temperature", 0.4)
 TTS_VOLUME = _config.get("volume", 70)
-MPV_SOCKET = "/tmp/echo-mpv-socket"  # For real-time volume control
 
 # STT config
 STT_MODEL = "nvidia/parakeet-tdt-0.6b-v3"
@@ -152,7 +151,6 @@ class EchoServer:
         self.recording = False
         self.volume = TTS_VOLUME  # Current volume level
         self.device = "auto"  # Audio output device
-        self._mpv_proc = None  # Current mpv process for volume control
 
         # Audio playback queue
         self._audio_queue = queue.Queue()
@@ -200,50 +198,16 @@ class EchoServer:
                     continue
 
                 set_state("speaking")
-                # Clean up old socket
-                if os.path.exists(MPV_SOCKET):
-                    os.remove(MPV_SOCKET)
 
-                # Start mpv reading raw PCM from stdin
-                mpv_cmd = [
-                    'mpv', '--no-video', '--really-quiet',
-                    f'--volume={self.volume}',
-                    f'--input-ipc-server={MPV_SOCKET}',
-                    '--demuxer=rawaudio',
-                    '--demuxer-rawaudio-rate=24000',
-                    '--demuxer-rawaudio-channels=1',
-                    '--demuxer-rawaudio-format=floatle',  # float32 little-endian
-                    '-',  # Read from stdin
-                ]
-                if self.device and self.device != "auto":
-                    mpv_cmd.insert(-1, f'--audio-device={self.device}')
-
-                proc = subprocess.Popen(
-                    mpv_cmd,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                self._mpv_proc = proc
-
-                # Generate full audio first, then send to mpv
-                try:
-                    # Collect all chunks into one buffer
-                    chunks = list(self.tts_engine.stream(text, voice=voice))
-                    if chunks:
-                        audio = np.concatenate(chunks)
-                        proc.stdin.write(audio.tobytes())
-                        proc.stdin.flush()
-                except BrokenPipeError:
-                    pass  # mpv was killed (e.g., by stop_playback)
-                finally:
-                    if proc.stdin:
-                        try:
-                            proc.stdin.close()
-                        except Exception:
-                            pass
-                    proc.wait()
-                    self._mpv_proc = None
+                # Generate full audio
+                chunks = list(self.tts_engine.stream(text, voice=voice))
+                if chunks:
+                    audio = np.concatenate(chunks)
+                    # Apply volume (0-100 -> 0.0-1.0)
+                    audio = audio * (self.volume / 100.0)
+                    # Play with sounddevice
+                    sd.play(audio, samplerate=24000)
+                    sd.wait()
 
                 # Brief pause between clips
                 time.sleep(0.1)
@@ -255,31 +219,14 @@ class EchoServer:
                 set_state("ready")
                 self._audio_queue.task_done()
 
-    def _send_mpv_volume(self, vol):
-        """Send volume command to mpv via IPC socket."""
-        try:
-            if not os.path.exists(MPV_SOCKET):
-                return
-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.connect(MPV_SOCKET)
-            cmd = jsonlib.dumps({"command": ["set_property", "volume", vol]}) + "\n"
-            sock.send(cmd.encode())
-            sock.close()
-        except Exception:
-            pass
-
     def set_volume(self, vol):
-        """Set volume and update currently playing audio."""
+        """Set volume level (0-100)."""
         self.volume = max(0, min(100, vol))
-        self._send_mpv_volume(self.volume)
 
     def stop_playback(self):
-        """Stop all speech - signal stop, kill mpv, and clear queue."""
-        # Signal current generation to stop
-        if hasattr(self, '_current_stop_event') and self._current_stop_event:
-            self._current_stop_event.set()
-        # Kill any running mpv processes
-        subprocess.run(['pkill', '-9', 'mpv'], capture_output=True)
+        """Stop all speech and clear queue."""
+        # Stop any currently playing audio
+        sd.stop()
         # Clear the queue
         while not self._audio_queue.empty():
             try:
