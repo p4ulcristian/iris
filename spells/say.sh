@@ -12,14 +12,13 @@ fi
 
 SPEED="${2:-1.0}"
 VOLUME="${3:-}"
-VOICE="${4:-}"
+VOICE="${4:-Female, natural conversational speech, warm, medium fast.}"
 
 ECHO_SERVER="http://127.0.0.1:8765"
 
 # Build JSON payload
-JSON="{\"text\": $(printf '%s' "$TEXT" | jq -Rs .), \"speed\": $SPEED"
+JSON="{\"text\": $(printf '%s' "$TEXT" | jq -Rs .), \"speed\": $SPEED, \"voice\": $(printf '%s' "$VOICE" | jq -Rs .)"
 [ -n "$VOLUME" ] && JSON="$JSON, \"volume\": $VOLUME"
-[ -n "$VOICE" ] && JSON="$JSON, \"voice\": $(printf '%s' "$VOICE" | jq -Rs .)"
 JSON="$JSON}"
 
 curl -s -X POST "$ECHO_SERVER/speak" \

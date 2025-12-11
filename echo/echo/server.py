@@ -226,22 +226,17 @@ class EchoServer:
                 )
                 self._mpv_proc = proc
 
-                # Create stop event for interruption
-                stop_event = threading.Event()
-                self._current_stop_event = stop_event
-
-                # Stream chunks directly to mpv
+                # Generate full audio first, then send to mpv
                 try:
-                    for chunk in self.tts_engine.stream(text, voice=voice, stop_event=stop_event):
-                        if stop_event.is_set() or proc.poll() is not None:
-                            break
-                        # Write float32 samples directly
-                        proc.stdin.write(chunk.tobytes())
+                    # Collect all chunks into one buffer
+                    chunks = list(self.tts_engine.stream(text, voice=voice))
+                    if chunks:
+                        audio = np.concatenate(chunks)
+                        proc.stdin.write(audio.tobytes())
                         proc.stdin.flush()
                 except BrokenPipeError:
                     pass  # mpv was killed (e.g., by stop_playback)
                 finally:
-                    self._current_stop_event = None
                     if proc.stdin:
                         try:
                             proc.stdin.close()
