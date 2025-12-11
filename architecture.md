@@ -12,7 +12,7 @@ A voice-controlled orchestration system where **Iris** (the herald) coordinates 
 
 **Echo** is Iris's voice - her ears and mouth. Lives in `echo/` and handles speech-to-text (Canary) and text-to-speech (Kokoro).
 
-**Iris** is the orchestrator running in the master tmux pane. She delegates tasks to shades but never writes code herself.
+**Iris** is the orchestrator running in the master tmux pane. She can work directly on simple tasks or delegate larger work to shades.
 
 **Shades** are Claude instances spawned in separate tmux panes. Each shade is assigned a color name (Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta, Crimson, Gold) and does the actual work.
 
@@ -46,9 +46,6 @@ iris (session)
 ├── spells/              # Shell scripts for orchestration
 │   ├── iris.sh          # Main CLI (spawn, status, kill, send, peek, stop)
 │   ├── spawn.sh         # Creates new shade panes
-│   ├── report.sh        # Shade-to-Iris messaging
-│   ├── messenger.sh     # Delivers queued reports to Iris when idle
-│   ├── change-detector.sh  # Tracks pane activity for idle detection
 │   ├── pane.sh          # Low-level tmux pane create/kill
 │   ├── layout.sh        # Restructures panes (break-pane/join-pane)
 │   ├── title.sh         # Updates shade status/title
@@ -72,29 +69,6 @@ iris (session)
 └── CLAUDE.md            # Role detection and shared context
 ```
 
-## Messaging System
-
-Shades communicate back to Iris through a queued messaging system:
-
-### Flow
-
-1. **Shade reports**: `./spells/report.sh "message"` appends to `/tmp/iris/queue`
-2. **Change detector**: `change-detector.sh` touches `/tmp/iris/pane-activity` on any tmux output
-3. **Messenger**: `messenger.sh` polls the queue and delivers messages when Iris has been idle for 5+ seconds
-4. **Delivery**: Messages are sent to Iris pane as `# <shade>: <message>`
-
-This prevents interrupting Iris mid-thought while ensuring messages are delivered promptly when she's available.
-
-### Temporary Files
-
-```
-/tmp/iris/
-├── queue              # Pending messages from shades
-├── pane-activity      # Touched on any pane output (mtime = last activity)
-├── messenger.pid      # Messenger daemon PID
-└── messenger.log      # Delivery log
-```
-
 ## Shade Lifecycle
 
 1. **Summon**: `iris spawn [--project <name>] "<task>"`
@@ -106,11 +80,9 @@ This prevents interrupting Iris mid-thought while ensuring messages are delivere
 
 2. **Working**: Shade executes task
    - Updates `current_task.txt` via `title.sh`
-   - Reports progress via `report.sh`
    - Status: `laboring`
 
 3. **Completion**: Shade finishes or encounters issues
-   - Reports completion: `report.sh "Done: summary"`
    - Status changes to `fulfilled`, `dormant`, or `scattered`
    - May save notes to `shadows/notes/` for future reference
 

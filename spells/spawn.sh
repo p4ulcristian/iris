@@ -57,20 +57,13 @@ WORKER_UUID="${COLOR_NAME,,}-$(date +%Y%m%d-%H%M%S)-$(openssl rand -hex 2)"
 # Use bash parameter expansion instead of sed - handles multiline TASK safely
 SHADE_PROMPT=$(jq -r '.prompts.shade' "$SETTINGS")
 
-# Check if reporting is enabled
-REPORT_ENABLED=$(jq -r '.shades.report // true' "$SETTINGS")
-if [ "$REPORT_ENABLED" = "false" ]; then
-    # Strip report instructions from prompt
-    SHADE_PROMPT=$(echo "$SHADE_PROMPT" | sed 's/Report to Iris using \.\/spells\/report\.sh "message" - report whenever you have something useful to share: discoveries, questions, blockers, progress updates, or when done\. //')
-fi
-
 INIT_MSG="${SHADE_PROMPT//\{\{COLOR_NAME\}\}/$COLOR_NAME}"
 INIT_MSG="${INIT_MSG//\{\{WORKER_UUID\}\}/$WORKER_UUID}"
 INIT_MSG="${INIT_MSG//\{\{TASK\}\}/$TASK}"
 
 # Build claude command with message as argument (instant start, no paste delay)
 # Escape single quotes in init message for safe embedding
-# Export SHADE_UUID and SHADE_NAME so report.sh can identify the shade
+# Export SHADE_UUID and SHADE_NAME for shade identification
 ESCAPED_MSG="${INIT_MSG//\'/\'\\\'\'}"
 if [ -n "$PROJECT_DIR" ]; then
     CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude --dangerously-skip-permissions --add-dir '$PROJECT_DIR' -- '$ESCAPED_MSG'"
