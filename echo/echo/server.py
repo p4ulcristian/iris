@@ -27,7 +27,6 @@ sys.stdout = sys.stderr = open(os.devnull, 'w')
 import torch
 import numpy as np
 import soundfile as sf
-import sounddevice as sd
 from flask import Flask, request, jsonify
 import nemo.collections.asr as nemo_asr
 
@@ -205,9 +204,10 @@ class EchoServer:
                     audio = np.concatenate(chunks)
                     # Apply volume (0-100 -> 0.0-1.0)
                     audio = audio * (self.volume / 100.0)
-                    # Play with sounddevice
-                    sd.play(audio, samplerate=24000)
-                    sd.wait()
+                    # Write to temp file and play with paplay
+                    tmp_path = '/tmp/echo-tts.wav'
+                    sf.write(tmp_path, audio, 24000)
+                    subprocess.run(['paplay', tmp_path], check=False)
 
                 # Brief pause between clips
                 time.sleep(0.1)
@@ -225,8 +225,8 @@ class EchoServer:
 
     def stop_playback(self):
         """Stop all speech and clear queue."""
-        # Stop any currently playing audio
-        sd.stop()
+        # Kill any paplay processes
+        subprocess.run(['pkill', '-9', 'paplay'], capture_output=True)
         # Clear the queue
         while not self._audio_queue.empty():
             try:
