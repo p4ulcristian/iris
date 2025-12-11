@@ -1,6 +1,6 @@
 [project]
 name = "echo"
-version = "0.3.0"
+version = "0.4.0"
 description = "Push-to-talk voice assistant for Wayland with STT and TTS"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,10 +12,11 @@ dependencies = [
     "librosa",
     "torch",
     "transformers",
-    "snac @ git+https://github.com/hubertsiuzdak/snac.git",
     "soundfile",
     "huggingface-hub",
     "accelerate",
+    "pyyaml",
+    "vibevoice @ file:///home/paul/Work/vibevoice",
 ]
 
 [project.scripts]

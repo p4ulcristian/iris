@@ -1,4 +1,4 @@
-"""Canary STT model wrapper."""
+"""Canary-Qwen STT model wrapper."""
 
 import os
 import sys
@@ -17,15 +17,14 @@ warnings.filterwarnings('ignore')
 _stdout, _stderr = sys.stdout, sys.stderr
 sys.stdout = sys.stderr = open(os.devnull, 'w')
 
-import torch
 import numpy as np
 import soundfile as sf
-from nemo.collections.asr.models import EncDecMultiTaskModel
+from nemo.collections.speechlm2.models import SALM
 
 sys.stdout, sys.stderr = _stdout, _stderr
 logging.disable(logging.NOTSET)
 
-MODEL_NAME = "nvidia/canary-1b-v2"
+MODEL_NAME = "nvidia/canary-qwen-2.5b"
 SAMPLE_RATE = 16000
 
 
@@ -44,21 +43,26 @@ def _quiet():
 class SpeechToText:
     def __init__(self, model_name: str = MODEL_NAME):
         print("Listening...", flush=True)
-        # Load to CPU first to avoid GPU memory spike, then move to GPU in FP16
         with _quiet():
-            self.model = EncDecMultiTaskModel.from_pretrained(model_name, map_location='cpu')
-            self.model = self.model.half().cuda()
-            self.model.eval()
+            self.model = SALM.from_pretrained(model_name)
         print("Ready", flush=True)
 
     def transcribe(self, audio: np.ndarray) -> str:
-        # Canary needs audio file path, not numpy array
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as f:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             sf.write(f.name, audio, SAMPLE_RATE)
+            temp_path = f.name
+        try:
             with _quiet():
-                result = self.model.transcribe([f.name], source_lang='en', target_lang='en', verbose=False)
-        if result and len(result) > 0:
-            hyp = result[0]
-            text = hyp.text if hasattr(hyp, 'text') else str(hyp)
+                answer_ids = self.model.generate(
+                    prompts=[[{
+                        "role": "user",
+                        "content": f"Transcribe the following: {self.model.audio_locator_tag}",
+                        "audio": [temp_path]
+                    }]],
+                    max_new_tokens=128,
+                )
+            text = self.model.tokenizer.ids_to_text(answer_ids[0].cpu())
             return text.strip()
+        finally:
+            os.unlink(temp_path)
         return ""

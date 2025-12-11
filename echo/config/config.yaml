@@ -1,0 +1,12 @@
+# Echo TTS Configuration
+
+tts:
+  # Model type: "realtime" (0.5B streaming) or "quality" (1.5B, not yet supported)
+  model: realtime
+
+  # Default voice preset (from vibevoice/demo/voices/streaming_model/)
+  # Available: en-Carter_man, en-Davis_man, en-Emma_woman, en-Frank_man, en-Grace_woman, en-Mike_man
+  voice: en-Emma_woman
+
+  # Default volume (0-100)
+  volume: 70

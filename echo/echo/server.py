@@ -1,4 +1,4 @@
-"""Unified Echo server - STT (NeMo) + TTS (Maya) with HTTP API."""
+"""Unified Echo server - STT (NeMo) + TTS (VibeVoice) with HTTP API."""
 
 import os
 import sys
@@ -29,7 +29,7 @@ import torch
 import numpy as np
 import soundfile as sf
 from flask import Flask, request, jsonify
-from nemo.collections.asr.models import EncDecMultiTaskModel
+from nemo.collections.speechlm2.models import SALM
 
 sys.stdout, sys.stderr = _stdout, _stderr
 logging.disable(logging.NOTSET)
@@ -40,7 +40,17 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 from echo.audio import AudioRecorder
 from echo.output import paste_text
 from echo.ptt import PTTListener
-from echo.maya_tts import MayaTTS
+from echo.vibevoice_tts import VibeVoiceTTS
+
+# Load config
+import yaml
+CONFIG_FILE = Path(__file__).parent.parent / "config" / "config.yaml"
+def load_config():
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE) as f:
+            return yaml.safe_load(f)
+    return {}
+_config = load_config()
 
 # Config
 HOST = "127.0.0.1"
@@ -56,13 +66,14 @@ def set_state(state: str):
     except Exception:
         pass
 
-# Maya TTS config
-MAYA_VOICE = "Female, in her 30s with an American accent, warm timbre, conversational pacing"
-MAYA_VOLUME = 70  # Default volume (0-100)
+# TTS config (from config.yaml)
+TTS_MODEL = _config.get("tts", {}).get("model", "realtime")
+TTS_VOICE = _config.get("tts", {}).get("voice", "en-Emma_woman")
+TTS_VOLUME = _config.get("tts", {}).get("volume", 70)
 MPV_SOCKET = "/tmp/echo-mpv-socket"  # For real-time volume control
 
 # STT config
-STT_MODEL = "nvidia/canary-1b-v2"
+STT_MODEL = "nvidia/canary-qwen-2.5b"
 STT_SAMPLE_RATE = 16000
 
 app = Flask(__name__)
@@ -122,7 +133,7 @@ class EchoServer:
         self.tts_ready = threading.Event()
         self.recorder = AudioRecorder()
         self.recording = False
-        self.volume = MAYA_VOLUME  # Current volume level
+        self.volume = TTS_VOLUME  # Current volume level
         self.device = "auto"  # Audio output device
         self._mpv_proc = None  # Current mpv process for volume control
 
@@ -238,7 +249,7 @@ class EchoServer:
             except queue.Empty:
                 break
 
-    def queue_speak(self, text: str, voice: str = MAYA_VOICE, speed: float = 1.0):
+    def queue_speak(self, text: str, voice: str = TTS_VOICE, speed: float = 1.0):
         """Queue text for TTS generation and playback (non-blocking)."""
         # Don't queue new speech while CapsLock is held (user is speaking)
         if self.caps_lock_held:
@@ -267,11 +278,11 @@ class EchoServer:
         self._audio_queue.put((text, voice, speed))
 
     def _load_tts_model(self):
-        """Load Maya TTS model."""
+        """Load VibeVoice TTS model."""
         set_state("loading:tts")
-        print("Loading TTS model (Maya)...", flush=True)
+        print(f"Loading TTS model (VibeVoice {TTS_MODEL})...", flush=True)
         try:
-            self.tts_engine = MayaTTS(memory_util=0.6, tp=1)  # 0.8 needed for standalone, 0.6 when sharing with STT
+            self.tts_engine = VibeVoiceTTS(model_type=TTS_MODEL, device="cuda")
             self.tts_engine._load_engine()  # Blocking load
             print("🔊 Ready to speak", flush=True)
         except Exception as e:
@@ -284,12 +295,10 @@ class EchoServer:
 
     def _load_stt_model(self):
         set_state("loading:stt")
-        print("Loading STT model (Canary)...", flush=True)
+        print("Loading STT model (Canary-Qwen)...", flush=True)
         try:
             with _quiet():
-                self.stt_model = EncDecMultiTaskModel.from_pretrained(STT_MODEL, map_location='cpu')
-                self.stt_model = self.stt_model.half().cuda()
-                self.stt_model.eval()
+                self.stt_model = SALM.from_pretrained(STT_MODEL)
             print("STT ready", flush=True)
             print("👂 Ready to listen", flush=True)
         except Exception as e:
@@ -319,14 +328,23 @@ class EchoServer:
             return ""
         if self.stt_model is None:
             return ""
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as f:
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             sf.write(f.name, audio, STT_SAMPLE_RATE)
+            temp_path = f.name
+        try:
             with _quiet():
-                result = self.stt_model.transcribe([f.name], source_lang='en', target_lang='en', verbose=False)
-        if result and len(result) > 0:
-            hyp = result[0]
-            text = hyp.text if hasattr(hyp, 'text') else str(hyp)
+                answer_ids = self.stt_model.generate(
+                    prompts=[[{
+                        "role": "user",
+                        "content": f"Transcribe the following: {self.stt_model.audio_locator_tag}",
+                        "audio": [temp_path]
+                    }]],
+                    max_new_tokens=128,
+                )
+            text = self.stt_model.tokenizer.ids_to_text(answer_ids[0].cpu())
             return text.strip()
+        finally:
+            os.unlink(temp_path)
         return ""
 
     def start_recording(self):
@@ -370,7 +388,7 @@ def speak():
         return jsonify({"error": "missing 'text' field"}), 400
 
     text = data['text']
-    voice = data.get('voice', MAYA_VOICE)
+    voice = data.get('voice', TTS_VOICE)
     speed = data.get('speed', 1.0)
     server.queue_speak(text, voice=voice, speed=speed)
     return jsonify({"status": "queued"})
