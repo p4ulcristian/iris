@@ -1,4 +1,4 @@
-"""Canary-Qwen STT model wrapper."""
+"""Parakeet TDT STT model wrapper."""
 
 import os
 import sys
@@ -19,12 +19,12 @@ sys.stdout = sys.stderr = open(os.devnull, 'w')
 
 import numpy as np
 import soundfile as sf
-from nemo.collections.speechlm2.models import SALM
+import nemo.collections.asr as nemo_asr
 
 sys.stdout, sys.stderr = _stdout, _stderr
 logging.disable(logging.NOTSET)
 
-MODEL_NAME = "nvidia/canary-qwen-2.5b"
+MODEL_NAME = "nvidia/parakeet-tdt-0.6b-v3"
 SAMPLE_RATE = 16000
 
 
@@ -44,7 +44,7 @@ class SpeechToText:
     def __init__(self, model_name: str = MODEL_NAME):
         print("Listening...", flush=True)
         with _quiet():
-            self.model = SALM.from_pretrained(model_name)
+            self.model = nemo_asr.models.ASRModel.from_pretrained(model_name)
         print("Ready", flush=True)
 
     def transcribe(self, audio: np.ndarray) -> str:
@@ -53,16 +53,10 @@ class SpeechToText:
             temp_path = f.name
         try:
             with _quiet():
-                answer_ids = self.model.generate(
-                    prompts=[[{
-                        "role": "user",
-                        "content": f"Transcribe the following: {self.model.audio_locator_tag}",
-                        "audio": [temp_path]
-                    }]],
-                    max_new_tokens=128,
-                )
-            text = self.model.tokenizer.ids_to_text(answer_ids[0].cpu())
-            return text.strip()
+                result = self.model.transcribe([temp_path])
+            if result and len(result) > 0:
+                text = result[0].text if hasattr(result[0], 'text') else str(result[0])
+                return text.strip()
+            return ""
         finally:
             os.unlink(temp_path)
-        return ""

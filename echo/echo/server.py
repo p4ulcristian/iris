@@ -29,7 +29,7 @@ import torch
 import numpy as np
 import soundfile as sf
 from flask import Flask, request, jsonify
-from nemo.collections.speechlm2.models import SALM
+import nemo.collections.asr as nemo_asr
 
 sys.stdout, sys.stderr = _stdout, _stderr
 logging.disable(logging.NOTSET)
@@ -73,7 +73,7 @@ TTS_VOLUME = _config.get("tts", {}).get("volume", 70)
 MPV_SOCKET = "/tmp/echo-mpv-socket"  # For real-time volume control
 
 # STT config
-STT_MODEL = "nvidia/canary-qwen-2.5b"
+STT_MODEL = "nvidia/parakeet-tdt-0.6b-v3"
 STT_SAMPLE_RATE = 16000
 
 app = Flask(__name__)
@@ -322,10 +322,10 @@ class EchoServer:
 
     def _load_stt_model(self):
         set_state("loading:stt")
-        print("Loading STT model (Canary-Qwen)...", flush=True)
+        print("Loading STT model (Parakeet TDT)...", flush=True)
         try:
             with _quiet():
-                self.stt_model = SALM.from_pretrained(STT_MODEL)
+                self.stt_model = nemo_asr.models.ASRModel.from_pretrained(STT_MODEL)
             print("STT ready", flush=True)
             print("👂 Ready to listen", flush=True)
         except Exception as e:
@@ -360,19 +360,13 @@ class EchoServer:
             temp_path = f.name
         try:
             with _quiet():
-                answer_ids = self.stt_model.generate(
-                    prompts=[[{
-                        "role": "user",
-                        "content": f"Transcribe the following: {self.stt_model.audio_locator_tag}",
-                        "audio": [temp_path]
-                    }]],
-                    max_new_tokens=128,
-                )
-            text = self.stt_model.tokenizer.ids_to_text(answer_ids[0].cpu())
-            return text.strip()
+                result = self.stt_model.transcribe([temp_path])
+            if result and len(result) > 0:
+                text = result[0].text if hasattr(result[0], 'text') else str(result[0])
+                return text.strip()
+            return ""
         finally:
             os.unlink(temp_path)
-        return ""
 
     def start_recording(self):
         if self.recording:
