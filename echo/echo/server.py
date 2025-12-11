@@ -1,4 +1,4 @@
-"""Unified Echo server - STT (NeMo) + TTS (VibeVoice) with HTTP API."""
+"""Unified Echo server - STT (NeMo) + TTS (Maya) with HTTP API."""
 
 import os
 import sys
@@ -40,16 +40,33 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 from echo.audio import AudioRecorder
 from echo.output import paste_text
 from echo.ptt import PTTListener
-from echo.vibevoice_tts import VibeVoiceTTS
+from echo.maya_tts import MayaTTS
 
-# Load config
-import yaml
-CONFIG_FILE = Path(__file__).parent.parent / "config" / "config.yaml"
+# Load config from Iris settings.json
+import json
+IRIS_SETTINGS = Path.home() / "Iris" / "config" / "settings.json"
+LOCAL_CONFIG = Path(__file__).parent.parent / "config" / "config.yaml"
+
 def load_config():
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE) as f:
-            return yaml.safe_load(f)
-    return {}
+    config = {}
+    # Load Iris settings.json for TTS config
+    if IRIS_SETTINGS.exists():
+        try:
+            with open(IRIS_SETTINGS) as f:
+                iris_config = json.load(f)
+                config["tts"] = iris_config.get("tts", {})
+        except Exception:
+            pass
+    # Fall back to local config.yaml for other settings
+    if LOCAL_CONFIG.exists():
+        import yaml
+        with open(LOCAL_CONFIG) as f:
+            local = yaml.safe_load(f) or {}
+            if "tts" not in config:
+                config["tts"] = local.get("tts", {})
+            config["volume"] = local.get("tts", {}).get("volume", 70)
+    return config
+
 _config = load_config()
 
 # Config
@@ -66,10 +83,10 @@ def set_state(state: str):
     except Exception:
         pass
 
-# TTS config (from config.yaml)
-TTS_MODEL = _config.get("tts", {}).get("model", "realtime")
-TTS_VOICE = _config.get("tts", {}).get("voice", "en-Emma_woman")
-TTS_VOLUME = _config.get("tts", {}).get("volume", 70)
+# TTS config (from Iris settings.json)
+TTS_VOICE = _config.get("tts", {}).get("voice", "Female voice in the 20s, american accent, energetic, fast pacing.")
+TTS_TEMPERATURE = _config.get("tts", {}).get("temperature", 0.4)
+TTS_VOLUME = _config.get("volume", 70)
 MPV_SOCKET = "/tmp/echo-mpv-socket"  # For real-time volume control
 
 # STT config
@@ -305,11 +322,15 @@ class EchoServer:
         self._audio_queue.put((text, voice, speed))
 
     def _load_tts_model(self):
-        """Load VibeVoice TTS model."""
+        """Load Maya TTS model."""
         set_state("loading:tts")
-        print(f"Loading TTS model (VibeVoice {TTS_MODEL})...", flush=True)
+        print("Loading TTS model (Maya)...", flush=True)
         try:
-            self.tts_engine = VibeVoiceTTS(model_type=TTS_MODEL, device="cuda")
+            self.tts_engine = MayaTTS(
+                device="cuda",
+                voice=TTS_VOICE,
+                temperature=TTS_TEMPERATURE,
+            )
             self.tts_engine._load_engine()  # Blocking load
             print("🔊 Ready to speak", flush=True)
         except Exception as e:
