@@ -149,7 +149,7 @@ class EchoServer:
         self._load_stt_model()
 
     def _playback_worker(self):
-        """Background thread that plays audio from the queue."""
+        """Background thread that generates TTS and plays audio from the queue."""
         while True:
             item = self._audio_queue.get()
             if item is None:  # Poison pill to clear queue
@@ -160,7 +160,22 @@ class EchoServer:
             while self.caps_lock_held:
                 time.sleep(0.1)
 
-            audio_bytes = item
+            # Item is now (text, voice, speed) tuple - generate audio here
+            text, voice, speed = item
+            try:
+                if not self.tts_ready.wait(timeout=5):
+                    print("TTS not ready yet", flush=True)
+                    self._audio_queue.task_done()
+                    continue
+                if self.tts_engine is None:
+                    print("TTS engine not loaded", flush=True)
+                    self._audio_queue.task_done()
+                    continue
+                audio_bytes = self.tts_engine.generate(text, voice=voice, speed=speed)
+            except Exception as e:
+                print(f"TTS generation error: {e}", flush=True)
+                self._audio_queue.task_done()
+                continue
             try:
                 set_state("speaking")
                 # Clean up old socket
@@ -224,7 +239,7 @@ class EchoServer:
                 break
 
     def queue_speak(self, text: str, voice: str = MAYA_VOICE, speed: float = 1.0):
-        """Request TTS from Maya and queue for playback."""
+        """Queue text for TTS generation and playback (non-blocking)."""
         # Don't queue new speech while CapsLock is held (user is speaking)
         if self.caps_lock_held:
             return
@@ -248,17 +263,8 @@ class EchoServer:
             return word.capitalize()
         text = re.sub(r'\b[A-Z]{2,}\b', fix_caps, text)
 
-        try:
-            if not self.tts_ready.wait(timeout=5):
-                print("TTS not ready yet", flush=True)
-                return
-            if self.tts_engine is None:
-                print("TTS engine not loaded", flush=True)
-                return
-            audio_bytes = self.tts_engine.generate(text, voice=voice, speed=speed)
-            self._audio_queue.put(audio_bytes)
-        except Exception as e:
-            print(f"TTS error: {e}", flush=True)
+        # Queue text for background TTS generation (non-blocking)
+        self._audio_queue.put((text, voice, speed))
 
     def _load_tts_model(self):
         """Load Maya TTS model."""

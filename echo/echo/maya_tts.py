@@ -1,10 +1,10 @@
-"""Maya TTS engine wrapper using GGUF/llama.cpp (memory-efficient)."""
+"""Maya TTS engine wrapper using PyTorch/transformers (fast, CUDA 13 compatible)."""
 
-from echo.maya_gguf import MayaGGUF
+from echo.maya_pytorch import MayaPyTorch
 
 
 class MayaTTS:
-    """Wrapper for Maya TTS with GGUF/llama.cpp backend."""
+    """Wrapper for Maya TTS with PyTorch backend."""
 
     # Default voice description
     DEFAULT_VOICE = "Female, in her 30s with an American accent, warm timbre, conversational pacing"
@@ -13,11 +13,11 @@ class MayaTTS:
         """Initialize Maya TTS (model loads on first use).
 
         Args:
-            memory_util: Ignored (kept for backward compatibility)
+            memory_util: GPU memory utilization (0.0-1.0)
             tp: Ignored (kept for backward compatibility)
         """
         self.memory_util = memory_util
-        self._engine = MayaGGUF(n_gpu_layers=-1)  # Use all GPU layers
+        self._engine = MayaPyTorch(gpu_memory_utilization=memory_util)
 
     def _load_engine(self):
         """Load the TTS engine (called lazily)."""
