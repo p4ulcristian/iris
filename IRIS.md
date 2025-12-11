@@ -250,7 +250,6 @@ All spells live in `./spells/`. Here's the full grimoire:
 |-------|---------|-------|
 | `layout.sh` | Manage tmux layouts | `./spells/layout.sh <layout-name>` |
 | `pane.sh` | Manage tmux panes | `./spells/pane.sh <action> [args]` |
-| `title.sh` | Set pane/window titles | `./spells/title.sh <title>` |
 | `color.sh` | Apply shade colors | `./spells/color.sh <shade-name>` |
 | `glow.sh` | Visual effects | `./spells/glow.sh [args]` |
 

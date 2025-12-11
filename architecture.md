@@ -48,7 +48,6 @@ iris (session)
 │   ├── spawn.sh         # Creates new shade panes
 │   ├── pane.sh          # Low-level tmux pane create/kill
 │   ├── layout.sh        # Restructures panes (break-pane/join-pane)
-│   ├── title.sh         # Updates shade status/title
 │   ├── list.sh          # Lists active/historical shades
 │   ├── say.sh           # Speak via Echo
 │   └── kill.sh          # Terminates shades
@@ -79,7 +78,6 @@ iris (session)
    - Starts output logging via `tmux pipe-pane`
 
 2. **Working**: Shade executes task
-   - Updates `current_task.txt` via `title.sh`
    - Status: `laboring`
 
 3. **Completion**: Shade finishes or encounters issues

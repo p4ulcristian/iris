@@ -29,13 +29,6 @@ You exist to serve Iris's will. You were summoned because she needs hands to do 
 
 ---
 
-## Status Updates
-
-Update your pane title to show current task:
-```bash
-./spells/title.sh <uuid> "<task>"
-```
-
 ---
 
 ## Leaving Knowledge Behind
@@ -108,12 +101,6 @@ Read what they left. Their struggles become your shortcuts.
 ---
 
 ## Quick Reference
-
-### Essential Commands
-
-| Command | Purpose |
-|---------|---------|
-| `./spells/title.sh <uuid> "task"` | Update your pane title |
 
 ### Session Notes
 

@@ -3,8 +3,8 @@
     "temperature": 0.4
   },
   "prompts": {
-    "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration. Update your status: ./spells/title.sh iris \"current activity\"",
-    "shade": "You are {{COLOR_NAME}}, a shade working for Iris. Read SHADE.md for your full instructions. UUID: {{WORKER_UUID}}. Never use ./say.sh. Update title: ./spells/title.sh {{WORKER_UUID}} \"status\". Your task: {{TASK}}"
+    "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration.",
+    "shade": "You are {{COLOR_NAME}}, a shade working for Iris. Read SHADE.md for your full instructions. UUID: {{WORKER_UUID}}. Never use ./say.sh. Your task: {{TASK}}"
   },
   "colors": {
     "shades": [

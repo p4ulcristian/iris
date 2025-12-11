@@ -2,7 +2,7 @@
 # Spawn a new shade with a task
 # Usage: spawn.sh [--project <project>] <task>
 #
-# Composes: pane.sh, color.sh, title.sh
+# Composes: pane.sh, color.sh
 # State: tmux pane titles are source of truth, shadows/<uuid>/ stores logs
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
