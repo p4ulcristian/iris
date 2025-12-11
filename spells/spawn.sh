@@ -33,6 +33,10 @@ while [[ $# -gt 0 ]]; do
                     ;;
             esac
             ;;
+        --model)
+            MODEL="$2"
+            shift 2
+            ;;
         *)
             break
             ;;
@@ -65,10 +69,13 @@ INIT_MSG="${INIT_MSG//\{\{TASK\}\}/$TASK}"
 # Escape single quotes in init message for safe embedding
 # Export SHADE_UUID and SHADE_NAME for shade identification
 ESCAPED_MSG="${INIT_MSG//\'/\'\\\'\'}"
+MODEL_FLAG=""
+[ -n "$MODEL" ] && MODEL_FLAG="--model $MODEL"
+
 if [ -n "$PROJECT_DIR" ]; then
-    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude --dangerously-skip-permissions --add-dir '$PROJECT_DIR' -- '$ESCAPED_MSG'"
+    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude $MODEL_FLAG --dangerously-skip-permissions --add-dir '$PROJECT_DIR' -- '$ESCAPED_MSG'"
 else
-    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude --dangerously-skip-permissions -- '$ESCAPED_MSG'"
+    CLAUDE_CMD="cd ~/Iris && SHADE_UUID='$WORKER_UUID' SHADE_NAME='$COLOR_NAME' claude $MODEL_FLAG --dangerously-skip-permissions -- '$ESCAPED_MSG'"
 fi
 
 # === COMPOSE MODULES ===

@@ -170,8 +170,9 @@ class MayaTTS:
         self.llm.eval(prompt_tokens)
 
         generated_tokens = []
-        token_buffer = []
         frames_per_chunk = 4  # Yield audio every 4 frames (28 tokens)
+        tokens_per_chunk = frames_per_chunk * TOKENS_PER_FRAME
+        last_decoded_frame = 0
 
         for _ in range(2048):
             if stop_event and stop_event.is_set():
@@ -187,24 +188,28 @@ class MayaTTS:
                 break
 
             generated_tokens.append(token)
-
-            # Buffer SNAC tokens for chunked decoding
-            if SNAC_TOKEN_START <= token <= SNAC_TOKEN_END:
-                token_buffer.append(token)
-
-                # Yield audio chunk every N frames
-                if len(token_buffer) >= frames_per_chunk * TOKENS_PER_FRAME:
-                    chunk_tokens = token_buffer[-frames_per_chunk * TOKENS_PER_FRAME:]
-                    audio_chunk = self._decode_snac_to_audio(chunk_tokens)
-                    if len(audio_chunk) > 0:
-                        yield audio_chunk.astype(np.float32)
-
             self.llm.eval([token])
 
+            # Check if we have enough new frames to decode
+            snac_tokens = [t for t in generated_tokens if SNAC_TOKEN_START <= t <= SNAC_TOKEN_END]
+            n_frames = len(snac_tokens) // TOKENS_PER_FRAME
+
+            if n_frames >= last_decoded_frame + frames_per_chunk:
+                # Decode only the new chunk
+                start_idx = last_decoded_frame * TOKENS_PER_FRAME
+                end_idx = (last_decoded_frame + frames_per_chunk) * TOKENS_PER_FRAME
+                chunk_tokens = snac_tokens[start_idx:end_idx]
+                audio_chunk = self._decode_snac_to_audio(chunk_tokens)
+                if len(audio_chunk) > 0:
+                    yield audio_chunk.astype(np.float32)
+                last_decoded_frame += frames_per_chunk
+
         # Yield remaining audio
-        remaining = len(token_buffer) % (frames_per_chunk * TOKENS_PER_FRAME)
-        if remaining >= TOKENS_PER_FRAME:
-            final_tokens = token_buffer[-(remaining // TOKENS_PER_FRAME * TOKENS_PER_FRAME):]
+        snac_tokens = [t for t in generated_tokens if SNAC_TOKEN_START <= t <= SNAC_TOKEN_END]
+        remaining_frames = len(snac_tokens) // TOKENS_PER_FRAME - last_decoded_frame
+        if remaining_frames > 0:
+            start_idx = last_decoded_frame * TOKENS_PER_FRAME
+            final_tokens = snac_tokens[start_idx:]
             final_audio = self._decode_snac_to_audio(final_tokens)
             if len(final_audio) > 0:
                 yield final_audio.astype(np.float32)
