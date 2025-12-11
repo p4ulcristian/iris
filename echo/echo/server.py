@@ -151,6 +151,11 @@ class EchoServer:
         self.volume = TTS_VOLUME  # Current volume level
         self.device = "auto"  # Audio output device
 
+        # PipeWire routing: virtual sink and loopback module
+        self.virtual_sink = "echo_tts_output"
+        self.loopback_module_id = None
+        self._setup_audio_routing()
+
         # Audio playback queue
         self._audio_queue = queue.Queue()
         self._playback_thread = threading.Thread(target=self._playback_worker, daemon=True)
@@ -167,6 +172,73 @@ class EchoServer:
         elif load_stt:
             self._stt_thread = threading.Thread(target=self._load_stt_model, daemon=True)
             self._stt_thread.start()
+
+    def _setup_audio_routing(self):
+        """Create virtual sink for Echo TTS output with loopback to system default."""
+        try:
+            # Enable pro-audio mode on NVIDIA card for simultaneous multi-output
+            subprocess.run(
+                ['pactl', 'set-card-profile', 'alsa_card.pci-0000_0a_00.1', 'pro-audio'],
+                capture_output=True, timeout=5
+            )
+            print("Enabled pro-audio mode (all outputs active)", flush=True)
+            time.sleep(0.5)
+
+            # Create virtual null sink for Echo
+            result = subprocess.run(
+                ['pactl', 'load-module', 'module-null-sink',
+                 f'sink_name={self.virtual_sink}',
+                 'sink_properties=device.description="Echo TTS Output"'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                print(f"Created virtual sink: {self.virtual_sink}", flush=True)
+                # Create initial loopback to system default
+                self._update_loopback("auto")
+            else:
+                print(f"Failed to create virtual sink: {result.stderr}", flush=True)
+        except Exception as e:
+            print(f"Error setting up audio routing: {e}", flush=True)
+
+    def _update_loopback(self, target_device):
+        """Update loopback to route virtual sink to target device."""
+        try:
+            # Unload old loopback if exists
+            if self.loopback_module_id is not None:
+                subprocess.run(
+                    ['pactl', 'unload-module', str(self.loopback_module_id)],
+                    capture_output=True, timeout=5
+                )
+                self.loopback_module_id = None
+
+            # Determine target sink
+            if target_device == "auto" or not target_device:
+                # Use default sink (let PipeWire choose)
+                target_sink = "@DEFAULT_SINK@"
+            else:
+                target_sink = target_device
+
+            # Create new loopback
+            result = subprocess.run(
+                ['pactl', 'load-module', 'module-loopback',
+                 f'source={self.virtual_sink}.monitor',
+                 f'sink={target_sink}'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                self.loopback_module_id = int(result.stdout.strip())
+                print(f"Loopback created: {self.virtual_sink} -> {target_sink}", flush=True)
+            else:
+                print(f"Failed to create loopback: {result.stderr}", flush=True)
+        except Exception as e:
+            print(f"Error updating loopback: {e}", flush=True)
+
+    def set_device(self, device_id):
+        """Set output device by updating loopback routing (pro-audio mode)."""
+        # Pro-audio mode: all outputs always active, just update loopback target
+        self.device = device_id
+        self._update_loopback(device_id)
+        print(f"Routing Echo TTS to: {device_id}", flush=True)
 
     def _load_models_sequential(self):
         """Load TTS first, then STT to avoid memory spikes."""
@@ -207,12 +279,8 @@ class EchoServer:
                     # Write to temp file and play with paplay
                     tmp_path = '/tmp/echo-tts.wav'
                     sf.write(tmp_path, audio, 24000)
-                    # Build paplay command with device if specified
-                    paplay_cmd = ['paplay']
-                    if self.device and self.device != "auto":
-                        paplay_cmd.extend(['--device', self.device])
-                    paplay_cmd.append(tmp_path)
-                    subprocess.run(paplay_cmd, check=False)
+                    # Always use virtual sink - loopback handles routing to target device
+                    subprocess.run(['paplay', '--device', self.virtual_sink, tmp_path], check=False)
 
                 # Brief pause between clips
                 time.sleep(0.1)
@@ -314,6 +382,22 @@ class EchoServer:
             self.tts_engine = None
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+        # Clean up audio routing
+        try:
+            if self.loopback_module_id is not None:
+                subprocess.run(
+                    ['pactl', 'unload-module', str(self.loopback_module_id)],
+                    capture_output=True, timeout=5
+                )
+            # Unload virtual sink (this will also remove its monitor source)
+            subprocess.run(
+                ['pactl', 'unload-module', 'module-null-sink'],
+                capture_output=True, timeout=5
+            )
+        except Exception:
+            pass
+
         print("Cleanup complete", flush=True)
 
     def transcribe(self, audio: np.ndarray) -> str:
@@ -402,7 +486,7 @@ def device():
         return jsonify({"device": server.device})
     data = request.get_json()
     if data and 'device' in data:
-        server.device = data['device']
+        server.set_device(data['device'])
         print(f"Audio device set to: {server.device}", flush=True)
     return jsonify({"device": server.device})
 

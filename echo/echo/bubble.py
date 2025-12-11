@@ -495,49 +495,45 @@ class EchoBubble(Gtk.Application):
         return False
 
     def get_audio_devices(self):
-        """Get list of available audio devices from pactl."""
+        """Get list of available audio devices (pro-audio mode)."""
         import subprocess
         import re
         try:
-            result = subprocess.run(
-                ['pactl', 'list', 'sinks', 'short'],
-                capture_output=True, text=True, timeout=5
-            )
+            # Pro-audio output mapping (discovered via testing)
+            PRO_OUTPUT_NAMES = {
+                'alsa_output.pci-0000_0a_00.1.pro-output-3': 'LG 5K (Ultrawide)',
+                'alsa_output.pci-0000_0a_00.1.pro-output-7': 'LG TV',
+            }
+
             devices = [('auto', 'Autoselect device')]
 
-            for line in result.stdout.strip().split('\n'):
-                if not line.strip():
-                    continue
-                # Format: INDEX NAME DRIVER SAMPLE_SPEC STATE
-                parts = line.split(maxsplit=4)
-                if len(parts) >= 2:
-                    sink_name = parts[1]
-                    # Get human-readable name using pactl list sinks
-                    try:
-                        desc_result = subprocess.run(
-                            ['pactl', 'list', 'sinks'],
-                            capture_output=True, text=True, timeout=5
-                        )
-                        # Find the description for this sink
-                        desc_match = re.search(
-                            rf'Name: {re.escape(sink_name)}.*?Description: (.+?)(?:\n\t[^\t]|\nS|\Z)',
-                            desc_result.stdout,
-                            re.DOTALL
-                        )
-                        if desc_match:
-                            device_name = desc_match.group(1).strip()
-                        else:
-                            device_name = sink_name
-                    except Exception:
-                        device_name = sink_name
+            # Get all active sinks
+            sinks_result = subprocess.run(
+                ['pactl', 'list', 'sinks'],
+                capture_output=True, text=True, timeout=5
+            )
 
-                    # Filter out echo-cancel sources
-                    if 'echo-cancel' not in sink_name.lower():
-                        devices.append((sink_name, device_name))
+            for sink_block in re.split(r'\nSink #\d+\n', sinks_result.stdout):
+                name_match = re.search(r'Name: (\S+)', sink_block)
+                desc_match = re.search(r'Description: (.+)', sink_block)
+
+                if name_match and desc_match:
+                    sink_name = name_match.group(1)
+                    sink_desc = desc_match.group(1).strip()
+
+                    # Skip echo-cancel and echo virtual sink
+                    if 'echo' in sink_name.lower():
+                        continue
+
+                    # Use custom name if available, otherwise use description
+                    display_name = PRO_OUTPUT_NAMES.get(sink_name, sink_desc)
+                    devices.append((sink_name, display_name))
 
             return devices if len(devices) > 1 else [('auto', 'Autoselect device')]
         except Exception as e:
             print(f"Error getting audio devices: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             return [('auto', 'Autoselect device')]
 
     def show_device_overlay(self):
@@ -690,15 +686,17 @@ class EchoBubble(Gtk.Application):
         return False
 
     def set_audio_device(self, device_id):
-        """Set audio device and update server."""
-        self.audio_device = device_id
-        print(f"Audio device: {device_id}", flush=True)
-        # Update server
+        """Set audio device and update server (pro-audio mode - no profile switching)."""
         import requests
+
+        self.audio_device = device_id
+        print(f"Audio device set to: {device_id}", flush=True)
+
+        # Update server with the sink name
         try:
             requests.post("http://127.0.0.1:8765/device", json={"device": device_id}, timeout=1)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error updating server: {e}", flush=True)
 
     def start_evdev_listener(self):
         """Listen for CapsLock (user speaking)."""
