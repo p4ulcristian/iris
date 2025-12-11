@@ -495,38 +495,47 @@ class EchoBubble(Gtk.Application):
         return False
 
     def get_audio_devices(self):
-        """Get list of available audio devices from mpv."""
+        """Get list of available audio devices from pactl."""
         import subprocess
+        import re
         try:
             result = subprocess.run(
-                ['mpv', '--audio-device=help'],
+                ['pactl', 'list', 'sinks', 'short'],
                 capture_output=True, text=True, timeout=5
             )
-            devices = []
-            for line in result.stdout.split('\n'):
-                line = line.strip()
-                if line.startswith("'") and "'" in line[1:]:
-                    # Parse: 'device_id' (Device Name)
-                    end_quote = line.index("'", 1)
-                    device_id = line[1:end_quote]
-                    # Get the name in parentheses
-                    if '(' in line and ')' in line:
-                        name_start = line.index('(') + 1
-                        name_end = line.rindex(')')
-                        device_name = line[name_start:name_end]
-                    else:
-                        device_name = device_id
-                    # Filter to useful devices
-                    if device_id in ('auto', 'pipewire'):
-                        devices.append((device_id, device_name))
-                    elif device_id.startswith('pipewire/') and 'echo-cancel' not in device_id:
-                        devices.append((device_id, device_name))
-                    elif device_id.startswith('alsa/hdmi:'):
-                        # Extract just the description part
-                        devices.append((device_id, device_name))
-                    elif device_id.startswith('alsa/sysdefault:'):
-                        devices.append((device_id, device_name))
-            return devices
+            devices = [('auto', 'Autoselect device')]
+
+            for line in result.stdout.strip().split('\n'):
+                if not line.strip():
+                    continue
+                # Format: INDEX NAME DRIVER SAMPLE_SPEC STATE
+                parts = line.split(maxsplit=4)
+                if len(parts) >= 2:
+                    sink_name = parts[1]
+                    # Get human-readable name using pactl list sinks
+                    try:
+                        desc_result = subprocess.run(
+                            ['pactl', 'list', 'sinks'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        # Find the description for this sink
+                        desc_match = re.search(
+                            rf'Name: {re.escape(sink_name)}.*?Description: (.+?)(?:\n\t[^\t]|\nS|\Z)',
+                            desc_result.stdout,
+                            re.DOTALL
+                        )
+                        if desc_match:
+                            device_name = desc_match.group(1).strip()
+                        else:
+                            device_name = sink_name
+                    except Exception:
+                        device_name = sink_name
+
+                    # Filter out echo-cancel sources
+                    if 'echo-cancel' not in sink_name.lower():
+                        devices.append((sink_name, device_name))
+
+            return devices if len(devices) > 1 else [('auto', 'Autoselect device')]
         except Exception as e:
             print(f"Error getting audio devices: {e}", flush=True)
             return [('auto', 'Autoselect device')]

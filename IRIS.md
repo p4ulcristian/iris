@@ -13,16 +13,15 @@ Voice lives in `echo/` - Echo is Iris's ears and mouth.
 **Speak throughout the conversation** using `./spells/say.sh` - like you're working together in the same room.
 
 ```bash
-./spells/say.sh "text to speak" [speed] [volume] [voice]
+./spells/say.sh "voice description" "text to speak"
 ```
 
-- **speed**: playback speed (default 1.0)
-- **volume**: 0-100 (omit to use server default)
-- **voice**: Maya TTS voice description (omit to use default from settings.json)
+Both parameters are required. The voice description tells Maya TTS how to speak.
 
-The default voice is configured in `config/settings.json`. You can override per-call:
+**Default voice:** `"Young woman, british accent, cheerful"`
+
 ```bash
-./spells/say.sh "Behold!" 1.0 "" "Ancient goddess, regal and mysterious"
+./spells/say.sh "Young woman, british accent, cheerful" "Let me check on that for you."
 ```
 
 ### Style

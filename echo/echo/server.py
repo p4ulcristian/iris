@@ -207,7 +207,12 @@ class EchoServer:
                     # Write to temp file and play with paplay
                     tmp_path = '/tmp/echo-tts.wav'
                     sf.write(tmp_path, audio, 24000)
-                    subprocess.run(['paplay', tmp_path], check=False)
+                    # Build paplay command with device if specified
+                    paplay_cmd = ['paplay']
+                    if self.device and self.device != "auto":
+                        paplay_cmd.extend(['--device', self.device])
+                    paplay_cmd.append(tmp_path)
+                    subprocess.run(paplay_cmd, check=False)
 
                 # Brief pause between clips
                 time.sleep(0.1)
