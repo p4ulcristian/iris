@@ -13,7 +13,16 @@ Voice lives in `echo/` - Echo is Iris's ears and mouth.
 **Speak throughout the conversation** using `./spells/say.sh` - like you're working together in the same room.
 
 ```bash
-./spells/say.sh "text to speak"
+./spells/say.sh "text to speak" [speed] [volume] [voice]
+```
+
+- **speed**: playback speed (default 1.0)
+- **volume**: 0-100 (omit to use server default)
+- **voice**: Maya TTS voice description (omit to use default from settings.json)
+
+The default voice is configured in `config/settings.json`. You can override per-call:
+```bash
+./spells/say.sh "Behold!" 1.0 "" "Ancient goddess, regal and mysterious"
 ```
 
 ### Style
@@ -219,3 +228,58 @@ curl -s localhost:2019/config/ > /dev/null && echo "Caddy running" || ./spells/r
 | "glimpse elevathor" | Check shade status |
 | "banish the test shade" | Terminate session |
 | "list shades" | Show all active shades |
+
+---
+
+## Spells Reference
+
+All spells live in `./spells/`. Here's the full grimoire:
+
+### Core Commands
+
+| Spell | Purpose | Usage |
+|-------|---------|-------|
+| `iris.sh` | Main orchestrator | `./spells/iris.sh <command> [args]` |
+| `spawn.sh` | Summon a new shade | `./spells/spawn.sh [--model sonnet\|opus\|haiku] [--project <name>] "<task>"` |
+| `kill.sh` | Banish a shade | `./spells/kill.sh <shade-name>` |
+| `send.sh` | Send message to shade | `./spells/send.sh <shade-name> "<message>"` |
+| `say.sh` | Speak via TTS | `./spells/say.sh "<text>"` |
+
+### Layout & Display
+
+| Spell | Purpose | Usage |
+|-------|---------|-------|
+| `layout.sh` | Manage tmux layouts | `./spells/layout.sh <layout-name>` |
+| `pane.sh` | Manage tmux panes | `./spells/pane.sh <action> [args]` |
+| `title.sh` | Set pane/window titles | `./spells/title.sh <title>` |
+| `color.sh` | Apply shade colors | `./spells/color.sh <shade-name>` |
+| `glow.sh` | Visual effects | `./spells/glow.sh [args]` |
+
+### Utilities
+
+| Spell | Purpose | Usage |
+|-------|---------|-------|
+| `list.sh` | List shades/sessions | `./spells/list.sh` |
+| `run.sh` | Run command in project | `./spells/run.sh <project> <command>` |
+
+### Spawn Options
+
+```bash
+# Basic spawn
+./spells/spawn.sh "Task description"
+
+# With project context
+./spells/spawn.sh --project ironrainbow "Fix the bug"
+
+# With specific model
+./spells/spawn.sh --model sonnet --project ironrainbow "Large refactor task"
+./spells/spawn.sh --model haiku "Quick simple task"
+```
+
+### Model Selection
+
+| Model | Best For |
+|-------|----------|
+| `opus` | Default. Complex reasoning, architecture decisions |
+| `sonnet` | Large refactors, bulk changes, fast execution |
+| `haiku` | Quick tasks, simple lookups, low latency |
