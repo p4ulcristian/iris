@@ -35,6 +35,9 @@ DEFAULT_VOICE = "en-Emma_woman"
 DEFAULT_CFG_SCALE = 1.5
 DEFAULT_INFERENCE_STEPS = 5
 
+# Sentinel for stream end detection (must be unique object, not None)
+_STREAM_END = object()
+
 
 class VibeVoiceTTS:
     """VibeVoice TTS engine for Echo.
@@ -194,8 +197,8 @@ class VibeVoiceTTS:
             if hasattr(v, "to"):
                 inputs[k] = v.to(self._torch_device)
 
-        # Set up streaming
-        audio_streamer = AudioStreamer(batch_size=1, stop_signal=None, timeout=None)
+        # Set up streaming (use sentinel object for stop signal, not None)
+        audio_streamer = AudioStreamer(batch_size=1, stop_signal=_STREAM_END, timeout=None)
         stop_signal = stop_event or threading.Event()
         errors = []
 

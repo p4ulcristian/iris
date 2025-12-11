@@ -29,9 +29,8 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Start messenger and change detector
+# Start messenger
 start_messenger() {
-    "$SPELLS_DIR/change-detector.sh"
     nohup "$SPELLS_DIR/messenger.sh" > /dev/null 2>&1 &
 }
 

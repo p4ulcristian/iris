@@ -160,7 +160,7 @@ class EchoServer:
         self._load_stt_model()
 
     def _playback_worker(self):
-        """Background thread that generates TTS and plays audio from the queue."""
+        """Background thread that streams TTS audio chunks to mpv."""
         while True:
             item = self._audio_queue.get()
             if item is None:  # Poison pill to clear queue
@@ -171,7 +171,6 @@ class EchoServer:
             while self.caps_lock_held:
                 time.sleep(0.1)
 
-            # Item is now (text, voice, speed) tuple - generate audio here
             text, voice, speed = item
             try:
                 if not self.tts_ready.wait(timeout=5):
@@ -182,39 +181,64 @@ class EchoServer:
                     print("TTS engine not loaded", flush=True)
                     self._audio_queue.task_done()
                     continue
-                audio_bytes = self.tts_engine.generate(text, voice=voice, speed=speed)
-            except Exception as e:
-                print(f"TTS generation error: {e}", flush=True)
-                self._audio_queue.task_done()
-                continue
-            try:
+
                 set_state("speaking")
                 # Clean up old socket
                 if os.path.exists(MPV_SOCKET):
                     os.remove(MPV_SOCKET)
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=True) as f:
-                    f.write(audio_bytes)
-                    f.flush()
-                    # Start mpv with IPC socket for real-time volume control
-                    mpv_cmd = [
-                        'mpv', '--no-video', '--really-quiet',
-                        f'--volume={self.volume}',
-                        f'--input-ipc-server={MPV_SOCKET}',
-                    ]
-                    if self.device and self.device != "auto":
-                        mpv_cmd.append(f'--audio-device={self.device}')
-                    mpv_cmd.append(f.name)
-                    proc = subprocess.Popen(mpv_cmd)
-                    self._mpv_proc = proc
-                    # Wait a moment for socket to be created, then set volume
-                    time.sleep(0.05)
-                    self._send_mpv_volume(self.volume)
+
+                # Start mpv reading raw PCM from stdin
+                mpv_cmd = [
+                    'mpv', '--no-video', '--really-quiet',
+                    f'--volume={self.volume}',
+                    f'--input-ipc-server={MPV_SOCKET}',
+                    '--demuxer=rawaudio',
+                    '--demuxer-rawaudio-rate=24000',
+                    '--demuxer-rawaudio-channels=1',
+                    '--demuxer-rawaudio-format=floatle',  # float32 little-endian
+                    '-',  # Read from stdin
+                ]
+                if self.device and self.device != "auto":
+                    mpv_cmd.insert(-1, f'--audio-device={self.device}')
+
+                proc = subprocess.Popen(
+                    mpv_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self._mpv_proc = proc
+
+                # Create stop event for interruption
+                stop_event = threading.Event()
+                self._current_stop_event = stop_event
+
+                # Stream chunks directly to mpv
+                try:
+                    for chunk in self.tts_engine.stream(text, voice=voice, stop_event=stop_event):
+                        if stop_event.is_set() or proc.poll() is not None:
+                            break
+                        # Write float32 samples directly
+                        proc.stdin.write(chunk.tobytes())
+                        proc.stdin.flush()
+                except BrokenPipeError:
+                    pass  # mpv was killed (e.g., by stop_playback)
+                finally:
+                    self._current_stop_event = None
+                    if proc.stdin:
+                        try:
+                            proc.stdin.close()
+                        except Exception:
+                            pass
                     proc.wait()
                     self._mpv_proc = None
+
                 # Brief pause between clips
-                time.sleep(0.3)
+                time.sleep(0.1)
             except Exception as e:
-                print(f"Playback error: {e}", flush=True)
+                print(f"TTS/playback error: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
             finally:
                 set_state("ready")
                 self._audio_queue.task_done()
@@ -238,7 +262,10 @@ class EchoServer:
         self._send_mpv_volume(self.volume)
 
     def stop_playback(self):
-        """Stop all speech - kill mpv and clear queue."""
+        """Stop all speech - signal stop, kill mpv, and clear queue."""
+        # Signal current generation to stop
+        if hasattr(self, '_current_stop_event') and self._current_stop_event:
+            self._current_stop_event.set()
         # Kill any running mpv processes
         subprocess.run(['pkill', '-9', 'mpv'], capture_output=True)
         # Clear the queue
