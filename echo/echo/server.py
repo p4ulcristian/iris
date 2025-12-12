@@ -9,6 +9,7 @@ import threading
 import queue
 import subprocess
 import time
+import uuid
 import json as jsonlib
 from pathlib import Path
 
@@ -246,10 +247,16 @@ class EchoServer:
         self._load_stt_model()
 
     def _playback_worker(self):
-        """Background thread that streams TTS audio chunks to mpv."""
+        """Background thread that generates and plays TTS audio.
+
+        Uses batch-then-concatenate approach:
+        1. Generate all sentences (clearing context between for memory efficiency)
+        2. Concatenate into single WAV
+        3. Play once for smooth, gap-free audio
+        """
         while True:
             item = self._audio_queue.get()
-            if item is None:  # Poison pill to clear queue
+            if item is None:
                 self._audio_queue.task_done()
                 continue
 
@@ -257,7 +264,8 @@ class EchoServer:
             while self.caps_lock_held:
                 time.sleep(0.1)
 
-            text, voice, speed = item
+            text, voice, _ = item
+            tmp_path = None
             try:
                 if not self.tts_ready.wait(timeout=5):
                     print("TTS not ready yet", flush=True)
@@ -270,25 +278,35 @@ class EchoServer:
 
                 set_state("speaking")
 
-                # Generate full audio
-                chunks = list(self.tts_engine.stream(text, voice=voice))
-                if chunks:
-                    audio = np.concatenate(chunks)
-                    # Apply volume (0-100 -> 0.0-1.0)
-                    audio = audio * (self.volume / 100.0)
-                    # Write to temp file and play with paplay
-                    tmp_path = '/tmp/echo-tts.wav'
-                    sf.write(tmp_path, audio, 24000)
-                    # Always use virtual sink - loopback handles routing to target device
-                    subprocess.run(['paplay', '--device', self.virtual_sink, tmp_path], check=False)
+                # Generate all sentences, then concatenate
+                # Context is cleared between sentences (via llm.reset() in generate())
+                wav_bytes = self.tts_engine.generate_batched(text, voice=voice)
 
-                # Brief pause between clips
-                time.sleep(0.1)
+                # Write combined audio to temp file
+                tmp_path = f'/tmp/echo-tts-{uuid.uuid4().hex[:8]}.wav'
+                with open(tmp_path, 'wb') as f:
+                    f.write(wav_bytes)
+
+                # Play once - smooth, gap-free playback
+                vol_scale = int((self.volume / 100.0) * 65536)
+                subprocess.run([
+                    'paplay',
+                    '--device', self.virtual_sink,
+                    '--volume', str(vol_scale),
+                    tmp_path
+                ], check=False)
+
             except Exception as e:
                 print(f"TTS/playback error: {e}", flush=True)
                 import traceback
                 traceback.print_exc()
             finally:
+                # TODO: re-enable cleanup after debugging
+                # if tmp_path:
+                #     try:
+                #         os.unlink(tmp_path)
+                #     except OSError:
+                #         pass
                 set_state("ready")
                 self._audio_queue.task_done()
 

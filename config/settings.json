@@ -1,6 +1,6 @@
 {
   "tts": {
-    "temperature": 0.4
+    "temperature": 0.6
   },
   "prompts": {
     "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration.",
