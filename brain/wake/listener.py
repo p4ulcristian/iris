@@ -8,8 +8,12 @@ Listens for CapsLock trigger and coordinates hear/, speak/, express/ servers.
 import requests
 import threading
 import logging
-from .ptt import PTTListener
-from .output import paste_text, send_to_iris, send_enter_to_iris
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from ptt import PTTListener
+from output import paste_text, send_to_iris, send_enter_to_iris
 
 # Configure logging
 logging.basicConfig(

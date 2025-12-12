@@ -14,10 +14,13 @@ import logging
 import threading
 import os
 import tempfile
-import soundfile as sf
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
-from .audio import AudioRecorder
-from .stt import SpeechToText
+import soundfile as sf
+from audio import AudioRecorder
+from stt import SpeechToText
 
 app = Flask(__name__)
 

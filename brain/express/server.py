@@ -7,9 +7,13 @@ Endpoints:
   POST /state  - Update visual state
 """
 
+import sys
+import os
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+
 from flask import Flask, request, jsonify
 import logging
-import threading
 
 app = Flask(__name__)
 
@@ -56,37 +60,77 @@ def update_state():
     logger.info(f"State change: {current_state} -> {state}")
     current_state = state
 
-    # Update bubble if it exists
-    if bubble_instance:
-        bubble_instance.set_state(state)
+    # Write to state file for bubble to read
+    update_state_file(state)
 
     return jsonify({"status": "ok", "state": state})
 
 
-def start_bubble():
-    """Start the GTK bubble in a separate thread"""
-    global bubble_instance
+import subprocess
+import signal
+from pathlib import Path
 
+# Bubble process and state file for communication
+bubble_process = None
+STATE_FILE = Path("/tmp/iris/express-state")
+BUBBLE_SCRIPT = Path(__file__).parent / "bubble.py"
+
+
+def start_bubble():
+    """Start the bubble overlay as separate process"""
+    global bubble_process
     try:
-        from .bubble import BubbleApp
-        bubble_instance = BubbleApp()
-        bubble_instance.run()
-    except ImportError as e:
+        logger.info("Starting bubble overlay...")
+        env = os.environ.copy()
+        env['LD_PRELOAD'] = '/usr/lib/libgtk4-layer-shell.so'
+        bubble_process = subprocess.Popen(
+            ['python3', str(BUBBLE_SCRIPT)],
+            start_new_session=True,
+            env=env
+        )
+        logger.info(f"Bubble overlay started (PID: {bubble_process.pid})")
+    except Exception as e:
         logger.warning(f"Could not start bubble UI: {e}")
         logger.warning("Running in headless mode (API only)")
-    except Exception as e:
-        logger.error(f"Bubble UI error: {e}")
+
+
+def stop_bubble():
+    """Stop the bubble overlay"""
+    global bubble_process
+    if bubble_process is not None:
+        try:
+            import os
+            os.killpg(os.getpgid(bubble_process.pid), signal.SIGTERM)
+        except Exception:
+            pass
+        bubble_process = None
+
+
+def update_state_file(state):
+    """Write state to file for bubble to read"""
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(state)
+    except Exception:
+        pass
 
 
 def main():
     """Start the server"""
     logger.info(f"Starting Iris Express server on {HOST}:{PORT}")
 
-    # Start bubble UI in background thread
-    bubble_thread = threading.Thread(target=start_bubble, daemon=True)
-    bubble_thread.start()
+    # Start bubble as separate process
+    start_bubble()
 
-    # Start Flask server
+    # Handle shutdown
+    def shutdown(signum, frame):
+        stop_bubble()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    # Start Flask server (blocks)
     app.run(
         host=HOST,
         port=PORT,

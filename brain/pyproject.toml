@@ -1,0 +1,25 @@
+[project]
+name = "iris-brain"
+version = "0.1.0"
+description = "Iris brain - voice and orchestration services"
+requires-python = ">=3.11"
+
+dependencies = [
+    "flask",
+    "requests",
+    "evdev",
+    "sounddevice",
+    "soundfile",
+    "numpy",
+]
+
+[project.optional-dependencies]
+stt = [
+    "nemo_toolkit[asr]",
+]
+ui = [
+    "PyGObject",
+]
+
+[tool.uv]
+dev-dependencies = []
