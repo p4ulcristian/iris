@@ -20,7 +20,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import soundfile as sf
 from audio import AudioRecorder
-from stt import SpeechToText
+
+# Try to import STT, fall back to dummy if nemo not installed
+try:
+    from stt import SpeechToText
+    STT_AVAILABLE = True
+except ImportError:
+    STT_AVAILABLE = False
+    class SpeechToText:
+        """Dummy STT when nemo is not installed"""
+        def __init__(self, *args, **kwargs):
+            pass
+        def transcribe(self, audio):
+            return "[STT not installed - install nemo_toolkit[asr]]"
 
 app = Flask(__name__)
 
@@ -48,11 +60,19 @@ def init_models():
     """Initialize STT model on startup"""
     global stt_model, recorder, is_ready
 
-    logger.info("Initializing STT model...")
+    if STT_AVAILABLE:
+        logger.info("Initializing STT model...")
+    else:
+        logger.warning("STT not available (nemo not installed) - using dummy")
+
     stt_model = SpeechToText()
     recorder = AudioRecorder()
     is_ready = True
-    logger.info("STT model initialized and ready")
+
+    if STT_AVAILABLE:
+        logger.info("STT model initialized and ready")
+    else:
+        logger.info("Hear server ready (dummy STT mode)")
 
 
 @app.route('/health', methods=['GET'])

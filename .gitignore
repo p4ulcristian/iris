@@ -2,3 +2,5 @@ secrets/
 shadows/
 .clj-kondo/
 .lsp/
+*.pyc
+__pycache__/

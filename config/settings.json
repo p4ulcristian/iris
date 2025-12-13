@@ -1,4 +1,9 @@
 {
+  "projects": {
+    "ironrainbow": "$HOME/Work/ironrainbow",
+    "elevathor": "$HOME/Work/elevathor",
+    "colormecrazy": "$HOME/Work/colormecrazy"
+  },
   "tts": {
     "temperature": 0.6
   },
