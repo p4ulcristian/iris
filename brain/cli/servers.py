@@ -71,16 +71,29 @@ def start(name: str) -> bool:
     log_file = _log_file(name)
     pid_file = _pid_file(name)
 
+    # Check for run.sh script (handles venv + env vars)
+    run_script = script_path.parent / "run.sh"
+
     print(f"\033[36mStarting {name}...\033[0m")
 
     # Open log file for output
     with open(log_file, "a") as log:
-        process = subprocess.Popen(
-            [str(_get_venv_python()), str(script_path)],
-            stdout=log,
-            stderr=log,
-            start_new_session=True,  # Detach from terminal
-        )
+        if run_script.exists():
+            # Use run.sh which sets up venv and env vars correctly
+            process = subprocess.Popen(
+                ["bash", str(run_script)],
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+        else:
+            # Fallback to direct python execution
+            process = subprocess.Popen(
+                [str(_get_venv_python()), str(script_path)],
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
 
     # Write PID
     pid_file.write_text(str(process.pid))

@@ -2,17 +2,22 @@
 # Start the Iris Speak server
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BRAIN_DIR="$(dirname "$SCRIPT_DIR")"
-VENV_DIR="$BRAIN_DIR/.venv"
+
+# Use vibevoice venv which has all TTS deps (torch 2.5.1 + flash-attn)
+VENV_DIR="/home/p4ulcristian/Work/vibevoice/.venv"
 
 # Activate venv
 if [[ ! -d "$VENV_DIR" ]]; then
     echo "Error: Virtual environment not found at $VENV_DIR"
-    echo "Run: python -m venv $VENV_DIR && source $VENV_DIR/bin/activate && pip install flask"
+    echo "Please set up vibevoice first"
     exit 1
 fi
 
 source "$VENV_DIR/bin/activate"
+
+# GPU settings for TTS
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+export CUDA_VISIBLE_DEVICES=1  # RTX 3080
 
 # Start server
 exec python "$SCRIPT_DIR/server.py"

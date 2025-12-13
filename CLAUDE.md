@@ -79,3 +79,43 @@ Personal notes live in `memory/`:
 | **Dormant** | Shade is idle |
 | **Scattered** | Shade crashed |
 | **Fulfilled** | Task complete |
+
+---
+
+## Talk
+
+You can speak text aloud using the iris speak server.
+
+**Endpoint:** `http://127.0.0.1:8765/speak`
+
+**Usage:**
+```bash
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello Paul"}'
+```
+
+**With voice:**
+```bash
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello Paul", "voice": "en-Emma_woman"}'
+```
+
+**Available voices:** en-Emma_woman (default), en-Carter_man, en-Davis_man, en-Frank_man, en-Grace_woman, en-Mike_man, and more.
+
+**List all voices:**
+```bash
+curl http://127.0.0.1:8765/voices
+```
+
+**Stop playback:**
+```bash
+curl -X POST http://127.0.0.1:8765/stop
+```
+
+**When to talk:**
+- Greet Paul when starting a session
+- Announce task completion
+- Read back important information when asked
+- Use sparingly - don't narrate everything

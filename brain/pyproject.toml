@@ -23,6 +23,13 @@ include = ["cli*", "hear*", "speak*", "express*", "wake*"]
 stt = [
     "nemo_toolkit[asr]",
 ]
+tts = [
+    "torch",
+    "transformers==4.51.3",
+    "diffusers",
+    "accelerate",
+    "flash-attn",
+]
 ui = [
     "PyGObject",
 ]
