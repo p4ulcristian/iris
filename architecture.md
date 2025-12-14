@@ -5,12 +5,12 @@ A voice-controlled orchestration system where **Iris** (the herald) coordinates 
 ## Core Concepts
 
 ```
-[User] → [Echo (STT/TTS)] → [Iris] → [Shades via tmux]
-              ↑                          ↓
-              └──────── responses ───────┘
+[User] → [brain/ (STT/TTS)] → [Iris] → [Shades via tmux]
+              ↑                            ↓
+              └──────── responses ─────────┘
 ```
 
-**Echo** is Iris's voice - her ears and mouth. Lives in `echo/` and handles speech-to-text (Canary) and text-to-speech (Kokoro).
+**brain/** is Iris's voice system - modular servers for speech-to-text (Parakeet) and text-to-speech (VibeVoice), plus the Python CLI for orchestration.
 
 **Iris** is the orchestrator running in the master tmux pane. She can work directly on simple tasks or delegate larger work to shades.
 
@@ -20,52 +20,47 @@ A voice-controlled orchestration system where **Iris** (the herald) coordinates 
 
 ```
 iris (session)
-├── %0 - Iris (master pane, 35% width)
-└── Workers (65% right side)
-    ├── Column 1 (up to 4 shades)
-    ├── Column 2 (up to 4 shades)
-    └── ...
+├── %0 - Iris (master pane, 50% width)
+└── Workers (50% right side)
+    └── Shades stacked vertically
 ```
 
-- Master pane stays on the left at 35% width
-- Workers fill columns on the right (max 4 per column)
+- Master pane stays on the left
+- Workers stack on the right (main-vertical layout)
 - Each pane has a colored background and title bar showing shade name
 
 ## File Structure
 
 ```
-~/Iris/
-├── echo/                # Voice system (STT/TTS)
-│   ├── echo.sh          # Start/stop Echo server
-│   ├── echo/            # Python package
-│   │   ├── server.py    # HTTP API + PTT listener
-│   │   ├── bubble.py    # Visual overlay (GTK4)
-│   │   └── ...
-│   ├── speak.sh         # CLI for TTS
-│   └── listen.sh        # CLI for STT
-├── spells/              # Shell scripts for orchestration
-│   ├── iris.sh          # Main CLI (spawn, status, kill, send, peek, stop)
-│   ├── spawn.sh         # Creates new shade panes
-│   ├── pane.sh          # Low-level tmux pane create/kill
-│   ├── layout.sh        # Restructures panes (break-pane/join-pane)
-│   ├── list.sh          # Lists active/historical shades
-│   ├── say.sh           # Speak via Echo
-│   └── kill.sh          # Terminates shades
-├── shadows/             # State for each shade
-│   ├── <uuid>/          # Per-shade folder
-│   │   ├── name.txt     # Color name (e.g., "Magenta")
-│   │   ├── task.txt     # Original assigned task
-│   │   ├── current_task.txt  # Current activity
-│   │   ├── status.txt   # laboring|dormant|fulfilled|scattered
-│   │   ├── spawned.txt  # Timestamp
-│   │   ├── project.txt  # Associated project (if any)
-│   │   └── output.log   # Full pane output (via tmux pipe-pane)
-│   └── notes/           # Session notes for knowledge transfer
+iris/
+├── brain/                 # Voice and orchestration system
+│   ├── cli/               # Python CLI (iris command)
+│   │   ├── __init__.py    # Main CLI entry point
+│   │   ├── config.py      # Configuration loading
+│   │   ├── shades.py      # Shade management
+│   │   ├── tmux.py        # Tmux operations
+│   │   └── servers.py     # Server start/stop
+│   ├── say.py             # Speech utility module
+│   ├── wake/              # Attention coordinator (CapsLock listener)
+│   ├── hear/              # STT server (Parakeet, port 8766)
+│   ├── speak/             # TTS server (VibeVoice, port 8765)
+│   ├── express/           # Visual UI server (GTK4, port 8767)
+│   └── remember/          # Memory and personal notes
+├── shadows/               # State for each shade
+│   ├── <uuid>/            # Per-shade folder
+│   │   ├── name.txt       # Color name (e.g., "Magenta")
+│   │   ├── task.txt       # Original assigned task
+│   │   ├── status.txt     # laboring|dormant|fulfilled|scattered
+│   │   ├── spawned.txt    # Timestamp
+│   │   ├── project.txt    # Associated project (if any)
+│   │   └── output.log     # Full pane output (via tmux pipe-pane)
+│   └── notes/             # Session notes for knowledge transfer
 ├── config/
-│   └── settings.json    # Prompts and color definitions
-├── IRIS.md              # Instructions for Iris
-├── SHADE.md             # Instructions for shades
-└── CLAUDE.md            # Role detection and shared context
+│   └── settings.json      # Prompts, colors, project paths
+├── iris                   # CLI entry point (Python script)
+├── IRIS.md                # Instructions for Iris
+├── SHADE.md               # Instructions for shades
+└── CLAUDE.md              # Role detection and shared context
 ```
 
 ## Shade Lifecycle
@@ -99,20 +94,39 @@ iris (session)
 
 | Command | Description |
 |---------|-------------|
-| `iris` | Start Iris session |
+| `iris` | Start Iris session + all servers |
 | `iris spawn "<task>"` | Create new shade |
 | `iris spawn --project ir "<task>"` | Shade with project context |
-| `iris status` | List active shades |
+| `iris list` | List active shades |
 | `iris peek <name>` | View shade output |
 | `iris send <name> "<msg>"` | Send instruction to shade |
 | `iris kill <name>` | Terminate shade |
 | `iris kill all` | Terminate all shades |
-| `iris stop` | Stop everything |
+| `iris stop` | Stop servers |
+| `iris stop all` | Stop everything |
+
+## Voice Pipeline
+
+```
+[CapsLock press]
+    ↓
+wake/ (evdev listener)
+    ├── POST speak:8765/stop    → TTS shuts up
+    └── POST hear:8766/start    → STT starts recording
+
+[CapsLock release]
+    ↓
+wake/
+    └── POST hear:8766/stop     → STT stops, transcribes, returns text
+        ↓
+    paste text at cursor (or send to Iris tmux)
+```
 
 ## Configuration
 
 `config/settings.json` contains:
 - **prompts.iris**: System prompt for Iris
-- **prompts.shade**: Template for shade prompts (with `{{COLOR_NAME}}`, `{{WORKER_UUID}}`, `{{TASK}}` placeholders)
+- **prompts.shade**: Template for shade prompts (with `{{COLOR_NAME}}`, `{{WORKER_UUID}}`, `{{VOICE}}`, `{{TASK}}` placeholders)
 - **colors.shades**: Color palette for shade panes
 - **colors.iris/border/glow**: UI color definitions
+- **projects**: Project name to directory mappings

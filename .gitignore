@@ -4,3 +4,21 @@ shadows/
 .lsp/
 *.pyc
 __pycache__/
+
+# Wake word training
+brain/wake/train/samples/
+brain/wake/train/models/
+brain/wake/train/hey_iris_model/
+brain/wake/train/background_clips/
+brain/wake/train/mit_rirs/
+brain/wake/train/openwakeword/
+brain/wake/train/piper-sample-generator/
+brain/wake/train/*.npy
+brain/wake/train/*.yaml
+brain/wake/train/*.yml
+
+# Benchmarks
+benchmark_*.py
+
+# Bin symlinks
+bin/

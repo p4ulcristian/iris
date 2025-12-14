@@ -1,4 +1,7 @@
 {
+  "audio": {
+    "input_device": "Arctis 7X+ Mono"
+  },
   "projects": {
     "ironrainbow": "$HOME/Work/ironrainbow",
     "elevathor": "$HOME/Work/elevathor",
@@ -8,23 +11,23 @@
     "temperature": 0.6
   },
   "prompts": {
-    "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration.",
+    "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use `iris spawn` to summon shades, `iris list` to track them, and the iris CLI for orchestration.",
     "shade": "You are {{COLOR_NAME}}, a shade working for Iris. Read SHADE.md for your full instructions. UUID: {{WORKER_UUID}}. Speak using: python -m brain.say \"message\" --voice {{VOICE}} --bg. When finished, speak a summary of what you did. Your task: {{TASK}}"
   },
   "colors": {
     "shades": [
-      {"name": "Ruby",     "bg": "#301515", "header": "#dc143c"},
-      {"name": "Amber",    "bg": "#2d2010", "header": "#ff8c00"},
-      {"name": "Sol",      "bg": "#28280a", "header": "#ffd700"},
-      {"name": "Jade",     "bg": "#0f241a", "header": "#2e8b57"},
-      {"name": "Azure",    "bg": "#101828", "header": "#007fff"},
-      {"name": "Indigo",   "bg": "#1a1030", "header": "#4b0082"},
-      {"name": "Violet",   "bg": "#241428", "header": "#8b00ff"},
-      {"name": "Coral",    "bg": "#2e1a18", "header": "#ff7f50"},
-      {"name": "Cyan",     "bg": "#0a2828", "header": "#00ced1"},
-      {"name": "Magenta",  "bg": "#280a20", "header": "#ff00ff"},
-      {"name": "Crimson",  "bg": "#251010", "header": "#dc143c"},
-      {"name": "Gold",     "bg": "#242008", "header": "#ffd700"}
+      {"name": "Ruby",     "bg": "#3d1f2f", "fg": "#e8c4c4"},
+      {"name": "Amber",    "bg": "#3d2f1f", "fg": "#e8d4c4"},
+      {"name": "Sol",      "bg": "#3d3a1f", "fg": "#e8e4c4"},
+      {"name": "Jade",     "bg": "#1f3d2a", "fg": "#c4e8d0"},
+      {"name": "Azure",    "bg": "#1f2a3d", "fg": "#c4d4e8"},
+      {"name": "Indigo",   "bg": "#2a1f3d", "fg": "#d4c4e8"},
+      {"name": "Violet",   "bg": "#351f3d", "fg": "#dcc4e8"},
+      {"name": "Coral",    "bg": "#3d2a1f", "fg": "#e8d0c4"},
+      {"name": "Cyan",     "bg": "#1f3d3d", "fg": "#c4e8e8"},
+      {"name": "Magenta",  "bg": "#3d1f35", "fg": "#e8c4dc"},
+      {"name": "Crimson",  "bg": "#3d1f1f", "fg": "#e8c4c4"},
+      {"name": "Gold",     "bg": "#3d351f", "fg": "#e8e0c4"}
     ],
     "iris": {
       "bg": "#1f1a28",

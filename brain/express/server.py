@@ -83,8 +83,11 @@ def start_bubble():
         logger.info("Starting bubble overlay...")
         env = os.environ.copy()
         env['LD_PRELOAD'] = '/usr/lib/libgtk4-layer-shell.so'
+        # Use venv python
+        venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
+        python_cmd = str(venv_python) if venv_python.exists() else sys.executable
         bubble_process = subprocess.Popen(
-            ['python3', str(BUBBLE_SCRIPT)],
+            [python_cmd, str(BUBBLE_SCRIPT)],
             start_new_session=True,
             env=env
         )

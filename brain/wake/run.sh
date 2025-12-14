@@ -3,6 +3,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRAIN_DIR="$(dirname "$SCRIPT_DIR")"
+IRIS_DIR="$(dirname "$BRAIN_DIR")"
 VENV_DIR="$BRAIN_DIR/.venv"
 
 # Activate venv
@@ -14,5 +15,6 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
-# Start listener
-exec python -m brain.wake.listener
+# Start listener from iris dir so brain module is findable
+cd "$IRIS_DIR"
+exec python "$SCRIPT_DIR/listener.py"

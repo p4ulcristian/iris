@@ -6,13 +6,13 @@ The brain is Iris's modular voice and orchestration system, with clean separatio
 
 ```
 brain/
+├── cli/      - Python CLI for orchestration (spawn, kill, list, send, peek)
+├── say.py    - Speech utility module
 ├── wake/     - Attention coordinator (CapsLock listener)
 ├── hear/     - STT server (Parakeet, port 8766)
-├── speak/    - TTS server (Maya, port 8765)
+├── speak/    - TTS server (VibeVoice, port 8765)
 ├── express/  - Visual UI server (GTK4 bubble, port 8767)
-├── remember/ - Memory and context storage
-├── do/       - Action scripts (non-tmux)
-└── oversee/  - Tmux orchestration scripts
+└── remember/ - Memory and context storage
 ```
 
 ## Components
@@ -51,18 +51,20 @@ Pure speech-to-text server using Parakeet TDT.
 
 ### speak/ - TTS Server
 
-Text-to-speech server (currently dummy, Maya TTS to be added).
+Text-to-speech server using VibeVoice.
 
 **Port:** 8765
 
 **Endpoints:**
 - `GET /health` - Health check
-- `POST /speak` - Speak text (currently just logs)
+- `POST /speak` - Speak text with optional voice selection
 - `POST /stop` - Stop playback
+- `GET /voices` - List available voices
 
 **Files:**
 - `server.py` - Flask HTTP server
-- (Maya TTS integration coming soon)
+- `tts.py` - VibeVoice model wrapper
+- `audio.py` - Audio playback (streaming)
 
 ### express/ - Visual UI Server
 
@@ -80,35 +82,35 @@ GTK4 bubble overlay showing system state.
 
 ### remember/ - Memory
 
-Personal notes and context (moved from root `memory/`):
+Personal notes and context:
 - `daily/` - Shopping lists, daily notes
 - `recipes/` - Recipes
 - `3d-printer/` - 3D printer notes
 
-### do/ - Action Scripts
+### cli/ - Python CLI
 
-Non-tmux action scripts:
-- `say.sh` - Send text to speak server
-- `color.sh` - Color config helper
+The `iris` command is implemented in Python (`brain/cli/`):
+- `__init__.py` - Main CLI entry point and argument parsing
+- `config.py` - Configuration loading
+- `shades.py` - Shade management (spawn, kill, list, send, peek)
+- `tmux.py` - Tmux session and pane operations
+- `servers.py` - Server start/stop management
 
-### oversee/ - Tmux Orchestration
+### say.py - Speech Utility
 
-Shade (worker) management scripts:
-- `iris.sh` - Main shade orchestrator
-- `spawn.sh` - Spawn new shade
-- `kill.sh` - Kill shade
-- `send.sh` - Send message to shade
-- `list.sh` - List active shades
-- `pane.sh` - Tmux pane operations
-- `layout.sh` - Grid layout management
-- Other tmux utilities
+Simple module for speaking text:
+```bash
+python -m brain.say "Hello"
+python -m brain.say "Bonjour" --voice french
+python -m brain.say --greet  # Time-aware greeting
+```
 
 ## Setup
 
 ### Create Virtual Environment
 
 ```bash
-cd ~/Iris
+cd /path/to/iris
 python -m venv brain/.venv
 source brain/.venv/bin/activate
 ```
@@ -119,9 +121,8 @@ source brain/.venv/bin/activate
 # For hear/ (STT)
 pip install flask nemo_toolkit[asr] sounddevice soundfile numpy
 
-# For speak/ (TTS)
-pip install flask
-# (Maya TTS dependencies to be added)
+# For speak/ (TTS - VibeVoice)
+pip install flask torch transformers sounddevice
 
 # For wake/ (coordinator)
 pip install evdev requests
@@ -249,9 +250,9 @@ curl -X POST http://127.0.0.1:8767/state \
   -d '{"state": "listening"}'
 ```
 
-## Migration from Echo
+## Migration History
 
-The old `echo/` monolith has been replaced with this modular architecture:
+The old `echo/` monolith and `spells/` shell scripts have been replaced with this modular architecture:
 
 | Old | New |
 |-----|-----|
@@ -261,12 +262,11 @@ The old `echo/` monolith has been replaced with this modular architecture:
 | `echo/echo/ptt.py` | `wake/ptt.py` |
 | `echo/echo/output.py` | `wake/output.py` |
 | `echo/echo/bubble.py` | `express/bubble.py` (simplified) |
-| `spells/` | `oversee/` + `do/` |
+| `spells/*.sh` | `brain/cli/` (Python) |
 | `memory/` | `remember/` |
 
 ## Future Enhancements
 
-- [ ] Implement real Maya TTS in `speak/`
 - [ ] Add wake word detection to `wake/`
 - [ ] Expand `express/` bubble UI with controls
 - [ ] Add worker (shade) status dots to `express/`

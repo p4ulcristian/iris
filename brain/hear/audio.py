@@ -1,16 +1,37 @@
 """PipeWire/PulseAudio audio recording."""
 
+import json
 import numpy as np
 import sounddevice as sd
+import resampy
+from pathlib import Path
 
-SAMPLE_RATE = 16000  # Parakeet expects 16kHz
+TARGET_SAMPLE_RATE = 16000  # Parakeet expects 16kHz
+CONFIG_FILE = Path(__file__).parent.parent.parent / "config" / "settings.json"
+
+
+def get_input_device():
+    """Get configured input device from settings. Returns (device_id, native_sample_rate)."""
+    try:
+        if CONFIG_FILE.exists():
+            settings = json.loads(CONFIG_FILE.read_text())
+            device_name = settings.get("audio", {}).get("input_device")
+            if device_name:
+                # Find device by name
+                devices = sd.query_devices()
+                for i, d in enumerate(devices):
+                    if device_name in d["name"] and d["max_input_channels"] > 0:
+                        return i, int(d["default_samplerate"])
+    except Exception:
+        pass
+    return None, TARGET_SAMPLE_RATE  # Use default
 
 
 class AudioRecorder:
-    def __init__(self, sample_rate: int = SAMPLE_RATE):
-        self.sample_rate = sample_rate
+    def __init__(self):
         self.buffer: list[np.ndarray] = []
         self.stream = None
+        self.device, self.native_rate = get_input_device()
 
     def _callback(self, indata, frames, time, status):
         self.buffer.append(indata.copy())
@@ -18,10 +39,11 @@ class AudioRecorder:
     def start(self):
         self.buffer = []
         self.stream = sd.InputStream(
-            samplerate=self.sample_rate,
+            samplerate=self.native_rate,
             channels=1,
             dtype=np.float32,
             callback=self._callback,
+            device=self.device,
         )
         self.stream.start()
 
@@ -33,4 +55,8 @@ class AudioRecorder:
         self.stream = None
         if not self.buffer:
             return None
-        return np.concatenate(self.buffer, axis=0).flatten()
+        audio = np.concatenate(self.buffer, axis=0).flatten()
+        # Resample to 16kHz if needed
+        if self.native_rate != TARGET_SAMPLE_RATE:
+            audio = resampy.resample(audio, self.native_rate, TARGET_SAMPLE_RATE)
+        return audio

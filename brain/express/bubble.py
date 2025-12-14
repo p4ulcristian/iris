@@ -58,6 +58,10 @@ GRAY_DARK = (0.25, 0.25, 0.3)
 WARNING_RED = (1.0, 0.1, 0.1)
 WARNING_DARK = (0.9, 0.0, 0.0)
 WARNING_ACCENT = (1.0, 0.2, 0.1)
+# Waking state (wake word detected)
+WAKE_GREEN = (0.2, 1.0, 0.6)
+WAKE_TEAL = (0.0, 0.8, 0.7)
+WAKE_BRIGHT = (0.4, 1.0, 0.8)
 
 # X button settings
 X_SIZE = 12
@@ -96,6 +100,7 @@ class IrisBubble(Gtk.Application):
         self.is_listening = False  # User speaking (CapsLock)
         self.is_speaking = False   # Iris speaking (TTS)
         self.is_loading = True     # Model loading
+        self.is_waking = False     # Wake word detected
         self.loading_what = ""     # What's being loaded (tts, stt)
         self.animation_id = None
         self.state_thread = None
@@ -693,16 +698,19 @@ class IrisBubble(Gtk.Application):
                             self.loading_what = state.split(":")[1].upper()
                             self.is_listening = False
                             self.is_speaking = False
+                            self.is_waking = False
                         else:
                             self.is_loading = state == "loading"
                             self.loading_what = ""
                             self.is_listening = state == "listening"
                             self.is_speaking = state == "speaking"
+                            self.is_waking = state == "waking"
                     else:
                         self.is_loading = True
                         self.loading_what = ""
                         self.is_listening = False
                         self.is_speaking = False
+                        self.is_waking = False
                 except Exception:
                     pass
                 time.sleep(0.1)
@@ -736,9 +744,9 @@ class IrisBubble(Gtk.Application):
         self.worker_thread.start()
 
     def animate(self):
-        # Pulse animation for all active states (loading, listening, speaking)
-        if self.is_listening or self.is_speaking or self.is_loading:
-            self.pulse_phase += 0.1 if self.is_loading else 0.15
+        # Pulse animation for all active states (loading, listening, speaking, waking)
+        if self.is_listening or self.is_speaking or self.is_loading or self.is_waking:
+            self.pulse_phase += 0.2 if self.is_waking else (0.1 if self.is_loading else 0.15)
             if self.pulse_phase > 2 * math.pi:
                 self.pulse_phase -= 2 * math.pi
         else:
@@ -771,6 +779,11 @@ class IrisBubble(Gtk.Application):
             primary = WARNING_RED
             secondary = WARNING_DARK
             accent = WARNING_ACCENT
+        elif self.is_waking:
+            # Wake word detected - bright green pulse
+            primary = WAKE_GREEN
+            secondary = WAKE_TEAL
+            accent = WAKE_BRIGHT
         elif self.is_listening:
             primary = NEON_CYAN
             secondary = ELECTRIC_BLUE
@@ -788,8 +801,8 @@ class IrisBubble(Gtk.Application):
             secondary = DARK_PURPLE
             accent = NEON_PINK
 
-        # === ACTIVE STATE (listening, speaking, or loading) ===
-        if self.is_listening or self.is_speaking or self.is_loading or self.pulse_phase > 0:
+        # === ACTIVE STATE (listening, speaking, loading, or waking) ===
+        if self.is_listening or self.is_speaking or self.is_loading or self.is_waking or self.pulse_phase > 0:
             pulse = (math.sin(self.pulse_phase) + 1) / 2
             pulse2 = (math.sin(self.pulse_phase * 2) + 1) / 2
 
@@ -822,6 +835,8 @@ class IrisBubble(Gtk.Application):
             pattern = cairo.RadialGradient(cx - radius * 0.3, cy - radius * 0.3, 0, cx, cy, radius)
             if self.is_listening and self.is_loading:
                 pattern.add_color_stop_rgba(0, 1.0, 0.7, 0.6, 1.0)  # Warning center
+            elif self.is_waking:
+                pattern.add_color_stop_rgba(0, 0.7, 1.0, 0.85, 1.0)  # Bright green center
             elif self.is_speaking:
                 pattern.add_color_stop_rgba(0, 1.0, 0.95, 0.7, 1.0)  # Warm center
             elif self.is_loading:
@@ -838,6 +853,8 @@ class IrisBubble(Gtk.Application):
             # Inner shine
             if self.is_listening and self.is_loading:
                 shine_color = (1.0, 0.8, 0.7)  # Warning
+            elif self.is_waking:
+                shine_color = (0.8, 1.0, 0.9)  # Green
             elif self.is_speaking:
                 shine_color = (1.0, 0.95, 0.8)  # Warm
             elif self.is_loading:
@@ -879,6 +896,8 @@ class IrisBubble(Gtk.Application):
         # === LABEL with dark background ===
         if self.is_listening and self.is_loading:
             label_text = "Wait" + "." * self.loading_dots
+        elif self.is_waking:
+            label_text = "Hey Iris!"
         elif self.is_listening:
             label_text = "Listening"
         elif self.is_speaking:
@@ -920,6 +939,8 @@ class IrisBubble(Gtk.Application):
         # Label color based on state
         if self.is_listening and self.is_loading:
             label_color = WARNING_RED
+        elif self.is_waking:
+            label_color = WAKE_GREEN
         elif self.is_speaking:
             label_color = GOLD
         elif self.is_loading:

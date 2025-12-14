@@ -11,6 +11,8 @@ dependencies = [
     "sounddevice",
     "soundfile",
     "numpy",
+    "nemo_toolkit[asr]",
+    "PyGObject",
 ]
 
 [tool.setuptools]
@@ -34,5 +36,5 @@ ui = [
     "PyGObject",
 ]
 
-[tool.uv]
-dev-dependencies = []
+[dependency-groups]
+dev = []

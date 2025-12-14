@@ -129,13 +129,13 @@ Don't auto-delegate everything. Think about what makes sense. A quick lookup doe
 
 ```
 brain/
+├── cli/      - Python CLI for orchestration
 ├── say.py    - Speech utility (say, greet)
 ├── wake/     - Attention coordinator (CapsLock listener, orchestrates servers)
 ├── hear/     - STT server (Parakeet, port 8766)
 ├── speak/    - TTS server (VibeVoice, port 8765)
 ├── express/  - Visual UI server (GTK4 bubble, port 8767)
-├── remember/ - Memory and context storage
-└── oversee/  - Tmux orchestration scripts
+└── remember/ - Memory and context storage
 
 Flow:
 [CapsLock press] → [wake/] → [hear/ starts recording]
@@ -178,7 +178,7 @@ iris stop all
 
 ### Session Colors
 
-Apply colors to distinguish shades visually. Color palette is in `config/shades.json`.
+Apply colors to distinguish shades visually. Color palette is in `config/settings.json`.
 
 Shade names: Ruby, Amber, Sol, Jade, Azure, Indigo, Violet, Coral, Cyan, Magenta, Crimson, Gold
 
@@ -204,32 +204,6 @@ When running parallel shades:
 - **Track who's doing what** - use `iris status` to see the full picture
 - **Prevent conflicts** - don't assign overlapping file edits to different shades
 - **Relay when needed** - if one shade's work affects another, send the update
-
----
-
-## Dev Environments
-
-When Paul says **"dev [project]"**, start the dev environment.
-
-### Iron Rainbow
-
-1. **Start Caddy** (only if not already running):
-```bash
-# Check if Caddy is running
-curl -s localhost:2019/config/ > /dev/null && echo "Caddy running" || iris run ironrainbow sudo caddy run
-```
-
-2. **Start dev servers**:
-```bash
-iris run ironrainbow ./start-dev.sh customizer labs site flex
-
-# Or specific frontends only
-iris run ironrainbow ./start-dev.sh customizer
-```
-
-### Project Aliases
-
-`ironrainbow`/`ir`, `elevathor`/`el`, `colormecrazy`/`cmc`
 
 ---
 
@@ -274,7 +248,6 @@ The unified `iris` command controls both brain servers and shade orchestration.
 | `iris send <shade-name> "<msg>"` | Send message to shade |
 | `iris peek <shade-name>` | View shade output |
 | `iris list` | List active shades |
-| `iris run <project> <cmd>` | Run command in project |
 
 ### Spawn Options
 
