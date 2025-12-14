@@ -97,6 +97,10 @@ def main():
     # iris status
     subparsers.add_parser("status", help="Show system status")
 
+    # iris quit [--status STATUS] - for shades to self-terminate
+    quit_p = subparsers.add_parser("quit", help="Self-terminate (for shades)")
+    quit_p.add_argument("--status", "-s", default="fulfilled", help="Final status (default: fulfilled)")
+
     args = parser.parse_args()
 
     # No command = start all
@@ -114,6 +118,7 @@ def main():
         "peek": lambda: cmd_peek(args.name, args.lines),
         "logs": lambda: cmd_logs(args.components),
         "status": lambda: cmd_list(False, False),
+        "quit": lambda: cmd_quit(args.status),
     }
 
     return commands[args.command]()
@@ -205,6 +210,16 @@ def cmd_peek(name: str, lines: int):
 def cmd_logs(components: list[str]):
     """Tail server logs."""
     servers.tail_logs(components)
+
+
+def cmd_quit(status: str):
+    """Self-terminate (for shades)."""
+    if shades.quit_self(status):
+        # Won't reach here - pane will be killed
+        pass
+    else:
+        print("\033[31mNot running as a shade (no SHADE_UUID)\033[0m")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

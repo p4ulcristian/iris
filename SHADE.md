@@ -56,6 +56,23 @@ Example:
 python -m brain.say "Task complete. I fixed the authentication bug in login.py and added unit tests. The issue was a missing null check on line 45." --voice indian --bg
 ```
 
+### Terminating Yourself
+
+When your task is complete and you've spoken your summary, terminate yourself:
+
+```bash
+iris quit
+```
+
+This marks your status as "fulfilled" and closes your pane. If something went wrong:
+
+```bash
+iris quit --status scattered   # If you crashed or couldn't complete
+iris quit --status dormant     # If you're waiting on something external
+```
+
+**Do this at the very end**, after saving notes and speaking your summary.
+
 ---
 
 ---

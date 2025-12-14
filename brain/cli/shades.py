@@ -1,6 +1,7 @@
 """Shade management - spawn, kill, list, send, peek."""
 
 import json
+import os
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +43,7 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     color = config.get_next_shade_color(used)
     color_name = color["name"]
     color_bg = color.get("bg", "#1a1a1a")
+    color_fg = color.get("fg", "#ffffff")
 
     # Generate UUID
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -89,7 +91,7 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     # Set pane metadata
     title_meta = f"{color_name}|{worker_uuid}|{project or 'none'}"
     tmux.set_pane_title(pane_id, title_meta)
-    tmux.set_pane_style(pane_id, color_bg)
+    tmux.set_pane_style(pane_id, color_bg, color_fg)
 
     # Start logging
     tmux.pipe_pane(pane_id, f"cat >> '{shadow_dir}/output.log'")
@@ -160,6 +162,32 @@ def kill_all() -> int:
         tmux.apply_layout()
 
     return count
+
+
+def quit_self(status: str = "fulfilled") -> bool:
+    """Self-terminate (for shades to call on themselves)."""
+    uuid = os.environ.get("SHADE_UUID")
+    if not uuid:
+        return False
+
+    # Find our pane
+    for pane in tmux.list_panes():
+        info = pane.shade_info
+        if info and info[1] == uuid:
+            # Record outcome
+            shadow_dir = config.SHADOWS_DIR / uuid
+            if shadow_dir.exists():
+                (shadow_dir / "status.txt").write_text(status)
+                (shadow_dir / "outcome.txt").write_text(status)
+                (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
+
+            # Stop logging and kill
+            tmux.pipe_pane(pane.pane_id, None)
+            tmux.kill_pane(pane.pane_id)
+            tmux.apply_layout()
+            return True
+
+    return False
 
 
 def send(name: str, message: str) -> bool:
