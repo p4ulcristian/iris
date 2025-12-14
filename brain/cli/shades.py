@@ -29,7 +29,7 @@ def _find_shade(name: str) -> tuple[str, str, str] | None:
     return None
 
 
-def spawn(task: str, project: str | None = None, model: str | None = None) -> dict | None:
+def spawn(task: str, project: str | None = None, model: str | None = None, voice: str = "indian") -> dict | None:
     """Spawn a new shade with a task."""
     if not tmux.session_exists():
         print("\033[31mIris not running. Start with: iris\033[0m")
@@ -55,6 +55,7 @@ def spawn(task: str, project: str | None = None, model: str | None = None) -> di
     prompt_template = config.get_shade_prompt()
     init_msg = prompt_template.replace("{{COLOR_NAME}}", color_name)
     init_msg = init_msg.replace("{{WORKER_UUID}}", worker_uuid)
+    init_msg = init_msg.replace("{{VOICE}}", voice)
     init_msg = init_msg.replace("{{TASK}}", task)
 
     # Escape for shell

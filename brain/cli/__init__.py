@@ -64,10 +64,11 @@ def main():
     stop_p.add_argument("components", nargs="*", help="Components to stop (default: servers only)")
     stop_p.add_argument("--all", action="store_true", help="Stop everything including CLI")
 
-    # iris spawn [--project NAME] [--model MODEL] TASK
+    # iris spawn [--project NAME] [--model MODEL] [--voice VOICE] TASK
     spawn_p = subparsers.add_parser("spawn", help="Spawn a new shade")
     spawn_p.add_argument("--project", "-p", help="Project context")
     spawn_p.add_argument("--model", "-m", help="Model to use")
+    spawn_p.add_argument("--voice", "-v", default="indian", help="Voice for shade (default: indian)")
     spawn_p.add_argument("task", nargs="+", help="Task description")
 
     # iris kill NAME|all
@@ -106,7 +107,7 @@ def main():
     commands = {
         "start": lambda: cmd_start(args.components),
         "stop": lambda: cmd_stop(args.components, args.all),
-        "spawn": lambda: cmd_spawn(" ".join(args.task), args.project, args.model),
+        "spawn": lambda: cmd_spawn(" ".join(args.task), args.project, args.model, args.voice),
         "kill": lambda: cmd_kill(args.name),
         "list": lambda: cmd_list(args.all, args.json),
         "send": lambda: cmd_send(args.name, " ".join(args.message)),
@@ -151,9 +152,9 @@ def cmd_stop(components: list[str], stop_all: bool):
             servers.stop(comp)
 
 
-def cmd_spawn(task: str, project: str | None, model: str | None):
+def cmd_spawn(task: str, project: str | None, model: str | None, voice: str):
     """Spawn a new shade."""
-    result = shades.spawn(task, project=project, model=model)
+    result = shades.spawn(task, project=project, model=model, voice=voice)
     if result:
         print(f"\033[32mSpawned \033[1m{result['name']}\033[0m\033[32m ({result['pane_id']})\033[0m")
         print(f"  Task: {task}")
