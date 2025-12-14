@@ -99,14 +99,17 @@ def say(text: str, voice: str = None, background: bool = False) -> bool:
             return False
 
     if background:
-        # Spawn a detached subprocess that makes the request
+        # Spawn a detached Python subprocess that makes the request
         import json
-        voice_resolved = resolve_voice(voice) if voice else None
-        cmd = [
-            "curl", "-s", "-X", "POST", SPEAK_URL,
-            "-H", "Content-Type: application/json",
-            "-d", json.dumps({"text": text, "voice": voice_resolved} if voice_resolved else {"text": text})
-        ]
+        payload_json = json.dumps(payload)
+        python_code = f"""
+import requests
+try:
+    requests.post('{SPEAK_URL}', json={payload_json}, timeout=60)
+except:
+    pass
+"""
+        cmd = [sys.executable, "-c", python_code]
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         return True
     else:
