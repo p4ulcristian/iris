@@ -17,7 +17,7 @@ source "$VENV_DIR/bin/activate"
 
 # GPU settings for TTS
 export CUDA_DEVICE_ORDER=PCI_BUS_ID
-export CUDA_VISIBLE_DEVICES=1  # RTX 3080
+export CUDA_VISIBLE_DEVICES=0  # RTX 3080
 
 # Start server
 exec python "$SCRIPT_DIR/server.py"

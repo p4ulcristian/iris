@@ -10,7 +10,7 @@ import threading
 
 # Must set before any torch imports
 os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "1")  # RTX 3080
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # RTX 3080
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -21,7 +21,7 @@ import torch
 MODEL_PATH = "microsoft/VibeVoice-Realtime-0.5B"
 GPU_INDEX = 0  # After CUDA_VISIBLE_DEVICES=1, the 3080 becomes device 0
 SAMPLE_RATE = 24000
-INFERENCE_STEPS = 5
+INFERENCE_STEPS = 50
 
 # Voices directory - look in vibevoice project
 VOICES_DIR = Path("/home/p4ulcristian/Work/vibevoice/demo/voices/streaming_model")

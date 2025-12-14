@@ -110,7 +110,7 @@ def speak():
 
     text = data.get('text', '')
     voice = data.get('voice')
-    cfg_scale = data.get('cfg_scale', 1.5)
+    cfg_scale = data.get('cfg_scale', 1.75)
     stream = data.get('stream', False)  # Streaming disabled by default (needs debugging)
 
     if not text:

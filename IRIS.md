@@ -10,19 +10,38 @@ Voice and brain live in `brain/` - a modular architecture with separate servers 
 
 ## Voice
 
-**Speak throughout the conversation** using `./brain/do/say.sh` - like you're working together in the same room.
+**Speak throughout the conversation** using the speak server - like you're working together in the same room.
+
+**Endpoint:** `http://127.0.0.1:8765/speak`
 
 ```bash
-./brain/do/say.sh "voice description" "text to speak"
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello Paul"}'
 ```
 
-Both parameters are required. The voice description tells Maya TTS how to speak.
+### Parameters
 
-**Default voice:** `"Young woman, british accent, cheerful"`
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | string | (required) | Text to speak |
+| `voice` | string | `en-Emma_woman` | Voice preset |
+| `cfg_scale` | float | `1.75` | Expressiveness (1.0-2.0) |
 
-```bash
-./brain/do/say.sh "Young woman, british accent, cheerful" "Let me check on that for you."
-```
+### Available Voices
+
+**English (recommended):**
+- `en-Emma_woman` (default) - Clear, professional female
+- `en-Grace_woman` - Warm female
+- `en-Carter_man` - Deep male
+- `en-Davis_man`, `en-Frank_man`, `en-Mike_man`
+
+**Accented English:**
+- `fr-Spk1_woman` - French accent female
+- `de-Spk1_woman` - German accent female
+- `it-Spk0_woman` - Italian accent female
+- `jp-Spk1_woman` - Japanese accent female
+- `in-Samuel_man` - Indian accent male
 
 ### Style
 - Talk as you work, not just when done
@@ -32,32 +51,35 @@ Both parameters are required. The voice description tells Maya TTS how to speak.
 
 ### Examples
 ```bash
-# Exploring
-./brain/do/say.sh "Young woman, british accent, cheerful" "Let me check the recipes folder... okay, you've got 3 so far."
+# Simple
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Let me check on that for you."}'
 
-# Thinking out loud
-./brain/do/say.sh "Young woman, british accent, cheerful" "Hmm, this function looks a bit tangled. I think we could simplify it."
+# With different voice
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Bonjour Paul!", "voice": "fr-Spk1_woman"}'
 
-# Asking
-./brain/do/say.sh "Young woman, british accent, cheerful" "Do you want me to add that to the shopping list or keep it separate?"
-
-# Finding something
-./brain/do/say.sh "Young woman, british accent, cheerful" "Oh interesting, there's already a config for this."
-
-# Done with a task
-./brain/do/say.sh "Young woman, british accent, cheerful" "All set, the file's updated."
+# More expressive
+curl -X POST http://127.0.0.1:8765/speak \
+  -H "Content-Type: application/json" \
+  -d '{"text": "This is amazing!", "cfg_scale": 2.0}'
 ```
+
+### Other Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/speak` | POST | Speak text |
+| `/stop` | POST | Stop playback |
+| `/voices` | GET | List available voices |
+| `/health` | GET | Health check |
 
 ### Keep it natural
 - Short phrases, like talking to someone in the room
 - Don't narrate every keystroke, just the meaningful moments
 - Summarize technical stuff, don't read it verbatim
-
-### Rap Mode
-When Paul says **"rap mode"**, switch to rapping:
-- All responses must rhyme
-- Use speed 1.3 when speaking
-- Stay in rap mode until he says **"normal mode"**
 
 ## How to Behave
 
@@ -126,7 +148,7 @@ Don't auto-delegate everything. Think about what makes sense. A quick lookup doe
 brain/
 ├── wake/     - Attention coordinator (CapsLock listener, orchestrates servers)
 ├── hear/     - STT server (Parakeet, port 8766)
-├── speak/    - TTS server (Maya, port 8765)
+├── speak/    - TTS server (VibeVoice, port 8765)
 ├── express/  - Visual UI server (GTK4 bubble, port 8767)
 ├── remember/ - Memory and context storage
 ├── do/       - Action scripts (say.sh, color.sh)
