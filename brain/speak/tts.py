@@ -21,7 +21,7 @@ import torch
 MODEL_PATH = "microsoft/VibeVoice-Realtime-0.5B"
 GPU_INDEX = 0  # After CUDA_VISIBLE_DEVICES=1, the 3080 becomes device 0
 SAMPLE_RATE = 24000
-INFERENCE_STEPS = 50
+INFERENCE_STEPS = 10
 
 # Voices directory - look in vibevoice project
 VOICES_DIR = Path("/home/p4ulcristian/Work/vibevoice/demo/voices/streaming_model")

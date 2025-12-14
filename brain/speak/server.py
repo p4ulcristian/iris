@@ -111,7 +111,7 @@ def speak():
     text = data.get('text', '')
     voice = data.get('voice')
     cfg_scale = data.get('cfg_scale', 1.5)
-    stream = data.get('stream', False)  # Streaming disabled by default (needs debugging)
+    stream = data.get('stream', True)  # Streaming with 500ms pre-buffer
 
     if not text:
         return jsonify({"error": "No text provided"}), 400

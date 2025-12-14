@@ -54,73 +54,91 @@ class AudioPlayer:
             with self._lock:
                 self._is_playing = False
 
-    def play_stream(self, audio_iterator: Iterator[np.ndarray], blocking: bool = True) -> float:
+    def play_stream(self, audio_iterator: Iterator[np.ndarray], blocking: bool = True,
+                     prebuffer_ms: int = 500) -> float:
         """
         Play audio chunks from an iterator as they arrive (streaming playback).
+        Uses direct writes instead of callbacks for smoother playback.
 
         Args:
             audio_iterator: Iterator yielding audio chunks as float32 numpy arrays
             blocking: If True, wait for playback to complete
+            prebuffer_ms: Milliseconds of audio to buffer before starting playback
 
         Returns:
             Total duration in seconds
         """
-        audio_queue = queue.Queue()
-        finished = threading.Event()
-        total_samples = [0]
+        total_samples = 0
+        prebuffer_samples = int(self.sample_rate * prebuffer_ms / 1000)
 
-        def audio_callback(outdata, frames, time, status):
-            try:
-                chunk = audio_queue.get_nowait()
-                if chunk.size < frames:
-                    outdata[:chunk.size, 0] = chunk
-                    outdata[chunk.size:, 0] = 0
-                else:
-                    outdata[:, 0] = chunk[:frames]
-                    if chunk.size > frames:
-                        audio_queue.put(chunk[frames:])
-            except queue.Empty:
-                if finished.is_set():
-                    raise sd.CallbackStop()
-                outdata.fill(0)
+        def process_chunk(chunk):
+            if chunk.size == 0:
+                return None
+            chunk = np.asarray(chunk, dtype=np.float32)
+            if chunk.ndim > 1:
+                chunk = chunk.reshape(-1)
+            peak = np.max(np.abs(chunk))
+            if peak > 1.0:
+                chunk = chunk / peak
+            return chunk
 
         with self._lock:
             self._is_playing = True
 
         try:
-            blocksize = 2400  # 100ms at 24kHz
+            # Pre-buffer phase: collect audio before starting playback
+            prebuffer = []
+            prebuffer_size = 0
+            iterator_exhausted = False
+
+            for chunk in audio_iterator:
+                chunk = process_chunk(chunk)
+                if chunk is None:
+                    continue
+                prebuffer.append(chunk)
+                prebuffer_size += chunk.size
+
+                if prebuffer_size >= prebuffer_samples:
+                    break
+            else:
+                iterator_exhausted = True
+
+            # Concatenate pre-buffer into one array
+            if prebuffer:
+                prebuffer_audio = np.concatenate(prebuffer)
+                total_samples += prebuffer_audio.size
+            else:
+                prebuffer_audio = np.array([], dtype=np.float32)
+
+            # If iterator exhausted, just play what we have
+            if iterator_exhausted:
+                if prebuffer_audio.size > 0:
+                    sd.play(prebuffer_audio, samplerate=self.sample_rate, device=self.device)
+                    sd.wait()
+                return total_samples / self.sample_rate
+
+            # Start stream with blocking writes
             stream = sd.OutputStream(
                 samplerate=self.sample_rate,
                 channels=1,
                 dtype=np.float32,
-                callback=audio_callback,
-                blocksize=blocksize,
                 device=self.device,
             )
 
             with stream:
+                # Write pre-buffered audio
+                if prebuffer_audio.size > 0:
+                    stream.write(prebuffer_audio.reshape(-1, 1))
+
+                # Continue with remaining chunks
                 for chunk in audio_iterator:
-                    if chunk.size == 0:
+                    chunk = process_chunk(chunk)
+                    if chunk is None:
                         continue
+                    total_samples += chunk.size
+                    stream.write(chunk.reshape(-1, 1))
 
-                    chunk = np.asarray(chunk, dtype=np.float32)
-                    if chunk.ndim > 1:
-                        chunk = chunk.reshape(-1)
-
-                    peak = np.max(np.abs(chunk))
-                    if peak > 1.0:
-                        chunk = chunk / peak
-
-                    total_samples[0] += chunk.size
-                    audio_queue.put(chunk)
-
-                finished.set()
-
-                if blocking:
-                    while not audio_queue.empty() or stream.active:
-                        sd.sleep(50)
-
-            return total_samples[0] / self.sample_rate
+            return total_samples / self.sample_rate
         finally:
             with self._lock:
                 self._is_playing = False
