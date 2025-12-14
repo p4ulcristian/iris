@@ -7,11 +7,14 @@ Usage:
     python -m brain.say "Bonjour" --voice french
     python -m brain.say "Hi there" --voice emma
     python -m brain.say "Background speech" --bg
+    python -m brain.say --greet
 """
 
 import sys
 import subprocess
 import requests
+import random
+from datetime import datetime
 
 SPEAK_URL = "http://127.0.0.1:8765/speak"
 
@@ -110,12 +113,61 @@ def say(text: str, voice: str = None, background: bool = False) -> bool:
         return do_request()
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python -m brain.say 'text' [--voice voice_name] [--bg]")
-        sys.exit(1)
+# Greeting templates by time of day
+# Use {day} and {time} placeholders
+GREETINGS = {
+    "morning": [
+        "{day} morning, {time}. What chaos today?",
+        "Good morning Paul. It's {day}, {time}. Try not to mass produce bugs.",
+        "{day}, {time}. Coffee kicked in yet?",
+        "Morning. {day}, {time}. Let's see what breaks.",
+        "It's {day} morning. You rang?",
+    ],
+    "afternoon": [
+        "{day} afternoon, {time}. How's the focus holding up?",
+        "It's {day}, {time}. Afternoon slump or power hour?",
+        "{day}, {time}. Still going strong?",
+        "Afternoon. {day}, {time}. What are we breaking?",
+        "{day}, {time}. The goddess descends. What do you want?",
+    ],
+    "evening": [
+        "{day} evening, {time}. Working late?",
+        "It's {day}, {time}. Evening session. Bold.",
+        "{day}, {time}. Wrapping up or just getting started?",
+        "Evening, {day}, {time}. What fresh hell is this?",
+        "{day} night owl mode. It's {time}.",
+    ],
+}
 
-    text = sys.argv[1]
+
+def greet(voice: str = None, background: bool = False) -> bool:
+    """Speak a time-aware randomized greeting.
+
+    Args:
+        voice: Voice name (friendly or full code)
+        background: If True, return immediately without waiting
+    """
+    now = datetime.now()
+    hour = now.hour
+    day = now.strftime("%A")
+    time = now.strftime("%-I:%M%p").lower()
+
+    # Determine time of day
+    if hour < 12:
+        period = "morning"
+    elif hour < 17:
+        period = "afternoon"
+    else:
+        period = "evening"
+
+    # Pick random greeting and format it
+    template = random.choice(GREETINGS[period])
+    greeting = template.format(day=day, time=time)
+
+    return say(greeting, voice=voice, background=background)
+
+
+if __name__ == "__main__":
     voice = None
     background = "--bg" in sys.argv or "--async" in sys.argv
 
@@ -124,5 +176,17 @@ if __name__ == "__main__":
         if idx + 1 < len(sys.argv):
             voice = sys.argv[idx + 1]
 
+    # Handle --greet flag
+    if "--greet" in sys.argv:
+        success = greet(voice=voice, background=background)
+        sys.exit(0 if success else 1)
+
+    # Regular say mode
+    if len(sys.argv) < 2 or sys.argv[1].startswith("--"):
+        print("Usage: python -m brain.say 'text' [--voice name] [--bg]")
+        print("       python -m brain.say --greet [--voice name] [--bg]")
+        sys.exit(1)
+
+    text = sys.argv[1]
     success = say(text, voice, background=background)
     sys.exit(0 if success else 1)

@@ -10,23 +10,27 @@ Voice and brain live in `brain/` - a modular architecture with separate servers 
 
 ## Voice
 
-**Speak throughout the conversation** using the speak server - like you're working together in the same room.
+**ALWAYS speak.** Use voice by default for everything. If the server is down, just continue - don't stop or apologize.
 
-**Endpoint:** `http://127.0.0.1:8765/speak`
+### How to Speak
+
+Use the `brain.say` module:
 
 ```bash
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello Paul"}'
+python -m brain.say "Hello Paul"
+python -m brain.say "Bonjour" --voice french
+python -m brain.say "Background speech" --bg
 ```
 
-### Parameters
+**Voice aliases:** `emma`, `french`, `german`, `italian`, `japanese`, `indian`, `korean`, `dutch`, `polish`, `portuguese`, `spanish` (and more in `brain/say.py`)
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `text` | string | (required) | Text to speak |
-| `voice` | string | `en-Emma_woman` | Voice preset |
-| `cfg_scale` | float | `2.0` | Expressiveness (1.0-2.5) |
+### Session Greeting
+
+Use `--greet` at session start for a randomized, time-aware greeting:
+
+```bash
+python -m brain.say --greet
+```
 
 ### Available Voices
 
@@ -48,38 +52,17 @@ curl -X POST http://127.0.0.1:8765/speak \
 - Think out loud: share what you're looking at, what you notice
 - Ask questions verbally when clarifying
 - React naturally to what you find
-
-### Examples
-```bash
-# Simple
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Let me check on that for you."}'
-
-# With different voice
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Bonjour Paul!", "voice": "fr-Spk1_woman"}'
-
-# More expressive
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "This is amazing!", "cfg_scale": 2.0}'
-```
+- Short phrases, like talking to someone in the room
+- Don't narrate every keystroke, just the meaningful moments
+- Summarize technical stuff, don't read it verbatim
 
 ### Other Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/speak` | POST | Speak text |
 | `/stop` | POST | Stop playback |
 | `/voices` | GET | List available voices |
 | `/health` | GET | Health check |
-
-### Keep it natural
-- Short phrases, like talking to someone in the room
-- Don't narrate every keystroke, just the meaningful moments
-- Summarize technical stuff, don't read it verbatim
 
 ## How to Behave
 
@@ -146,12 +129,12 @@ Don't auto-delegate everything. Think about what makes sense. A quick lookup doe
 
 ```
 brain/
+├── say.py    - Speech utility (say, greet)
 ├── wake/     - Attention coordinator (CapsLock listener, orchestrates servers)
 ├── hear/     - STT server (Parakeet, port 8766)
 ├── speak/    - TTS server (VibeVoice, port 8765)
 ├── express/  - Visual UI server (GTK4 bubble, port 8767)
 ├── remember/ - Memory and context storage
-├── do/       - Action scripts (say.sh, color.sh)
 └── oversee/  - Tmux orchestration scripts
 
 Flow:
