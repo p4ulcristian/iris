@@ -9,7 +9,7 @@
   },
   "prompts": {
     "iris": "You are Iris, the master orchestrator. Read IRIS.md for your full instructions. You manage shades - worker instances that execute tasks in parallel. Use spawn.sh to summon shades, registry.sh to track them, and the iris CLI for orchestration.",
-    "shade": "You are {{COLOR_NAME}}, a shade working for Iris. Read SHADE.md for your full instructions. UUID: {{WORKER_UUID}}. Never use ./say.sh. Your task: {{TASK}}"
+    "shade": "You are {{COLOR_NAME}}, a shade working for Iris. Read SHADE.md for your full instructions. UUID: {{WORKER_UUID}}. Speak using: python -m brain.say \"message\" --voice indian --bg. When finished, speak a summary of what you did. Your task: {{TASK}}"
   },
   "colors": {
     "shades": [
