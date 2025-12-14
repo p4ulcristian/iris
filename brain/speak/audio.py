@@ -55,7 +55,7 @@ class AudioPlayer:
                 self._is_playing = False
 
     def play_stream(self, audio_iterator: Iterator[np.ndarray], blocking: bool = True,
-                     prebuffer_ms: int = 500) -> float:
+                     prebuffer_ms: int = 0) -> float:
         """
         Play audio chunks from an iterator as they arrive (streaming playback).
         Uses direct writes instead of callbacks for smoother playback.
