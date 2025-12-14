@@ -23,6 +23,7 @@ class AudioPlayer:
         self.device = device
         self._lock = threading.Lock()
         self._is_playing = False
+        self._stop_requested = False
 
     def play(self, audio: np.ndarray, blocking: bool = True) -> None:
         """
@@ -84,6 +85,7 @@ class AudioPlayer:
 
         with self._lock:
             self._is_playing = True
+            self._stop_requested = False
 
         try:
             # Pre-buffer phase: collect audio before starting playback
@@ -92,6 +94,8 @@ class AudioPlayer:
             iterator_exhausted = False
 
             for chunk in audio_iterator:
+                if self._stop_requested:
+                    return 0
                 chunk = process_chunk(chunk)
                 if chunk is None:
                     continue
@@ -126,12 +130,18 @@ class AudioPlayer:
             )
 
             with stream:
+                # Write silent padding to let audio device initialize
+                silence = np.zeros(int(self.sample_rate * 0.03), dtype=np.float32)  # 30ms
+                stream.write(silence.reshape(-1, 1))
+
                 # Write pre-buffered audio
                 if prebuffer_audio.size > 0:
                     stream.write(prebuffer_audio.reshape(-1, 1))
 
                 # Continue with remaining chunks
                 for chunk in audio_iterator:
+                    if self._stop_requested:
+                        break
                     chunk = process_chunk(chunk)
                     if chunk is None:
                         continue
@@ -145,6 +155,7 @@ class AudioPlayer:
 
     def stop(self) -> None:
         """Stop any currently playing audio."""
+        self._stop_requested = True
         sd.stop()
         with self._lock:
             self._is_playing = False
