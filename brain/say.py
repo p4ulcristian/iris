@@ -6,9 +6,11 @@ Usage:
     python -m brain.say "Hello Paul"
     python -m brain.say "Bonjour" --voice french
     python -m brain.say "Hi there" --voice emma
+    python -m brain.say "Background speech" --bg
 """
 
 import sys
+import subprocess
 import requests
 
 SPEAK_URL = "http://127.0.0.1:8765/speak"
@@ -72,33 +74,55 @@ def resolve_voice(voice: str) -> str:
     return voice
 
 
-def say(text: str, voice: str = None) -> bool:
-    """Speak text aloud via the TTS server."""
+def say(text: str, voice: str = None, background: bool = False) -> bool:
+    """Speak text aloud via the TTS server.
+
+    Args:
+        text: Text to speak
+        voice: Voice name (friendly or full code)
+        background: If True, return immediately without waiting for playback
+    """
     payload = {"text": text}
     if voice:
         payload["voice"] = resolve_voice(voice)
 
-    try:
-        resp = requests.post(SPEAK_URL, json=payload, timeout=30)
-        resp.raise_for_status()
+    def do_request():
+        try:
+            resp = requests.post(SPEAK_URL, json=payload, timeout=60)
+            resp.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f"Speak failed: {e}", file=sys.stderr)
+            return False
+
+    if background:
+        # Spawn a detached subprocess that makes the request
+        import json
+        voice_resolved = resolve_voice(voice) if voice else None
+        cmd = [
+            "curl", "-s", "-X", "POST", SPEAK_URL,
+            "-H", "Content-Type: application/json",
+            "-d", json.dumps({"text": text, "voice": voice_resolved} if voice_resolved else {"text": text})
+        ]
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
         return True
-    except requests.RequestException as e:
-        print(f"Speak failed: {e}", file=sys.stderr)
-        return False
+    else:
+        return do_request()
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python -m brain.say 'text' [--voice voice_name]")
+        print("Usage: python -m brain.say 'text' [--voice voice_name] [--bg]")
         sys.exit(1)
 
     text = sys.argv[1]
     voice = None
+    background = "--bg" in sys.argv or "--async" in sys.argv
 
     if "--voice" in sys.argv:
         idx = sys.argv.index("--voice")
         if idx + 1 < len(sys.argv):
             voice = sys.argv[idx + 1]
 
-    success = say(text, voice)
+    success = say(text, voice, background=background)
     sys.exit(0 if success else 1)
