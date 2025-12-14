@@ -153,9 +153,9 @@ def set_pane_title(pane_id: str, title: str):
     run("select-pane", "-t", pane_id, "-T", title)
 
 
-def set_pane_style(pane_id: str, bg_color: str):
-    """Set a pane's background color."""
-    run("select-pane", "-t", pane_id, "-P", f"bg={bg_color}")
+def set_pane_style(pane_id: str, bg_color: str, fg_color: str = "#ffffff"):
+    """Set a pane's background and foreground colors."""
+    run("select-pane", "-t", pane_id, "-P", f"bg={bg_color},fg={fg_color}")
 
 
 def send_keys(pane_id: str, keys: str, enter: bool = True):
@@ -184,13 +184,116 @@ def pipe_pane(pane_id: str, command: str | None):
         run("pipe-pane", "-t", pane_id)  # Stop piping
 
 
+def _layout_checksum(layout_str: str) -> str:
+    """Calculate tmux layout checksum (csum16)."""
+    csum = 0
+    for c in layout_str:
+        csum = (csum >> 1) + ((csum & 1) << 15)
+        csum += ord(c)
+        csum &= 0xffff
+    return f"{csum:04x}"
+
+
 def apply_layout():
-    """Apply a sensible layout to all panes."""
+    """Apply grid layout: Iris on left 50%, shades in grid on right 50%.
+
+    Grid pattern (n shades):
+    - 1: single pane
+    - 2: stacked vertically (1 column)
+    - 3: 2 columns [1, 2] (first col 1 pane, second col 2 stacked)
+    - 4: 2 columns [2, 2]
+    - 5: 3 columns [1, 2, 2]
+    - 6: 3 columns [2, 2, 2]
+    - etc.
+
+    Formula: cols = ceil(n/2), first col gets fewer if odd count
+    """
     if not session_exists():
         return
 
-    # Use main-vertical layout: Iris on left, shades stacked on right
-    run("select-layout", "-t", config.SESSION, "main-vertical")
+    panes = list_panes()
+    # Sort by pane_id for consistent ordering
+    all_panes = sorted(panes, key=lambda p: int(p.pane_id[1:]))
 
-    # Resize main pane to be wider
-    run("resize-pane", "-t", f"{config.SESSION}:0.0", "-x", "50%")
+    if len(all_panes) <= 1:
+        return  # Just Iris or nothing
+
+    iris_pane = all_panes[0]  # Should be %0
+    shade_panes = all_panes[1:]
+    n = len(shade_panes)
+
+    # Get window dimensions
+    result = run("display-message", "-t", config.SESSION, "-p", "#{window_width}x#{window_height}")
+    if result.returncode != 0:
+        return
+
+    try:
+        dims = result.stdout.strip().split("x")
+        W = int(dims[0])
+        H = int(dims[1])
+    except (ValueError, IndexError):
+        return
+
+    # Iris gets left ~50%
+    iris_w = W // 2
+    shade_area_x = iris_w + 1
+    shade_area_w = W - shade_area_x
+
+    # Calculate grid distribution
+    if n <= 2:
+        cols = 1
+        distribution = [n]
+    else:
+        cols = (n + 1) // 2  # ceil(n/2)
+        base = n // cols
+        extra = n % cols
+        # First columns get fewer if odd
+        distribution = [base if i < cols - extra else base + 1 for i in range(cols)]
+
+    # Helper to get pane number without % prefix
+    def pane_num(p):
+        return p.pane_id[1:]
+
+    # Build column layouts
+    shade_idx = 0
+    col_layouts = []
+    col_w = shade_area_w // cols if cols > 0 else shade_area_w
+
+    for col_idx, col_count in enumerate(distribution):
+        col_x = shade_area_x + col_idx * (col_w + 1)
+        # Last column takes remaining width
+        this_col_w = col_w if col_idx < cols - 1 else W - col_x
+
+        if col_count == 1:
+            # Single pane in column
+            pane = shade_panes[shade_idx]
+            col_layouts.append(f"{this_col_w}x{H},{col_x},0,{pane_num(pane)}")
+            shade_idx += 1
+        else:
+            # Vertical stack of panes
+            pane_h = H // col_count
+            pane_layouts = []
+            for row_idx in range(col_count):
+                pane = shade_panes[shade_idx]
+                y = row_idx * (pane_h + 1)
+                # Last row takes remaining height
+                h = pane_h if row_idx < col_count - 1 else H - y
+                pane_layouts.append(f"{this_col_w}x{h},{col_x},{y},{pane_num(pane)}")
+                shade_idx += 1
+            col_layouts.append(f"{this_col_w}x{H},{col_x},0[{','.join(pane_layouts)}]")
+
+    # Build shades area layout
+    if cols == 1:
+        shades_layout = col_layouts[0]
+    else:
+        shades_layout = f"{shade_area_w}x{H},{shade_area_x},0{{{','.join(col_layouts)}}}"
+
+    # Full layout: iris + shades horizontally
+    iris_layout = f"{iris_w}x{H},0,0,{pane_num(iris_pane)}"
+    layout_body = f"{W}x{H},0,0{{{iris_layout},{shades_layout}}}"
+
+    # Calculate checksum and apply
+    checksum = _layout_checksum(layout_body)
+    full_layout = f"{checksum},{layout_body}"
+
+    run("select-layout", "-t", config.SESSION, full_layout)
