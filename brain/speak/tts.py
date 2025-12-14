@@ -147,7 +147,7 @@ class TextToSpeech:
         self,
         text: str,
         voice: Optional[str] = None,
-        cfg_scale: float = 1.5,
+        cfg_scale: float = 2.0,
     ) -> np.ndarray:
         """
         Synthesize speech from text.
@@ -210,7 +210,7 @@ class TextToSpeech:
         self,
         text: str,
         voice: Optional[str] = None,
-        cfg_scale: float = 1.5,
+        cfg_scale: float = 2.0,
     ) -> Iterator[np.ndarray]:
         """
         Synthesize speech from text, yielding audio chunks for streaming playback.

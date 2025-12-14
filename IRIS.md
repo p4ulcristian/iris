@@ -26,7 +26,7 @@ curl -X POST http://127.0.0.1:8765/speak \
 |-----------|------|---------|-------------|
 | `text` | string | (required) | Text to speak |
 | `voice` | string | `en-Emma_woman` | Voice preset |
-| `cfg_scale` | float | `1.75` | Expressiveness (1.0-2.0) |
+| `cfg_scale` | float | `2.0` | Expressiveness (1.0-2.5) |
 
 ### Available Voices
 
