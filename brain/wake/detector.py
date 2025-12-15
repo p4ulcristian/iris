@@ -18,9 +18,11 @@ import subprocess
 import random
 
 MODEL_PATH = Path(__file__).parent / 'train' / 'hey_iris_model' / 'hey_iris.onnx'
+VERIFIER_PATH = Path(__file__).parent / 'voice_samples' / 'verifier.pkl'
 STATE_FILE = Path('/tmp/iris/express-state')
 CONFIG_FILE = Path(__file__).parent.parent.parent / 'config' / 'settings.json'
-THRESHOLD = 0.85  # High threshold to reduce false positives
+THRESHOLD = 0.45  # Tuned for verifier - Paul's voice ~0.7, noise ~0.2
+VERIFIER_THRESHOLD = 0.3  # Threshold to trigger verifier check
 COOLDOWN = 3.0  # seconds between detections
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 1280  # ~80ms at 16kHz
@@ -82,7 +84,21 @@ def speak(text: str):
 def run_detector(on_wake=None):
     """Run wake word detector. Calls on_wake callback when detected."""
     print('Loading wake word model...', flush=True)
-    model = Model(wakeword_models=[str(MODEL_PATH)], inference_framework='onnx')
+
+    # Check if verifier exists
+    verifier_models = {}
+    if VERIFIER_PATH.exists():
+        print(f'Using custom verifier: {VERIFIER_PATH}', flush=True)
+        verifier_models['hey_iris'] = str(VERIFIER_PATH)
+    else:
+        print('No custom verifier found, using base model only', flush=True)
+
+    model = Model(
+        wakeword_models=[str(MODEL_PATH)],
+        inference_framework='onnx',
+        custom_verifier_models=verifier_models,
+        custom_verifier_threshold=VERIFIER_THRESHOLD
+    )
 
     device, native_rate = get_input_device()
     need_resample = native_rate != SAMPLE_RATE
