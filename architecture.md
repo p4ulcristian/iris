@@ -40,6 +40,9 @@ iris/
 │   │   ├── shades.py      # Shade management
 │   │   ├── tmux.py        # Tmux operations
 │   │   └── servers.py     # Server start/stop
+│   ├── skills/            # Specialized pane utilities
+│   │   ├── glow/          # Markdown viewer pane
+│   │   └── nvim/          # Neovim editor pane
 │   ├── say.py             # Speech utility module
 │   ├── wake/              # Attention coordinator (CapsLock listener)
 │   ├── hear/              # STT server (Parakeet, port 8766)
@@ -104,6 +107,32 @@ iris/
 | `iris kill all` | Terminate all shades |
 | `iris stop` | Stop servers |
 | `iris stop all` | Stop everything |
+
+## Skills
+
+Specialized pane utilities that open in the worker grid alongside shades.
+
+### Glow (Markdown Viewer)
+
+Opens markdown files in a pane using [glow](https://github.com/charmbracelet/glow).
+
+```bash
+python -m brain.skills.glow <file>
+python -m brain.skills.glow IRIS.md
+python -m brain.skills.glow /path/to/README.md
+```
+
+The pane opens with glow in pager mode (scrollable) and integrates into the grid layout.
+
+### Nvim (Neovim Editor)
+
+Opens files in a pane using neovim. Multiple files open as tabs within a single nvim instance.
+
+```bash
+python -m brain.skills.nvim <file> [file2] [file3] ...
+python -m brain.skills.nvim IRIS.md
+python -m brain.skills.nvim src/main.py src/utils.py src/config.py
+```
 
 ## Voice Pipeline
 
