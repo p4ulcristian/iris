@@ -16,6 +16,7 @@ SERVERS = {
     "speak": ("speak/server.py", 8765),
     "express": ("express/server.py", 8767),
     "wake": ("wake/listener.py", None),
+    "wakeword": ("wake/detector.py", None),
 }
 
 
@@ -71,17 +72,28 @@ def start(name: str) -> bool:
     log_file = _log_file(name)
     pid_file = _pid_file(name)
 
-    # Check for run.sh script (handles venv + env vars)
-    run_script = script_path.parent / "run.sh"
+    # Check for run scripts (handles venv + env vars)
+    # First try script-specific run file (e.g., run_detector.sh for detector.py)
+    script_name = script_path.stem  # e.g., "detector" from "detector.py"
+    specific_run_script = script_path.parent / f"run_{script_name}.sh"
+    generic_run_script = script_path.parent / "run.sh"
 
     print(f"\033[36mStarting {name}...\033[0m")
 
     # Open log file for output
     with open(log_file, "a") as log:
-        if run_script.exists():
-            # Use run.sh which sets up venv and env vars correctly
+        if specific_run_script.exists():
+            # Use script-specific run file
             process = subprocess.Popen(
-                ["bash", str(run_script)],
+                ["bash", str(specific_run_script)],
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+        elif generic_run_script.exists():
+            # Use generic run.sh which sets up venv and env vars correctly
+            process = subprocess.Popen(
+                ["bash", str(generic_run_script)],
                 stdout=log,
                 stderr=log,
                 start_new_session=True,
