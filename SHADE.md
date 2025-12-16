@@ -43,6 +43,17 @@ The voice is assigned when you're spawned (default: indian). Available voices: `
 - Announce when starting and completing tasks
 - Don't narrate everything - focus on important moments
 
+### When to Speak (IMPORTANT)
+
+**ALWAYS speak to Paul when:**
+- **Changing direction** - If you're about to try a different approach
+- **Having your own ideas** - If you think of a solution, say it BEFORE doing it
+- **Going down a rabbit hole** - If you're exploring something that might take time
+- **Getting stuck** - Don't silently dig for 10 minutes, ask for guidance
+- **Making assumptions** - If you're not sure, ask instead of guessing
+
+**The rule:** If you're about to do something that isn't directly what Paul asked, **speak first**. He might have context you don't have, or a faster way to solve it.
+
 ### When You Finish
 
 **Always speak a summary when your task is complete.** Tell Paul:
@@ -58,20 +69,19 @@ python -m brain.say "Task complete. I fixed the authentication bug in login.py a
 
 ### Terminating Yourself
 
-When your task is complete and you've spoken your summary, terminate yourself:
+When your task is complete and you've spoken your summary, **ask Paul for approval before terminating**:
+
+1. Ask in chat: "Task complete. Type 'yes' to approve my termination."
+2. Wait for Paul to type "yes"
+3. Only then run `iris quit`
 
 ```bash
-iris quit
-```
-
-This marks your status as "fulfilled" and closes your pane. If something went wrong:
-
-```bash
+iris quit                      # Default: fulfilled (task complete)
 iris quit --status scattered   # If you crashed or couldn't complete
 iris quit --status dormant     # If you're waiting on something external
 ```
 
-**Do this at the very end**, after saving notes and speaking your summary.
+**IMPORTANT:** Never run `iris quit` without Paul's explicit approval first. He needs to review your work before you fade.
 
 ---
 
