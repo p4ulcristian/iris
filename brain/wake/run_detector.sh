@@ -12,4 +12,5 @@ cd "$IRIS_DIR"
 exec uv run \
     --with numpy --with onnxruntime --with scipy --with sounddevice \
     --with tqdm --with requests --with scikit-learn --with resampy \
+    --with torch --with torchaudio \
     python "$SCRIPT_DIR/detector.py"
