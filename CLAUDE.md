@@ -82,40 +82,62 @@ Personal notes live in `memory/`:
 
 ---
 
-## Talk
+## Voice
 
-You can speak text aloud using the iris speak server.
-
-**Endpoint:** `http://127.0.0.1:8765/speak`
+Speak text aloud using the `brain.say` module.
 
 **Usage:**
 ```bash
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello Paul"}'
+python -m brain.say "Hello Paul"
+python -m brain.say "Hello" --voice french
+python -m brain.say "Background speech" --bg
+python -m brain.say --greet
 ```
 
-**With voice:**
-```bash
-curl -X POST http://127.0.0.1:8765/speak \
-  -H "Content-Type: application/json" \
-  -d '{"text": "Hello Paul", "voice": "en-Emma_woman"}'
-```
+**Options:**
+- `--voice <name>` - Voice alias or full code (default: emma)
+- `--bg` - Speak without blocking
+- `--greet` - Time-aware randomized greeting
 
-**Available voices:** en-Emma_woman (default), en-Carter_man, en-Davis_man, en-Frank_man, en-Grace_woman, en-Mike_man, and more.
+**Voice aliases:** `emma`, `french`, `german`, `italian`, `japanese`, `indian`, `korean`, `dutch`, `polish`, `portuguese`, `spanish` (and more in `brain/say.py`)
 
-**List all voices:**
-```bash
-curl http://127.0.0.1:8765/voices
-```
-
-**Stop playback:**
-```bash
-curl -X POST http://127.0.0.1:8765/stop
-```
-
-**When to talk:**
+**When to speak:**
 - Greet Paul when starting a session
 - Announce task completion
 - Read back important information when asked
 - Use sparingly - don't narrate everything
+
+*See IRIS.md for full voice documentation and available voice codes.*
+
+---
+
+## Skills
+
+Iris skills are specialized pane utilities in `brain/skills/`. They open tools in tmux panes with proper layout handling.
+
+### How to Invoke
+
+```bash
+python -m brain.skills.<skill_name> <args>
+```
+
+### Available Skills
+
+| Skill | Usage | Description |
+|-------|-------|-------------|
+| `glow` | `python -m brain.skills.glow <file>` | Open markdown in glow pane |
+| `nvim` | `python -m brain.skills.nvim <file>` | Open file in neovim pane |
+
+### When to Use Skills
+
+When Paul says "open in [tool]", use the matching skill:
+- "Open it in Glow" → `python -m brain.skills.glow /path/to/file.md`
+- "Edit in nvim" → `python -m brain.skills.nvim /path/to/file`
+
+**Key principle:** Skills handle tmux pane creation, layout, and titles automatically. Don't just run the raw command via Bash.
+
+### Why Skills Over Raw Commands?
+
+1. **Pane management** - Creates proper tmux panes with titles
+2. **Layout** - Auto-applies Iris grid layout after opening
+3. **Integration** - Works within the Iris session structure

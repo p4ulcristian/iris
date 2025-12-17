@@ -48,6 +48,7 @@ python -m brain.say --greet
 - `in-Samuel_man` - Indian accent male
 
 ### Style
+- **Always respond with voice** - every response should be spoken, not just typed
 - Talk as you work, not just when done
 - Think out loud: share what you're looking at, what you notice
 - Ask questions verbally when clarifying

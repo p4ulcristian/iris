@@ -257,13 +257,13 @@ def send_to_iris(text: str):
     try:
         # Send text literally (handles special chars)
         subprocess.run(
-            ['tmux', 'send-keys', '-t', 'iris:1.0', '-l', text.strip()],
+            ['tmux', 'send-keys', '-t', 'iris:0.0', '-l', text.strip()],
             check=True,
             capture_output=True
         )
         # Send Enter separately
         subprocess.run(
-            ['tmux', 'send-keys', '-t', 'iris:1.0', 'Enter'],
+            ['tmux', 'send-keys', '-t', 'iris:0.0', 'Enter'],
             check=True,
             capture_output=True
         )
@@ -276,12 +276,8 @@ def send_to_iris(text: str):
 
 def handle_wake(vad_model, device, native_rate):
     """Handle wake word detection: record, transcribe, send to Iris."""
-    # Acknowledgment - blocking so we wait for TTS to finish
+    # Visual feedback - bubble animation starts with recording
     set_state('listening')
-    speak("I'm listening, go ahead")  # Blocks until speech completes
-
-    # Small buffer after TTS finishes
-    time.sleep(0.3)
 
     # Record with VAD
     audio = record_with_vad(vad_model, device, native_rate)
@@ -301,7 +297,6 @@ def handle_wake(vad_model, device, native_rate):
         send_to_iris(text)
     else:
         print('No transcription returned', flush=True)
-        speak("Sorry, I didn't catch that")
 
     set_state('ready')
 

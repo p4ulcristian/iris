@@ -136,7 +136,7 @@ def create_pane(command: str) -> str | None:
     if not session_exists():
         return None
 
-    result = run("split-window", "-t", config.SESSION, "-h", "-P", "-F", "#{pane_id}", command)
+    result = run("split-window", "-t", config.SESSION, "-d", "-h", "-P", "-F", "#{pane_id}", command)
     if result.returncode != 0:
         return None
     return result.stdout.strip()
@@ -160,10 +160,11 @@ def set_pane_style(pane_id: str, bg_color: str, fg_color: str = "#ffffff"):
 
 def send_keys(pane_id: str, keys: str, enter: bool = True):
     """Send keys to a pane."""
-    args = ["send-keys", "-t", pane_id, keys]
+    # Use -l for literal text to avoid interpretation
+    run("send-keys", "-t", pane_id, "-l", keys)
     if enter:
-        args.append("Enter")
-    run(*args)
+        # Send Enter as separate command
+        run("send-keys", "-t", pane_id, "Enter")
 
 
 def capture_pane(pane_id: str, lines: int = 30) -> str:
