@@ -35,19 +35,27 @@ def open_nvim(*filepaths: str) -> str | None:
         print("\033[31mIris session not running\033[0m")
         return None
 
-    # Build nvim command - use -p flag for tabs when multiple files
-    if len(resolved) == 1:
-        nvim_cmd = f"nvim {resolved[0]}"
+    # Determine working directory and nvim args
+    first_path = Path(resolved[0])
+    if first_path.is_dir():
+        # Opening a directory - cd there and open nvim
+        work_dir = str(first_path)
+        nvim_cmd = f"cd {work_dir} && nvim ."
     else:
-        # -p opens files in tabs
-        files_str = " ".join(f'"{f}"' for f in resolved)
-        nvim_cmd = f"nvim -p {files_str}"
+        # Opening file(s) - cd to parent directory
+        work_dir = str(first_path.parent)
+        if len(resolved) == 1:
+            nvim_cmd = f"cd {work_dir} && nvim {resolved[0]}"
+        else:
+            # -p opens files in tabs
+            files_str = " ".join(f'"{f}"' for f in resolved)
+            nvim_cmd = f"cd {work_dir} && nvim -p {files_str}"
 
     # Create pane with nvim
     result = tmux.run(
         "split-window", "-t", config.SESSION, "-d", "-h",
         "-P", "-F", "#{pane_id}",
-        nvim_cmd
+        "bash", "-c", nvim_cmd
     )
 
     if result.returncode != 0:
