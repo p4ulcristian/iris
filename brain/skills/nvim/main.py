@@ -76,7 +76,7 @@ def open_nvim(*filepaths: str) -> str | None:
     # Apply layout
     tmux.apply_layout()
 
-    files_msg = f"{len(resolved)} files" if len(resolved) > 1 else first_name
+    files_msg = f"{len(resolved)} files" if len(resolved) > 1 else first_path.name
     print(f"\033[32mOpened {files_msg} in nvim pane {pane_id}\033[0m")
     return pane_id
 
@@ -84,10 +84,20 @@ def open_nvim(*filepaths: str) -> str | None:
 def main():
     if len(sys.argv) < 2:
         print("Usage: python -m brain.skills.nvim <file> [file2] [file3] ...")
-        print("Example: python -m brain.skills.nvim IRIS.md")
-        print("Example: python -m brain.skills.nvim src/main.py src/utils.py")
+        print("")
+        print("Opens files in a new nvim pane in the Iris session.")
+        print("")
+        print("Examples:")
+        print("  python -m brain.skills.nvim IRIS.md")
+        print("  python -m brain.skills.nvim src/main.py src/utils.py")
+        print("")
+        print("For highlighting, use: python -m brain.skills.nvim-highlight")
         sys.exit(1)
 
     filepaths = sys.argv[1:]
     result = open_nvim(*filepaths)
     sys.exit(0 if result else 1)
+
+
+if __name__ == "__main__":
+    main()
