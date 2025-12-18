@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from . import config
 
 
+SHADE_COLORS = {
+    "ruby", "amber", "sol", "jade", "azure", "indigo",
+    "violet", "coral", "cyan", "magenta", "crimson", "gold"
+}
+
+
 @dataclass
 class Pane:
     """Represents a tmux pane."""
@@ -15,18 +21,26 @@ class Pane:
 
     @property
     def is_shade(self) -> bool:
-        """Check if this pane is a shade (has metadata in title)."""
-        return "|" in self.title
+        """Check if this pane is a shade (title starts with ColorName:)."""
+        if ":" not in self.title:
+            return False
+        name_part = self.title.split(":")[0].strip().lower()
+        return name_part in SHADE_COLORS
 
     @property
-    def shade_info(self) -> tuple[str, str, str] | None:
-        """Parse shade info from title: (name, uuid, project)."""
+    def shade_name(self) -> str | None:
+        """Get shade name from title (e.g., 'Ruby' from 'Ruby: Fix bug')."""
         if not self.is_shade:
             return None
-        parts = self.title.split("|")
-        if len(parts) >= 3:
-            return parts[0], parts[1], parts[2]
-        return None
+        return self.title.split(":")[0].strip()
+
+    @property
+    def shade_task(self) -> str | None:
+        """Get shade task from title (e.g., 'Fix bug' from 'Ruby: Fix bug')."""
+        if not self.is_shade:
+            return None
+        parts = self.title.split(":", 1)
+        return parts[1].strip() if len(parts) > 1 else ""
 
 
 def run(*args, capture=True, check=False) -> subprocess.CompletedProcess:
@@ -53,12 +67,25 @@ def start_session():
         focus_session()
         return
 
-    # Create session
-    run("new-session", "-d", "-s", config.SESSION)
-
-    # Get colors
-    iris_colors = config.get_iris_colors()
+    # Get colors - main pane is a shade too
     border_colors = config.get_border_colors()
+    shade_color = config.get_next_shade_color(set())  # No shades yet, pick first available
+    color_name = shade_color["name"]
+    color_bg = shade_color.get("bg", "#1a1a1a")
+    color_fg = shade_color.get("fg", "#ffffff")
+
+    # Build Claude command using shade prompt template
+    task = "Help Paul with whatever he needs."
+    prompt_template = config.get_shade_prompt()
+    shade_prompt = prompt_template.replace("{{COLOR_NAME}}", color_name)
+    shade_prompt = shade_prompt.replace("{{WORKER_UUID}}", f"{color_name.lower()}-init")
+    shade_prompt = shade_prompt.replace("{{VOICE}}", "emma")
+    shade_prompt = shade_prompt.replace("{{TASK}}", task)
+    escaped = shade_prompt.replace("'", "'\"'\"'")
+    claude_cmd = f"cd '{config.IRIS_DIR}' && claude --dangerously-skip-permissions -- '{escaped}'"
+
+    # Create session with command directly (so pane closes when Claude exits)
+    run("new-session", "-d", "-s", config.SESSION, claude_cmd)
 
     # Style the session
     run("set-option", "-t", config.SESSION, "status", "off")
@@ -69,18 +96,11 @@ def start_session():
     run("set-option", "-t", config.SESSION, "pane-border-format", f"#[bg={border_colors['bg']},fg={border_colors['fg']},bold] #{{pane_title}} ")
     run("set-option", "-t", config.SESSION, "allow-set-title", "off")
 
-    # Style main pane
-    run("select-pane", "-t", config.SESSION, "-P", f"bg={iris_colors['bg']}")
-    run("select-pane", "-t", config.SESSION, "-T", "𓂀 Iris")
+    # Style main pane as a shade
+    run("select-pane", "-t", config.SESSION, "-P", f"bg={color_bg},fg={color_fg}")
+    run("select-pane", "-t", config.SESSION, "-T", f"{color_name}: {task}")
 
-    # Start Claude in the main pane
-    iris_prompt = config.get_iris_prompt()
-    escaped = iris_prompt.replace("'", "'\"'\"'")
-    run("send-keys", "-t", config.SESSION,
-        f"cd '{config.IRIS_DIR}' && claude --dangerously-skip-permissions -- '{escaped}'",
-        "Enter")
-
-    print("\033[32mIris session started\033[0m")
+    print(f"\033[32mIris session started ({color_name})\033[0m")
     focus_session()
 
 

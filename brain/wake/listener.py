@@ -40,11 +40,11 @@ def on_capslock_press(mode):
 
     logger.info(f"CapsLock PRESSED (mode={mode})")
 
-    # Stop any TTS playback
+    # Mute TTS - stops current playback AND prevents new speech
     try:
-        requests.post(f"{SPEAK_SERVER}/stop", timeout=1)
+        requests.post(f"{SPEAK_SERVER}/mute", timeout=1)
     except Exception as e:
-        logger.warning(f"Failed to stop speak server: {e}")
+        logger.warning(f"Failed to mute speak server: {e}")
 
     # Tell express to show "listening" state
     try:
@@ -92,6 +92,12 @@ def on_capslock_release(mode):
             requests.post(f"{EXPRESS_SERVER}/state", json={"state": "ready"}, timeout=1)
         except Exception as e:
             logger.warning(f"Failed to update express state: {e}")
+
+        # Unmute TTS - allow shades to speak again
+        try:
+            requests.post(f"{SPEAK_SERVER}/unmute", timeout=1)
+        except Exception as e:
+            logger.warning(f"Failed to unmute speak server: {e}")
 
     # Process in background thread
     threading.Thread(target=process, daemon=True).start()

@@ -52,13 +52,13 @@ def run_command(command: str, cwd: str | None = None, title: str | None = None) 
 
     pane_id = result.stdout.strip()
 
-    # Set title - use provided title or extract from command
+    # Set title - "Run: command"
     if title:
-        pane_title = f"Run|{title}"
+        pane_title = f"Run: {title}"
     else:
-        # Extract first word/program from command for title
-        cmd_name = command.split()[0].split("/")[-1] if command else "cmd"
-        pane_title = f"Run|{cmd_name}"
+        # Use command (truncate if too long)
+        cmd_display = command[:40] + "..." if len(command) > 40 else command
+        pane_title = f"Run: {cmd_display}"
 
     tmux.set_pane_title(pane_id, pane_title)
 

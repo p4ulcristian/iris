@@ -67,6 +67,7 @@ PORT = 8765
 tts_model = None
 player = None
 is_ready = False
+is_muted = False  # When True, /speak returns immediately without playing
 speak_lock = threading.Lock()
 
 
@@ -98,10 +99,14 @@ def health():
 @app.route('/speak', methods=['POST'])
 def speak():
     """Speak text"""
-    global tts_model, player
+    global tts_model, player, is_muted
 
     if not is_ready:
         return jsonify({"error": "TTS model not ready"}), 503
+
+    if is_muted:
+        logger.info("[SPEAK] Muted - ignoring request")
+        return jsonify({"status": "muted", "duration_seconds": 0})
 
     data = request.get_json()
 
@@ -116,13 +121,17 @@ def speak():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
+    # Prepend filler word to give model warmup runway (fixes bad first syllable)
+    text = "So, " + text
+
     logger.info(f"[SPEAK] voice={voice}, stream={stream}, text={text[:50]}{'...' if len(text) > 50 else ''}")
 
     with speak_lock:
         if stream:
             # Streaming mode - lower latency
+            # trim_prefix removes the "So, " we prepended for model warmup
             audio_iter = tts_model.synthesize_stream(text, voice=voice, cfg_scale=cfg_scale)
-            duration = player.play_stream(audio_iter, blocking=True)
+            duration = player.play_stream(audio_iter, blocking=True, trim_prefix=True)
         else:
             # Non-streaming mode - generate all then play
             audio = tts_model.synthesize(text, voice=voice, cfg_scale=cfg_scale)
@@ -149,6 +158,30 @@ def stop():
         logger.info("[STOP] Playback stopped")
 
     return jsonify({"status": "ok"})
+
+
+@app.route('/mute', methods=['POST'])
+def mute():
+    """Mute TTS - stop current playback and ignore new requests"""
+    global player, is_muted
+
+    is_muted = True
+    if player:
+        player.stop()
+    logger.info("[MUTE] TTS muted")
+
+    return jsonify({"status": "ok", "muted": True})
+
+
+@app.route('/unmute', methods=['POST'])
+def unmute():
+    """Unmute TTS - allow new speak requests"""
+    global is_muted
+
+    is_muted = False
+    logger.info("[UNMUTE] TTS unmuted")
+
+    return jsonify({"status": "ok", "muted": False})
 
 
 @app.route('/voices', methods=['GET'])

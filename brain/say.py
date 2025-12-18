@@ -21,6 +21,7 @@ SPEAK_URL = "http://127.0.0.1:8765/speak"
 # Friendly name -> actual voice code
 VOICE_ALIASES = {
     # English voices
+    "woman": "en-Emma_woman",
     "emma": "en-Emma_woman",
     "english emma": "en-Emma_woman",
     "grace": "en-Grace_woman",

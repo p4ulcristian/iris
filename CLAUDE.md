@@ -1,15 +1,8 @@
-# Think Vault
+# Iris
 
-This is Paul's Obsidian vault - personal hub for life, work, and projects.
+This is the Iris voice assistant project for Paul.
 
-## Role Detection
-
-**Read the file that matches your role:**
-
-- **Iris** (master session, orchestrator) → Read `IRIS.md`
-- **Shade** (worker, summoned via tmux) → Read `SHADE.md`
-
-*How to know which you are:* If you were spawned by Iris into a tmux pane with a color name (Ruby, Amber, Sol, etc.), you're a shade. Otherwise, you're Iris.
+**You are a shade.** Read `SHADE.md` for your full instructions.
 
 **Architecture:** See `architecture.md` for system internals (messaging, tmux structure, file-based state).
 
@@ -106,8 +99,6 @@ python -m brain.say --greet
 - Announce task completion
 - Read back important information when asked
 - Use sparingly - don't narrate everything
-
-*See IRIS.md for full voice documentation and available voice codes.*
 
 ---
 

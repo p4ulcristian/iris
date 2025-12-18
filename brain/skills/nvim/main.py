@@ -64,14 +64,14 @@ def open_nvim(*filepaths: str) -> str | None:
 
     pane_id = result.stdout.strip()
 
-    # Set title - show first file name (and count if multiple)
-    first_name = Path(resolved[0]).name
-    if len(resolved) == 1:
-        title = f"Nvim|{first_name}"
+    # Set title - show folder name
+    first_path = Path(resolved[0])
+    if first_path.is_dir():
+        folder_name = first_path.name
     else:
-        title = f"Nvim|{first_name}+{len(resolved)-1}"
+        folder_name = first_path.parent.name
 
-    tmux.set_pane_title(pane_id, title)
+    tmux.set_pane_title(pane_id, f"{folder_name}/")
 
     # Apply layout
     tmux.apply_layout()

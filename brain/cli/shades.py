@@ -14,23 +14,52 @@ def _get_used_colors() -> set[str]:
     """Get shade color names currently in use."""
     used = set()
     for pane in tmux.list_panes():
-        info = pane.shade_info
-        if info:
-            used.add(info[0])  # name
+        if pane.shade_name:
+            used.add(pane.shade_name)
     return used
 
 
-def _find_shade(name: str) -> tuple[str, str, str] | None:
-    """Find a shade by name (case insensitive). Returns (pane_id, name, uuid)."""
+def _find_shade(name: str) -> tuple[str, str] | None:
+    """Find a shade by name (case insensitive). Returns (pane_id, name)."""
     search = name.lower()
     for pane in tmux.list_panes():
-        info = pane.shade_info
-        if info and info[0].lower() == search:
-            return pane.pane_id, info[0], info[1]
+        if pane.shade_name and pane.shade_name.lower() == search:
+            return pane.pane_id, pane.shade_name
     return None
 
 
-def spawn(task: str, project: str | None = None, model: str | None = None, voice: str = "indian") -> dict | None:
+def _find_uuid_by_pane(pane_id: str) -> str | None:
+    """Find shade UUID by searching shadow folders for matching pane_id."""
+    if not config.SHADOWS_DIR.exists():
+        return None
+    for shadow_dir in config.SHADOWS_DIR.iterdir():
+        if not shadow_dir.is_dir():
+            continue
+        pane_file = shadow_dir / "pane_id.txt"
+        died_file = shadow_dir / "died.txt"
+        if pane_file.exists() and not died_file.exists():
+            if pane_file.read_text().strip() == pane_id:
+                return shadow_dir.name
+    return None
+
+
+def _find_uuid_by_name(name: str) -> str | None:
+    """Find shade UUID by searching shadow folders for matching name (active only)."""
+    if not config.SHADOWS_DIR.exists():
+        return None
+    search = name.lower()
+    for shadow_dir in config.SHADOWS_DIR.iterdir():
+        if not shadow_dir.is_dir():
+            continue
+        name_file = shadow_dir / "name.txt"
+        died_file = shadow_dir / "died.txt"
+        if name_file.exists() and not died_file.exists():
+            if name_file.read_text().strip().lower() == search:
+                return shadow_dir.name
+    return None
+
+
+def spawn(task: str, project: str | None = None, model: str | None = None, voice: str = "emma") -> dict | None:
     """Spawn a new shade with a task."""
     if not tmux.session_exists():
         print("\033[31mIris not running. Start with: iris\033[0m")
@@ -88,9 +117,13 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     if not pane_id:
         return None
 
-    # Set pane metadata
-    title_meta = f"{color_name}|{worker_uuid}|{project or 'none'}"
-    tmux.set_pane_title(pane_id, title_meta)
+    # Store pane_id for UUID lookup
+    (shadow_dir / "pane_id.txt").write_text(pane_id)
+
+    # Set pane title: "Name: Task" (truncate task if too long)
+    task_display = task[:50] + "..." if len(task) > 50 else task
+    title = f"{color_name}: {task_display}"
+    tmux.set_pane_title(pane_id, title)
     tmux.set_pane_style(pane_id, color_bg, color_fg)
 
     # Start logging
@@ -113,18 +146,20 @@ def kill(name: str) -> bool:
     if not shade:
         return False
 
-    pane_id, shade_name, uuid = shade
+    pane_id, shade_name = shade
 
     # Don't kill master pane
     if pane_id == "%0":
         print("\033[31mCannot kill master pane\033[0m")
         return False
 
-    # Record outcome
-    shadow_dir = config.SHADOWS_DIR / uuid
-    if shadow_dir.exists():
-        (shadow_dir / "outcome.txt").write_text("killed")
-        (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
+    # Find UUID and record outcome
+    uuid = _find_uuid_by_pane(pane_id)
+    if uuid:
+        shadow_dir = config.SHADOWS_DIR / uuid
+        if shadow_dir.exists():
+            (shadow_dir / "outcome.txt").write_text("killed")
+            (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
 
     # Stop logging and kill
     tmux.pipe_pane(pane_id, None)
@@ -141,17 +176,16 @@ def kill_all() -> int:
         if pane.pane_id == "%0":  # Skip master
             continue
 
-        info = pane.shade_info
-        if not info:
+        if not pane.is_shade:
             continue
 
-        name, uuid, project = info
-
-        # Record outcome
-        shadow_dir = config.SHADOWS_DIR / uuid
-        if shadow_dir.exists():
-            (shadow_dir / "outcome.txt").write_text("killed")
-            (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
+        # Find UUID and record outcome
+        uuid = _find_uuid_by_pane(pane.pane_id)
+        if uuid:
+            shadow_dir = config.SHADOWS_DIR / uuid
+            if shadow_dir.exists():
+                (shadow_dir / "outcome.txt").write_text("killed")
+                (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
 
         # Stop logging and kill
         tmux.pipe_pane(pane.pane_id, None)
@@ -170,24 +204,27 @@ def quit_self(status: str = "fulfilled") -> bool:
     if not uuid:
         return False
 
-    # Find our pane
-    for pane in tmux.list_panes():
-        info = pane.shade_info
-        if info and info[1] == uuid:
-            # Record outcome
-            shadow_dir = config.SHADOWS_DIR / uuid
-            if shadow_dir.exists():
-                (shadow_dir / "status.txt").write_text(status)
-                (shadow_dir / "outcome.txt").write_text(status)
-                (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
+    # Find our pane by UUID (from shadow folder pane_id.txt)
+    shadow_dir = config.SHADOWS_DIR / uuid
+    if not shadow_dir.exists():
+        return False
 
-            # Stop logging and kill
-            tmux.pipe_pane(pane.pane_id, None)
-            tmux.kill_pane(pane.pane_id)
-            tmux.apply_layout()
-            return True
+    pane_file = shadow_dir / "pane_id.txt"
+    if not pane_file.exists():
+        return False
 
-    return False
+    pane_id = pane_file.read_text().strip()
+
+    # Record outcome
+    (shadow_dir / "status.txt").write_text(status)
+    (shadow_dir / "outcome.txt").write_text(status)
+    (shadow_dir / "died.txt").write_text(datetime.now().isoformat())
+
+    # Stop logging and kill
+    tmux.pipe_pane(pane_id, None)
+    tmux.kill_pane(pane_id)
+    tmux.apply_layout()
+    return True
 
 
 def send(name: str, message: str) -> bool:
@@ -196,7 +233,7 @@ def send(name: str, message: str) -> bool:
     if not shade:
         return False
 
-    pane_id, _, _ = shade
+    pane_id, _ = shade
     tmux.send_keys(pane_id, message)
     return True
 
@@ -207,7 +244,7 @@ def peek(name: str, lines: int = 30) -> str | None:
     if not shade:
         return None
 
-    pane_id, _, _ = shade
+    pane_id, _ = shade
     return tmux.capture_pane(pane_id, lines)
 
 
@@ -270,11 +307,14 @@ def _get_active_shades() -> dict:
     result = {}
 
     for pane in tmux.list_panes():
-        info = pane.shade_info
-        if not info:
+        if not pane.is_shade:
             continue
 
-        name, uuid, project = info
+        name = pane.shade_name
+        uuid = _find_uuid_by_pane(pane.pane_id)
+
+        if not uuid:
+            continue
 
         # Read additional info from shadows folder
         shadow_dir = config.SHADOWS_DIR / uuid
@@ -282,6 +322,7 @@ def _get_active_shades() -> dict:
         spawned = ""
         status = "laboring"
         current_task = ""
+        project = ""
 
         if shadow_dir.exists():
             task_file = shadow_dir / "task.txt"
@@ -300,13 +341,17 @@ def _get_active_shades() -> dict:
             if current_file.exists():
                 current_task = current_file.read_text().strip()
 
+            project_file = shadow_dir / "project.txt"
+            if project_file.exists():
+                project = project_file.read_text().strip()
+
         result[uuid] = {
             "uuid": uuid,
             "pane_id": pane.pane_id,
             "name": name,
             "task": task,
             "current_task": current_task,
-            "project": project if project != "none" else "",
+            "project": project,
             "spawned_at": spawned,
             "status": status,
             "status_icon": _status_icon(status),

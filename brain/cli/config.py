@@ -109,9 +109,3 @@ def get_shade_prompt() -> str:
     """Get the shade prompt template."""
     settings = load_settings()
     return settings.get("prompts", {}).get("shade", "You are {{COLOR_NAME}}, a shade. Task: {{TASK}}")
-
-
-def get_iris_prompt() -> str:
-    """Get the iris prompt."""
-    settings = load_settings()
-    return settings.get("prompts", {}).get("iris", "You are Iris, the master orchestrator.")

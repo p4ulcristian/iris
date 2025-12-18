@@ -43,8 +43,8 @@ def open_glow(filepath: str) -> str | None:
 
     pane_id = result.stdout.strip()
 
-    # Set title
-    tmux.set_pane_title(pane_id, f"Glow|{path.name}")
+    # Set title - just filename
+    tmux.set_pane_title(pane_id, path.name)
 
     # Apply layout
     tmux.apply_layout()
