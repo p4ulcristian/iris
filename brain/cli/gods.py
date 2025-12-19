@@ -59,7 +59,7 @@ def _find_uuid_by_name(name: str) -> str | None:
     return None
 
 
-def spawn(task: str, project: str | None = None, model: str | None = None, voice: str | None = None) -> dict | None:
+def spawn(task: str, project: str | None = None, model: str | None = None, voice: str | None = None, god_name: str | None = None) -> dict | None:
     """Summon a new god with a task."""
     if not tmux.session_exists():
         print("\033[31mIris not running. Start with: iris\033[0m")
@@ -69,8 +69,13 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
 
     # Get god name and colors
     used = _get_used_names()
-    color = config.get_next_shade_color(used)
-    god_name = color["name"]
+    if god_name:
+        # Use specified god, get their color from theme
+        color = config.get_shade_color_by_name(god_name) or config.get_next_shade_color(used)
+        god_name = color["name"]  # Normalize casing
+    else:
+        color = config.get_next_shade_color(used)
+        god_name = color["name"]
     color_bg = color.get("bg", "#1a1a1a")
     color_fg = color.get("fg", "#ffffff")
 

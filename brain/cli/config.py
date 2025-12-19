@@ -149,6 +149,16 @@ def get_next_shade_color(used_names: set[str]) -> dict:
         return random.choice(colors) if colors else {"name": "Gray", "bg": "#1a1a1a", "fg": "#808080"}
 
 
+def get_shade_color_by_name(name: str) -> dict | None:
+    """Get a specific shade color by name (case insensitive)."""
+    colors = get_shade_colors()
+    search = name.lower()
+    for color in colors:
+        if color["name"].lower() == search:
+            return color
+    return None
+
+
 def get_god_config(name: str) -> dict:
     """Get god configuration (voice, traits) by name."""
     settings = load_settings()
