@@ -8,13 +8,9 @@ from dataclasses import dataclass
 from . import config
 
 
-SHADE_COLORS = {
-    # Greek gods (new)
+GOD_NAMES = {
     "apollo", "artemis", "athena", "hermes", "hades", "poseidon",
     "hera", "ares", "hephaestus", "aphrodite", "dionysus", "demeter",
-    # Legacy color names
-    "ruby", "amber", "sol", "jade", "azure", "indigo",
-    "violet", "coral", "cyan", "magenta", "crimson", "gold"
 }
 
 
@@ -25,24 +21,24 @@ class Pane:
     title: str
 
     @property
-    def is_shade(self) -> bool:
-        """Check if this pane is a shade (title starts with ColorName:)."""
+    def is_god(self) -> bool:
+        """Check if this pane is a god (title starts with GodName:)."""
         if ":" not in self.title:
             return False
         name_part = self.title.split(":")[0].strip().lower()
-        return name_part in SHADE_COLORS
+        return name_part in GOD_NAMES
 
     @property
-    def shade_name(self) -> str | None:
-        """Get shade name from title (e.g., 'Ruby' from 'Ruby: Fix bug')."""
-        if not self.is_shade:
+    def god_name(self) -> str | None:
+        """Get god name from title (e.g., 'Apollo' from 'Apollo: Fix bug')."""
+        if not self.is_god:
             return None
         return self.title.split(":")[0].strip()
 
     @property
-    def shade_task(self) -> str | None:
-        """Get shade task from title (e.g., 'Fix bug' from 'Ruby: Fix bug')."""
-        if not self.is_shade:
+    def god_task(self) -> str | None:
+        """Get god task from title (e.g., 'Fix bug' from 'Apollo: Fix bug')."""
+        if not self.is_god:
             return None
         parts = self.title.split(":", 1)
         return parts[1].strip() if len(parts) > 1 else ""

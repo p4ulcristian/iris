@@ -14,8 +14,8 @@ def _get_used_names() -> set[str]:
     """Get god names currently in use."""
     used = set()
     for pane in tmux.list_panes():
-        if pane.shade_name:
-            used.add(pane.shade_name)
+        if pane.god_name:
+            used.add(pane.god_name)
     return used
 
 
@@ -23,8 +23,8 @@ def _find_god(name: str) -> tuple[str, str] | None:
     """Find a god by name (case insensitive). Returns (pane_id, name)."""
     search = name.lower()
     for pane in tmux.list_panes():
-        if pane.shade_name and pane.shade_name.lower() == search:
-            return pane.pane_id, pane.shade_name
+        if pane.god_name and pane.god_name.lower() == search:
+            return pane.pane_id, pane.god_name
     return None
 
 
@@ -59,7 +59,7 @@ def _find_uuid_by_name(name: str) -> str | None:
     return None
 
 
-def spawn(task: str, project: str | None = None, model: str | None = None, voice: str = "emma") -> dict | None:
+def spawn(task: str, project: str | None = None, model: str | None = None, voice: str | None = None) -> dict | None:
     """Summon a new god with a task."""
     if not tmux.session_exists():
         print("\033[31mIris not running. Start with: iris\033[0m")
@@ -70,23 +70,29 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     # Get god name and colors
     used = _get_used_names()
     color = config.get_next_shade_color(used)
-    color_name = color["name"]
+    god_name = color["name"]
     color_bg = color.get("bg", "#1a1a1a")
     color_fg = color.get("fg", "#ffffff")
+
+    # Get god config (voice, traits) - voice param overrides config
+    god_config = config.get_god_config(god_name)
+    voice = voice or god_config.get("voice", "emma")
+    traits = god_config.get("traits", "")
 
     # Generate UUID
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     rand_hex = secrets.token_hex(2)
-    worker_uuid = f"{color_name.lower()}-{timestamp}-{rand_hex}"
+    god_uuid = f"{god_name.lower()}-{timestamp}-{rand_hex}"
 
     # Resolve project
     project_dir = config.resolve_project(project) if project else None
 
     # Build init message from template
-    prompt_template = config.get_shade_prompt()
-    init_msg = prompt_template.replace("{{COLOR_NAME}}", color_name)
-    init_msg = init_msg.replace("{{WORKER_UUID}}", worker_uuid)
+    prompt_template = config.get_god_prompt()
+    init_msg = prompt_template.replace("{{GOD_NAME}}", god_name)
+    init_msg = init_msg.replace("{{GOD_UUID}}", god_uuid)
     init_msg = init_msg.replace("{{VOICE}}", voice)
+    init_msg = init_msg.replace("{{TRAITS}}", traits)
     init_msg = init_msg.replace("{{TASK}}", task)
 
     # Escape for shell
@@ -98,15 +104,15 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
 
     claude_cmd = (
         f"cd '{config.IRIS_DIR}' && "
-        f"SHADE_UUID='{worker_uuid}' SHADE_NAME='{color_name}' "
+        f"GOD_UUID='{god_uuid}' GOD_NAME='{god_name}' "
         f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{escaped_msg}'"
     )
 
     # Create shadows folder
-    shadow_dir = config.SHADOWS_DIR / worker_uuid
+    shadow_dir = config.SHADOWS_DIR / god_uuid
     shadow_dir.mkdir(parents=True, exist_ok=True)
     (shadow_dir / "task.txt").write_text(task)
-    (shadow_dir / "name.txt").write_text(color_name)
+    (shadow_dir / "name.txt").write_text(god_name)
     (shadow_dir / "spawned.txt").write_text(datetime.now().isoformat())
     (shadow_dir / "status.txt").write_text("laboring")
     if project:
@@ -122,7 +128,7 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
 
     # Set pane title: "Name: Task" (truncate task if too long)
     task_display = task[:50] + "..." if len(task) > 50 else task
-    title = f"{color_name}: {task_display}"
+    title = f"{god_name}: {task_display}"
     tmux.set_pane_title(pane_id, title)
     tmux.set_pane_style(pane_id, color_bg, color_fg)
 
@@ -133,8 +139,8 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     tmux.apply_layout()
 
     return {
-        "name": color_name,
-        "uuid": worker_uuid,
+        "name": god_name,
+        "uuid": god_uuid,
         "pane_id": pane_id,
         "project": project,
     }
@@ -176,7 +182,7 @@ def kill_all() -> int:
         if pane.pane_id == "%0":  # Skip master
             continue
 
-        if not pane.is_shade:
+        if not pane.is_god:
             continue
 
         # Find UUID and record outcome
@@ -200,7 +206,7 @@ def kill_all() -> int:
 
 def quit_self(status: str = "fulfilled") -> bool:
     """Self-terminate (for gods to call on themselves)."""
-    uuid = os.environ.get("SHADE_UUID")
+    uuid = os.environ.get("GOD_UUID")
     if not uuid:
         return False
 
@@ -307,10 +313,10 @@ def _get_active_gods() -> dict:
     result = {}
 
     for pane in tmux.list_panes():
-        if not pane.is_shade:
+        if not pane.is_god:
             continue
 
-        name = pane.shade_name
+        name = pane.god_name
         uuid = _find_uuid_by_pane(pane.pane_id)
 
         if not uuid:

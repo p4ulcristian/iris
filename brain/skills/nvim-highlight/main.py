@@ -37,7 +37,7 @@ def find_nvim_pane() -> str | None:
     panes = tmux.list_panes()
     for pane in panes:
         # Nvim panes have titles ending with /
-        if pane.title.endswith("/") and not pane.is_shade:
+        if pane.title.endswith("/") and not pane.is_god:
             return pane.pane_id
     return None
 

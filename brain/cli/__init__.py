@@ -219,7 +219,7 @@ def cmd_quit(status: str):
         # Won't reach here - pane will be killed
         pass
     else:
-        print("\033[31mNot running as a god (no SHADE_UUID)\033[0m")
+        print("\033[31mNot running as a god (no GOD_UUID)\033[0m")
         sys.exit(1)
 
 

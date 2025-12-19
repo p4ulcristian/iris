@@ -149,7 +149,14 @@ def get_next_shade_color(used_names: set[str]) -> dict:
         return random.choice(colors) if colors else {"name": "Gray", "bg": "#1a1a1a", "fg": "#808080"}
 
 
-def get_shade_prompt() -> str:
-    """Get the shade prompt template."""
+def get_god_config(name: str) -> dict:
+    """Get god configuration (voice, traits) by name."""
     settings = load_settings()
-    return settings.get("prompts", {}).get("shade", "You are {{COLOR_NAME}}, a shade. Task: {{TASK}}")
+    gods = settings.get("gods", {})
+    return gods.get(name, {"voice": "emma", "traits": ""})
+
+
+def get_god_prompt() -> str:
+    """Get the god prompt template."""
+    settings = load_settings()
+    return settings.get("prompts", {}).get("god", "You are {{GOD_NAME}}, a god. Task: {{TASK}}")

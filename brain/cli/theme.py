@@ -41,9 +41,9 @@ def apply_theme(theme_name: str = None):
 
     # Apply to all panes - cycle through theme colors
     panes = tmux.list_panes()
-    shade_panes = [p for p in panes if p.is_shade]
+    god_panes = [p for p in panes if p.is_god]
 
-    for i, pane in enumerate(shade_panes):
+    for i, pane in enumerate(god_panes):
         # Cycle through available colors
         colors = shade_list[i % len(shade_list)]
         tmux.set_pane_style(pane.pane_id, colors["bg"], colors.get("fg", "#ffffff"))
