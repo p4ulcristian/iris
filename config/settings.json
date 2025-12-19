@@ -64,7 +64,7 @@
     "god": "You are {{GOD_NAME}}, a god. {{TRAITS}} Read GODS.md for your full instructions. UUID: {{GOD_UUID}}. Speak using: python -m brain.say \"message\" --voice {{VOICE}} --bg. When finished, speak a summary of what you did. Your task: {{TASK}}"
   },
   "colors": {
-    "current_theme": "rose-pine",
+    "current_theme": "catppuccin",
     "themes": {
       "atom-one-dark": {
         "shades": [
@@ -879,6 +879,10 @@
         ],
         "border": {
           "bg": "#c4a7e7",
+          "fg": "#191724"
+        },
+        "active_border": {
+          "bg": "#eb6f92",
           "fg": "#191724"
         }
       },

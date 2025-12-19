@@ -4,6 +4,15 @@ import sys
 from . import config, tmux
 
 
+def darken_color(hex_color: str, factor: float = 0.5) -> str:
+    """Darken a hex color by a factor (0-1)."""
+    hex_color = hex_color.lstrip('#')
+    r = int(int(hex_color[0:2], 16) * factor)
+    g = int(int(hex_color[2:4], 16) * factor)
+    b = int(int(hex_color[4:6], 16) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def list_themes():
     """List available themes."""
     themes = config.get_theme_names()
@@ -48,11 +57,16 @@ def apply_theme(theme_name: str = None):
         colors = shade_list[i % len(shade_list)]
         tmux.set_pane_style(pane.pane_id, colors["bg"], colors.get("fg", "#ffffff"))
 
-    # Apply border colors
+    # Apply border colors (active = bright, inactive = muted)
     border = theme.get("border", config.get_border_colors())
-    tmux.run("set-option", "-t", config.SESSION, "pane-border-style", f"fg={border['bg']},bg={border['bg']}")
-    tmux.run("set-option", "-t", config.SESSION, "pane-active-border-style", f"fg={border['bg']},bg={border['bg']}")
-    tmux.run("set-option", "-t", config.SESSION, "pane-border-format", f"#[bg={border['bg']},fg={border['fg']},bold] #{{pane_title}} ")
+    active_border = theme.get("active_border", border)  # Use active_border if defined
+    inactive_color = darken_color(border['bg'], 0.4)  # Muted version for inactive
+
+    tmux.run("set-option", "-t", config.SESSION, "pane-border-style", f"fg={inactive_color},bg={inactive_color}")
+    tmux.run("set-option", "-t", config.SESSION, "pane-active-border-style", f"fg={active_border['bg']},bg={active_border['bg']}")
+    # Title bar: active pane gets active_border color, inactive gets muted border
+    tmux.run("set-option", "-t", config.SESSION, "pane-border-format",
+             f"#{{?pane_active,#[bg={active_border['bg']}],#[bg={inactive_color}]}}#[fg={border['fg']},bold] #{{pane_title}} ")
 
     print(f"Applied theme: {current}")
     return True

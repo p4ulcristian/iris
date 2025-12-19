@@ -8,6 +8,15 @@ from dataclasses import dataclass
 from . import config
 
 
+def darken_color(hex_color: str, factor: float = 0.5) -> str:
+    """Darken a hex color by a factor (0-1)."""
+    hex_color = hex_color.lstrip('#')
+    r = int(int(hex_color[0:2], 16) * factor)
+    g = int(int(hex_color[2:4], 16) * factor)
+    b = int(int(hex_color[4:6], 16) * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 GOD_NAMES = {
     "apollo", "artemis", "athena", "hermes", "hades", "poseidon",
     "hera", "ares", "hephaestus", "aphrodite", "dionysus", "demeter",
@@ -92,7 +101,8 @@ def start_session():
     run("set-option", "-t", config.SESSION, "status", "off")
     run("set-option", "-t", config.SESSION, "pane-border-status", "top")
     run("set-option", "-t", config.SESSION, "pane-border-lines", "heavy")
-    run("set-option", "-t", config.SESSION, "pane-border-style", f"fg={border_colors['bg']},bg={border_colors['bg']}")
+    inactive_color = darken_color(border_colors['bg'], 0.4)
+    run("set-option", "-t", config.SESSION, "pane-border-style", f"fg={inactive_color},bg={inactive_color}")
     run("set-option", "-t", config.SESSION, "pane-active-border-style", f"fg={border_colors['bg']},bg={border_colors['bg']}")
     run("set-option", "-t", config.SESSION, "pane-border-format", f"#[bg={border_colors['bg']},fg={border_colors['fg']},bold] #{{pane_title}} ")
     run("set-option", "-t", config.SESSION, "allow-set-title", "off")
