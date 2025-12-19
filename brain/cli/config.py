@@ -4,7 +4,6 @@ import json
 import os
 import random
 from pathlib import Path
-from functools import lru_cache
 
 
 # Derive IRIS_DIR from this file's location
@@ -29,13 +28,18 @@ def ensure_dirs():
     SHADOWS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@lru_cache
 def load_settings() -> dict:
-    """Load settings from config/settings.json."""
+    """Load settings from config/settings.json (fresh read, no cache)."""
     if not SETTINGS_FILE.exists():
         return {}
     with open(SETTINGS_FILE) as f:
         return json.load(f)
+
+
+def save_settings(settings: dict):
+    """Save settings to config/settings.json."""
+    with open(SETTINGS_FILE, "w") as f:
+        json.dump(settings, f, indent=2)
 
 
 def get_projects() -> dict[str, Path]:
@@ -75,10 +79,46 @@ def resolve_project(name: str) -> Path | None:
     return None
 
 
-def get_shade_colors() -> list[dict]:
-    """Get shade color definitions."""
+def get_current_theme() -> str:
+    """Get the current theme name."""
     settings = load_settings()
-    return settings.get("colors", {}).get("shades", [])
+    return settings.get("colors", {}).get("current_theme", "atom-one-dark")
+
+
+def get_theme_names() -> list[str]:
+    """Get list of available theme names."""
+    settings = load_settings()
+    themes = settings.get("colors", {}).get("themes", {})
+    return list(themes.keys())
+
+
+def set_current_theme(theme_name: str) -> bool:
+    """Set the current theme. Returns True if successful."""
+    settings = load_settings()
+    themes = settings.get("colors", {}).get("themes", {})
+
+    if theme_name not in themes:
+        return False
+
+    settings["colors"]["current_theme"] = theme_name
+    save_settings(settings)
+    return True
+
+
+def get_theme(theme_name: str = None) -> dict:
+    """Get a theme by name, or current theme if not specified."""
+    settings = load_settings()
+    if theme_name is None:
+        theme_name = get_current_theme()
+
+    themes = settings.get("colors", {}).get("themes", {})
+    return themes.get(theme_name, {})
+
+
+def get_shade_colors() -> list[dict]:
+    """Get shade color definitions from current theme."""
+    theme = get_theme()
+    return theme.get("shades", [])
 
 
 def get_iris_colors() -> dict:
@@ -88,7 +128,11 @@ def get_iris_colors() -> dict:
 
 
 def get_border_colors() -> dict:
-    """Get border color scheme."""
+    """Get border color scheme from current theme."""
+    theme = get_theme()
+    if "border" in theme:
+        return theme["border"]
+    # Fallback to global border
     settings = load_settings()
     return settings.get("colors", {}).get("border", {"bg": "#c9b1d4", "fg": "#1f1a28"})
 
@@ -102,7 +146,7 @@ def get_next_shade_color(used_names: set[str]) -> dict:
         return random.choice(available)
     else:
         # All used, pick random
-        return random.choice(colors) if colors else {"name": "Gray", "bg": "#1a1a1a", "header": "#808080"}
+        return random.choice(colors) if colors else {"name": "Gray", "bg": "#1a1a1a", "fg": "#808080"}
 
 
 def get_shade_prompt() -> str:
