@@ -1,0 +1,56 @@
+# Iris
+
+**Messenger of the Gods**
+
+Iris is a voice assistant that summons the Greek pantheon to do your bidding. She orchestrates divine workers - Apollo, Artemis, Athena, and their kin - each god bringing their power to your tasks.
+
+## The Mythology
+
+In Greek mythology, Iris is the goddess of the rainbow and messenger of the gods. She travels between Olympus and the mortal world, carrying divine commands across realms.
+
+Here, Iris serves a similar role. She listens for your voice, interprets your commands, and summons gods from her pantheon to fulfill them. Each god is an autonomous worker with their own pane, their own context, and their own purpose.
+
+## The Pantheon
+
+| God | Domain |
+|-----|--------|
+| **Apollo** | Light and knowledge |
+| **Artemis** | Swift execution |
+| **Athena** | Wisdom and strategy |
+| **Hermes** | Speed and messages |
+| **Hades** | Deep work |
+| **Poseidon** | Vast undertakings |
+| **Hera** | Coordination |
+| **Ares** | Aggressive tasks |
+| **Hephaestus** | Building and crafting |
+| **Aphrodite** | Beauty and design |
+| **Dionysus** | Creative chaos |
+| **Demeter** | Growth and nurturing |
+
+## Commands
+
+```bash
+iris                  # Awaken Iris
+iris spawn "task"     # Summon a god
+iris list             # Survey the pantheon
+iris kill <name>      # Banish a god
+iris send <name> msg  # Message a god
+iris peek <name>      # Observe a god's work
+```
+
+## Hotkeys
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+n` | Summon a new god |
+| `Ctrl+k` | Kill current pane |
+| `Ctrl+t` | Change theme |
+| `Ctrl+h` | Show hotkeys |
+| `Alt+l` | List gods |
+| `Alt+k` | Banish by name |
+
+## Architecture
+
+Iris runs in a tmux session. The master pane is her throne; summoned gods occupy surrounding panes. Each god runs Claude with full autonomy, communicating through the file system.
+
+For details, see `architecture.md`.

@@ -1,13 +1,14 @@
 
        IRIS HOTKEYS
 
-  Ctrl+n   Spawn new shade
+  Ctrl+n   Summon new god
   Ctrl+k   Kill current pane
   Ctrl+t   Theme picker
+  Ctrl+s   Skills list
   Ctrl+f   Toggle fullscreen
   Ctrl+l   Rotate layouts
   Ctrl+r   New terminal pane
   Ctrl+h   This help
 
-  Alt+l    List shades
-  Alt+k    Kill shade by name
+  Alt+l    List gods
+  Alt+k    Banish god by name

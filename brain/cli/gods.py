@@ -1,4 +1,4 @@
-"""Shade management - spawn, kill, list, send, peek."""
+"""God management - summon, banish, list, send, peek."""
 
 import json
 import os
@@ -10,8 +10,8 @@ from . import config
 from . import tmux
 
 
-def _get_used_colors() -> set[str]:
-    """Get shade color names currently in use."""
+def _get_used_names() -> set[str]:
+    """Get god names currently in use."""
     used = set()
     for pane in tmux.list_panes():
         if pane.shade_name:
@@ -19,8 +19,8 @@ def _get_used_colors() -> set[str]:
     return used
 
 
-def _find_shade(name: str) -> tuple[str, str] | None:
-    """Find a shade by name (case insensitive). Returns (pane_id, name)."""
+def _find_god(name: str) -> tuple[str, str] | None:
+    """Find a god by name (case insensitive). Returns (pane_id, name)."""
     search = name.lower()
     for pane in tmux.list_panes():
         if pane.shade_name and pane.shade_name.lower() == search:
@@ -29,7 +29,7 @@ def _find_shade(name: str) -> tuple[str, str] | None:
 
 
 def _find_uuid_by_pane(pane_id: str) -> str | None:
-    """Find shade UUID by searching shadow folders for matching pane_id."""
+    """Find god UUID by searching shadow folders for matching pane_id."""
     if not config.SHADOWS_DIR.exists():
         return None
     for shadow_dir in config.SHADOWS_DIR.iterdir():
@@ -44,7 +44,7 @@ def _find_uuid_by_pane(pane_id: str) -> str | None:
 
 
 def _find_uuid_by_name(name: str) -> str | None:
-    """Find shade UUID by searching shadow folders for matching name (active only)."""
+    """Find god UUID by searching shadow folders for matching name (active only)."""
     if not config.SHADOWS_DIR.exists():
         return None
     search = name.lower()
@@ -60,15 +60,15 @@ def _find_uuid_by_name(name: str) -> str | None:
 
 
 def spawn(task: str, project: str | None = None, model: str | None = None, voice: str = "emma") -> dict | None:
-    """Spawn a new shade with a task."""
+    """Summon a new god with a task."""
     if not tmux.session_exists():
         print("\033[31mIris not running. Start with: iris\033[0m")
         return None
 
     config.ensure_dirs()
 
-    # Get color
-    used = _get_used_colors()
+    # Get god name and colors
+    used = _get_used_names()
     color = config.get_next_shade_color(used)
     color_name = color["name"]
     color_bg = color.get("bg", "#1a1a1a")
@@ -141,12 +141,12 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
 
 
 def kill(name: str) -> bool:
-    """Kill a shade by name."""
-    shade = _find_shade(name)
-    if not shade:
+    """Banish a god by name."""
+    god = _find_god(name)
+    if not god:
         return False
 
-    pane_id, shade_name = shade
+    pane_id, god_name = god
 
     # Don't kill master pane
     if pane_id == "%0":
@@ -170,7 +170,7 @@ def kill(name: str) -> bool:
 
 
 def kill_all() -> int:
-    """Kill all shades. Returns count killed."""
+    """Banish all gods. Returns count banished."""
     count = 0
     for pane in tmux.list_panes():
         if pane.pane_id == "%0":  # Skip master
@@ -199,7 +199,7 @@ def kill_all() -> int:
 
 
 def quit_self(status: str = "fulfilled") -> bool:
-    """Self-terminate (for shades to call on themselves)."""
+    """Self-terminate (for gods to call on themselves)."""
     uuid = os.environ.get("SHADE_UUID")
     if not uuid:
         return False
@@ -228,29 +228,29 @@ def quit_self(status: str = "fulfilled") -> bool:
 
 
 def send(name: str, message: str) -> bool:
-    """Send a message to a shade."""
-    shade = _find_shade(name)
-    if not shade:
+    """Send a message to a god."""
+    god = _find_god(name)
+    if not god:
         return False
 
-    pane_id, _ = shade
+    pane_id, _ = god
     tmux.send_keys(pane_id, message)
     return True
 
 
 def peek(name: str, lines: int = 30) -> str | None:
-    """Get recent output from a shade."""
-    shade = _find_shade(name)
-    if not shade:
+    """Get recent output from a god."""
+    god = _find_god(name)
+    if not god:
         return None
 
-    pane_id, _ = shade
+    pane_id, _ = god
     return tmux.capture_pane(pane_id, lines)
 
 
-def list_shades(show_all: bool = False, json_output: bool = False):
-    """List active shades and optionally history."""
-    active = _get_active_shades()
+def list_gods(show_all: bool = False, json_output: bool = False):
+    """List active gods and optionally history."""
+    active = _get_active_gods()
 
     if json_output:
         if show_all:
@@ -261,7 +261,7 @@ def list_shades(show_all: bool = False, json_output: bool = False):
         return
 
     # Human-readable output
-    print("=== Active Shades ===")
+    print("=== Active Gods ===")
     if not active:
         print("  (none)")
     else:
@@ -302,8 +302,8 @@ def _status_icon(status: str) -> str:
     return icons.get(status, "▶")
 
 
-def _get_active_shades() -> dict:
-    """Get all active shades as a dict keyed by UUID."""
+def _get_active_gods() -> dict:
+    """Get all active gods as a dict keyed by UUID."""
     result = {}
 
     for pane in tmux.list_panes():

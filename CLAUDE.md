@@ -2,7 +2,7 @@
 
 This is the Iris voice assistant project for Paul.
 
-**You are a shade.** Read `SHADE.md` for your full instructions.
+**You are a god.** Read `GODS.md` for your full instructions.
 
 **Architecture:** See `architecture.md` for system internals (messaging, tmux structure, file-based state).
 
@@ -58,19 +58,19 @@ Personal notes live in `memory/`:
 
 ## Iris Lexicon
 
-*Iris commands **shades**: spirits summoned from shadow, each one a different color of her rainbow.*
+*Iris, messenger of the gods, summons divine workers from Olympus. Each god brings their unique power to Paul's tasks.*
 
 | Term | Meaning |
 |------|---------|
-| **Shade** | A worker instance |
-| **Shades / Shadows** | All workers collectively |
-| **Summon** | Spawn a new shade |
-| **Banish** | Terminate a shade |
-| **Bind** | Assign a task to a shade |
-| **Glimpse** | Check shade status |
-| **Laboring** | Shade is busy |
-| **Dormant** | Shade is idle |
-| **Scattered** | Shade crashed |
+| **God** | A worker instance (Apollo, Artemis, Athena, etc.) |
+| **Gods** | All workers collectively |
+| **Summon** | Call a new god into service |
+| **Banish** | Release a god from service |
+| **Bind** | Assign a task to a god |
+| **Glimpse** | Check god status |
+| **Laboring** | God is busy |
+| **Dormant** | God is idle |
+| **Scattered** | God crashed |
 | **Fulfilled** | Task complete |
 
 ---

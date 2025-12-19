@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import config
 from . import tmux
-from . import shades
+from . import gods
 from . import servers
 
 
@@ -50,7 +50,7 @@ def fix_input_group() -> bool:
 def main():
     parser = argparse.ArgumentParser(
         prog="iris",
-        description="Iris - shade orchestration and voice services",
+        description="Iris - messenger of the gods, orchestrating divine workers",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -65,30 +65,30 @@ def main():
     stop_p.add_argument("--all", action="store_true", help="Stop everything including CLI")
 
     # iris spawn [--project NAME] [--model MODEL] [--voice VOICE] [--quiet] TASK
-    spawn_p = subparsers.add_parser("spawn", help="Spawn a new shade")
+    spawn_p = subparsers.add_parser("spawn", help="Summon a new god")
     spawn_p.add_argument("--project", "-p", help="Project context")
     spawn_p.add_argument("--model", "-m", help="Model to use")
-    spawn_p.add_argument("--voice", "-v", default="emma", help="Voice for shade (default: emma)")
+    spawn_p.add_argument("--voice", "-v", default="emma", help="Voice for god (default: emma)")
     spawn_p.add_argument("--quiet", "-q", action="store_true", help="Suppress output (for keybindings)")
     spawn_p.add_argument("task", nargs="+", help="Task description")
 
     # iris kill NAME|all
-    kill_p = subparsers.add_parser("kill", help="Kill a shade")
-    kill_p.add_argument("name", help="Shade name or 'all'")
+    kill_p = subparsers.add_parser("kill", help="Banish a god")
+    kill_p.add_argument("name", help="God name or 'all'")
 
     # iris list [--all] [--json]
-    list_p = subparsers.add_parser("list", help="List shades")
+    list_p = subparsers.add_parser("list", help="List gods")
     list_p.add_argument("--all", action="store_true", help="Include history")
     list_p.add_argument("--json", action="store_true", help="JSON output")
 
     # iris send NAME MESSAGE
-    send_p = subparsers.add_parser("send", help="Send message to shade")
-    send_p.add_argument("name", help="Shade name")
+    send_p = subparsers.add_parser("send", help="Send message to god")
+    send_p.add_argument("name", help="God name")
     send_p.add_argument("message", nargs="+", help="Message to send")
 
     # iris peek NAME [LINES]
-    peek_p = subparsers.add_parser("peek", help="View shade output")
-    peek_p.add_argument("name", help="Shade name")
+    peek_p = subparsers.add_parser("peek", help="View god output")
+    peek_p.add_argument("name", help="God name")
     peek_p.add_argument("lines", nargs="?", type=int, default=30, help="Lines to show")
 
     # iris logs [COMPONENT...]
@@ -98,8 +98,8 @@ def main():
     # iris status
     subparsers.add_parser("status", help="Show system status")
 
-    # iris quit [--status STATUS] - for shades to self-terminate
-    quit_p = subparsers.add_parser("quit", help="Self-terminate (for shades)")
+    # iris quit [--status STATUS] - for gods to self-terminate
+    quit_p = subparsers.add_parser("quit", help="Self-terminate (for gods)")
     quit_p.add_argument("--status", "-s", default="fulfilled", help="Final status (default: fulfilled)")
 
     args = parser.parse_args()
@@ -148,7 +148,7 @@ def cmd_start(components: list[str]):
 def cmd_stop(components: list[str], stop_all: bool):
     """Stop Iris components."""
     if stop_all:
-        shades.kill_all()
+        gods.kill_all()
         servers.stop_all()
         tmux.kill_session()
     elif not components:
@@ -159,48 +159,48 @@ def cmd_stop(components: list[str], stop_all: bool):
 
 
 def cmd_spawn(task: str, project: str | None, model: str | None, voice: str, quiet: bool = False):
-    """Spawn a new shade."""
-    result = shades.spawn(task, project=project, model=model, voice=voice)
+    """Summon a new god."""
+    result = gods.spawn(task, project=project, model=model, voice=voice)
     if result and not quiet:
-        print(f"\033[32mSpawned \033[1m{result['name']}\033[0m\033[32m ({result['pane_id']})\033[0m")
+        print(f"\033[32mSummoned \033[1m{result['name']}\033[0m\033[32m ({result['pane_id']})\033[0m")
         print(f"  Task: {task}")
 
 
 def cmd_kill(name: str):
-    """Kill a shade."""
+    """Banish a god."""
     if name == "all":
-        count = shades.kill_all()
+        count = gods.kill_all()
         if count:
-            print(f"\033[32mKilled {count} shade(s)\033[0m")
+            print(f"\033[32mBanished {count} god(s)\033[0m")
         else:
-            print("\033[33mNo shades to kill\033[0m")
+            print("\033[33mNo gods to banish\033[0m")
     else:
-        if shades.kill(name):
-            print(f"\033[32mKilled {name}\033[0m")
+        if gods.kill(name):
+            print(f"\033[32mBanished {name}\033[0m")
         else:
-            print(f"\033[31mShade '{name}' not found\033[0m")
+            print(f"\033[31mGod '{name}' not found\033[0m")
             sys.exit(1)
 
 
 def cmd_list(show_all: bool, json_output: bool):
-    """List shades."""
-    shades.list_shades(show_all=show_all, json_output=json_output)
+    """List gods."""
+    gods.list_gods(show_all=show_all, json_output=json_output)
 
 
 def cmd_send(name: str, message: str):
-    """Send message to shade."""
-    if shades.send(name, message):
+    """Send message to god."""
+    if gods.send(name, message):
         print(f"\033[32mSent to {name}:\033[0m {message}")
     else:
-        print(f"\033[31mShade '{name}' not found\033[0m")
+        print(f"\033[31mGod '{name}' not found\033[0m")
         sys.exit(1)
 
 
 def cmd_peek(name: str, lines: int):
-    """Peek at shade output."""
-    output = shades.peek(name, lines)
+    """Peek at god output."""
+    output = gods.peek(name, lines)
     if output is None:
-        print(f"\033[31mShade '{name}' not found\033[0m")
+        print(f"\033[31mGod '{name}' not found\033[0m")
         sys.exit(1)
     print(f"\033[1mOutput from {name}:\033[0m")
     print("─" * 40)
@@ -214,12 +214,12 @@ def cmd_logs(components: list[str]):
 
 
 def cmd_quit(status: str):
-    """Self-terminate (for shades)."""
-    if shades.quit_self(status):
+    """Self-terminate (for gods)."""
+    if gods.quit_self(status):
         # Won't reach here - pane will be killed
         pass
     else:
-        print("\033[31mNot running as a shade (no SHADE_UUID)\033[0m")
+        print("\033[31mNot running as a god (no SHADE_UUID)\033[0m")
         sys.exit(1)
 
 

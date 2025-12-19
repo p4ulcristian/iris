@@ -92,7 +92,7 @@ Personal notes and context:
 The `iris` command is implemented in Python (`brain/cli/`):
 - `__init__.py` - Main CLI entry point and argument parsing
 - `config.py` - Configuration loading
-- `shades.py` - Shade management (spawn, kill, list, send, peek)
+- `gods.py` - God management (spawn, kill, list, send, peek)
 - `tmux.py` - Tmux session and pane operations
 - `servers.py` - Server start/stop management
 
@@ -182,13 +182,13 @@ iris logs         # Tail all server logs
 iris logs hear    # Tail specific log
 ```
 
-### Shade Management
+### God Management
 
 ```bash
 iris spawn "task description"
-iris kill <shade-name>
-iris send <shade-name> "message"
-iris peek <shade-name>
+iris kill <god-name>
+iris send <god-name> "message"
+iris peek <god-name>
 iris list
 ```
 
@@ -269,6 +269,6 @@ The old `echo/` monolith and `spells/` shell scripts have been replaced with thi
 
 - [ ] Add wake word detection to `wake/`
 - [ ] Expand `express/` bubble UI with controls
-- [ ] Add worker (shade) status dots to `express/`
-- [ ] Implement inter-shade messaging via `remember/`
+- [ ] Add worker (god) status dots to `express/`
+- [ ] Implement inter-god messaging via `remember/`
 - [ ] Add conversation history to `remember/`
