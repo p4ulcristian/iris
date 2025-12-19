@@ -116,6 +116,7 @@ python -m brain.skills.<skill_name> <args>
 
 | Skill | Usage | Description |
 |-------|-------|-------------|
+| `focus` | `python -m brain.skills.focus <status>` | Update god's pane title |
 | `glow` | `python -m brain.skills.glow <file>` | Open markdown in glow pane |
 | `nvim` | `python -m brain.skills.nvim <file>` | Open file in neovim pane |
 

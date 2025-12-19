@@ -52,6 +52,7 @@ python -m brain.skills.<skill_name> <args>
 
 | Skill | Usage | Description |
 |-------|-------|-------------|
+| `focus` | `python -m brain.skills.focus <status>` | Update pane title with current activity |
 | `glow` | `python -m brain.skills.glow <file>` | Open markdown in glow pane |
 | `nvim` | `python -m brain.skills.nvim <file> [files...]` | Open file(s) in neovim pane |
 | `nvim-highlight` | See below | Highlight code in nvim for demos |
@@ -80,3 +81,16 @@ shadows/notes/[project]-[topic]-[YYYY-MM-DD].md
 ```
 
 Not required for routine work.
+
+---
+
+## Critical: Iris vs Claude Code
+
+**NEVER confuse these:**
+
+- **"Summon a god"** → Use Iris: `python -m brain.spawn <god-name>`
+- **Task tool** → Claude Code's internal subagent system (different thing entirely)
+
+When Paul says "summon", "bind", "banish" → He means **Iris gods in tmux**, not Claude Code's Task tool.
+
+The Task tool is for YOUR internal work (research, exploration). Gods are for PAUL to see and command.
