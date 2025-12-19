@@ -84,14 +84,19 @@ def start_session():
     color_bg = shade_color.get("bg", "#1a1a1a")
     color_fg = shade_color.get("fg", "#ffffff")
 
-    # Build Claude command using shade prompt template
+    # Build Claude command using god prompt template
     task = "Help Paul with whatever he needs."
-    prompt_template = config.get_shade_prompt()
-    shade_prompt = prompt_template.replace("{{COLOR_NAME}}", color_name)
-    shade_prompt = shade_prompt.replace("{{WORKER_UUID}}", f"{color_name.lower()}-init")
-    shade_prompt = shade_prompt.replace("{{VOICE}}", "emma")
-    shade_prompt = shade_prompt.replace("{{TASK}}", task)
-    escaped = shade_prompt.replace("'", "'\"'\"'")
+    god_config = config.get_god_config(color_name)
+    voice = god_config.get("voice", "emma")
+    traits = god_config.get("traits", "")
+
+    prompt_template = config.get_god_prompt()
+    god_prompt = prompt_template.replace("{{GOD_NAME}}", color_name)
+    god_prompt = god_prompt.replace("{{GOD_UUID}}", f"{color_name.lower()}-init")
+    god_prompt = god_prompt.replace("{{VOICE}}", voice)
+    god_prompt = god_prompt.replace("{{TRAITS}}", traits)
+    god_prompt = god_prompt.replace("{{TASK}}", task)
+    escaped = god_prompt.replace("'", "'\"'\"'")
     claude_cmd = f"cd '{config.IRIS_DIR}' && claude --dangerously-skip-permissions -- '{escaped}'"
 
     # Create session with command directly (so pane closes when Claude exits)
