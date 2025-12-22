@@ -14,7 +14,14 @@ from . import servers
 
 
 def check_input_group() -> bool:
-    """Check if user is in the input group (needed for CapsLock detection)."""
+    """Check if user is in the input group (needed for CapsLock detection).
+
+    Only relevant on Linux - returns True on other platforms.
+    """
+    import platform
+    if platform.system() != "Linux":
+        return True  # Not needed on macOS/Windows
+
     try:
         user_groups = os.getgroups()
         input_gid = grp.getgrnam('input').gr_gid

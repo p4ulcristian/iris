@@ -1,7 +1,10 @@
 #!/bin/bash
 # Spawn picker with god selection and task input
 
-cd /home/p4ulcristian/Work/iris
+# Self-locate: script is in brain/cli/, so go up 2 levels
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+IRIS_DIR="${IRIS_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+cd "$IRIS_DIR"
 
 # Get available gods with theme colors (excludes active gods, shuffled)
 GODS_COLORED=$(python3 -c "

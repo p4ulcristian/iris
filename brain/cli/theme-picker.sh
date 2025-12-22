@@ -1,7 +1,10 @@
 #!/bin/bash
 # Theme picker with live preview
 
-cd /home/p4ulcristian/Work/iris
+# Self-locate: script is in brain/cli/, so go up 2 levels
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+IRIS_DIR="${IRIS_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+cd "$IRIS_DIR"
 
 # Save current theme
 ORIGINAL=$(python -m brain.cli.theme current)

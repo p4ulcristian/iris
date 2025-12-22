@@ -53,6 +53,14 @@ class Pane:
         return parts[1].strip() if len(parts) > 1 else ""
 
 
+def _get_env():
+    """Get environment with IRIS_DIR set."""
+    import os
+    env = os.environ.copy()
+    env["IRIS_DIR"] = str(config.IRIS_DIR)
+    return env
+
+
 def run(*args, capture=True, check=False) -> subprocess.CompletedProcess:
     """Run a tmux command."""
     cmd = ["tmux"] + list(args)
@@ -61,6 +69,7 @@ def run(*args, capture=True, check=False) -> subprocess.CompletedProcess:
         capture_output=capture,
         text=True,
         check=check,
+        env=_get_env(),
     )
 
 
@@ -104,6 +113,9 @@ def start_session():
     # Use -f to load iris config instead of global ~/.tmux.conf
     run("-f", str(config.TMUX_CONF), "new-session", "-d", "-s", config.SESSION, "-n", "Olympus", claude_cmd)
 
+    # Set IRIS_DIR in session environment for keybindings
+    run("set-environment", "-t", config.SESSION, "IRIS_DIR", str(config.IRIS_DIR))
+
     # Style the session
     run("set-option", "-t", config.SESSION, "status", "off")
     run("set-option", "-t", config.SESSION, "pane-border-status", "top")
@@ -124,23 +136,29 @@ def start_session():
 
 def focus_session():
     """Focus or open the iris session in a terminal."""
-    # Check if already attached in a ghostty window
-    result = subprocess.run(
-        ["pgrep", "-f", f"ghostty.*tmux attach.*{config.SESSION}"],
-        capture_output=True,
-    )
+    import platform
 
-    if result.returncode == 0:
-        # Try to focus existing window
-        subprocess.run(["hyprctl", "dispatch", "focuswindow", "class:com.mitchellh.ghostty"],
-                      capture_output=True)
+    if platform.system() == "Linux":
+        # Check if already attached in a ghostty window
+        result = subprocess.run(
+            ["pgrep", "-f", f"ghostty.*tmux attach.*{config.SESSION}"],
+            capture_output=True,
+        )
+
+        if result.returncode == 0:
+            # Try to focus existing window (Hyprland)
+            subprocess.run(["hyprctl", "dispatch", "focuswindow", "class:com.mitchellh.ghostty"],
+                          capture_output=True)
+            return
+
+    # Try ghostty first, fallback to plain tmux attach
+    if shutil.which("ghostty"):
+        subprocess.Popen(["ghostty", "-e", "tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION],
+                        env=_get_env())
     else:
-        # Check if ghostty exists
-        if shutil.which("ghostty"):
-            subprocess.Popen(["ghostty", "-e", "tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION])
-        else:
-            # Fallback: just attach in current terminal
-            subprocess.run(["tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION])
+        # Fallback: just attach in current terminal
+        subprocess.run(["tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION],
+                      env=_get_env())
 
 
 def kill_session():
