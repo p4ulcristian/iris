@@ -1,5 +1,7 @@
 # Iris Modular Architecture Plan
 
+**Status: IMPLEMENTED**
+
 ## Current Shortcuts Overview
 
 ### Tmux Hotkeys (config/tmux.conf)

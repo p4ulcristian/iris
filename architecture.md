@@ -33,22 +33,45 @@ iris (session)
 
 ```
 iris/
-├── brain/                 # Voice and orchestration system
-│   ├── cli/               # Python CLI (iris command)
+├── brain/                 # Modular voice and orchestration system
+│   ├── tmux/              # STANDALONE: Generic tmux operations
+│   │   └── __init__.py    # session, pane, layout (portable, reusable)
+│   │
+│   ├── cli/               # Iris-specific CLI (uses brain.tmux)
 │   │   ├── __init__.py    # Main CLI entry point
 │   │   ├── config.py      # Configuration loading
 │   │   ├── gods.py        # God management
-│   │   ├── tmux.py        # Tmux operations
+│   │   ├── tmux.py        # Iris tmux wrapper (god-aware)
 │   │   └── servers.py     # Server start/stop
-│   ├── skills/            # Specialized pane utilities
+│   │
+│   ├── hear/              # STANDALONE: STT server (port 8766)
+│   │   ├── __init__.py    # HearClient API
+│   │   ├── server.py      # Flask HTTP server
+│   │   ├── stt.py         # Parakeet transcription
+│   │   └── audio.py       # Microphone capture
+│   │
+│   ├── speak/             # STANDALONE: TTS server (port 8765)
+│   │   ├── __init__.py    # SpeakClient API
+│   │   ├── server.py      # Flask HTTP server
+│   │   ├── tts.py         # Speech synthesis
+│   │   └── audio.py       # Audio playback
+│   │
+│   ├── wake/              # STANDALONE: Input listener (Linux evdev)
+│   │   ├── __init__.py    # PTTListener (platform-aware)
+│   │   ├── listener.py    # Main coordinator
+│   │   └── ptt.py         # Push-to-talk (Linux)
+│   │
+│   ├── express/           # STANDALONE: Visual UI (port 8767)
+│   │   ├── __init__.py    # ExpressClient API
+│   │   ├── server.py      # Flask HTTP server
+│   │   └── bubble.py      # GTK4 overlay
+│   │
+│   ├── skills/            # Pane utilities
 │   │   ├── glow/          # Markdown viewer pane
-│   │   └── nvim/          # Neovim editor pane
-│   ├── say.py             # Speech utility module
-│   ├── wake/              # Attention coordinator (CapsLock listener)
-│   ├── hear/              # STT server (Parakeet, port 8766)
-│   ├── speak/             # TTS server (VibeVoice, port 8765)
-│   ├── express/           # Visual UI server (GTK4, port 8767)
-│   └── remember/          # Memory and personal notes
+│   │   ├── nvim/          # Neovim editor pane
+│   │   └── focus/         # Pane title updates
+│   │
+│   └── say.py             # Quick TTS utility
 ├── shadows/               # State for each god
 │   ├── <uuid>/            # Per-god folder
 │   │   ├── name.txt       # God name (e.g., "Apollo")
@@ -149,6 +172,39 @@ wake/
     └── POST hear:8766/stop     → STT stops, transcribes, returns text
         ↓
     paste text at cursor (or send to Iris tmux)
+```
+
+## Standalone Modules
+
+Each brain module can be used independently:
+
+```python
+# tmux - Generic tmux operations
+from brain import tmux
+tmux.create_session("my-app", window_name="main", command="htop")
+tmux.create_pane("my-app", "tail -f log.txt")
+tmux.apply_grid_layout("my-app")
+
+# hear - Speech-to-text client
+from brain.hear import HearClient
+client = HearClient()
+client.start()
+text = client.stop()
+
+# speak - Text-to-speech client
+from brain.speak import SpeakClient, say
+say("Hello world", voice="emma")
+
+# wake - Push-to-talk (Linux only)
+from brain.wake import PTTListener, is_supported
+if is_supported():
+    listener = PTTListener(on_press=..., on_release=...)
+    listener.start()
+
+# express - Visual UI state
+from brain.express import ExpressClient
+client = ExpressClient()
+client.set_state("listening")
 ```
 
 ## Configuration
