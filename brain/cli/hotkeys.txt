@@ -1,14 +1,27 @@
 
        IRIS HOTKEYS
 
+  ─────── PANES ───────
   Ctrl+n   Summon new god
   Ctrl+k   Kill current pane
-  Ctrl+t   Theme picker
-  Ctrl+s   Skills list
   Ctrl+f   Toggle fullscreen
   Ctrl+l   Rotate layouts
   Ctrl+r   New terminal pane
-  Ctrl+h   This help
 
   Alt+l    List gods
   Alt+k    Banish god by name
+
+  ────── WINDOWS ──────
+  Alt+n    New window
+  Alt+1-9  Focus window
+  Alt+,/.  Prev/next window
+  Alt+w    Rename window
+
+  Alt+Shift+1-9  Move pane to window
+  Alt+Shift+n    Move pane to new window
+
+  ─────── OTHER ───────
+  Ctrl+t   Theme picker
+  Ctrl+s   Skills list
+  Ctrl+h   This help
+

@@ -100,7 +100,8 @@ def start_session():
     claude_cmd = f"cd '{config.IRIS_DIR}' && claude --dangerously-skip-permissions -- '{escaped}'"
 
     # Create session with command directly (so pane closes when Claude exits)
-    run("new-session", "-d", "-s", config.SESSION, claude_cmd)
+    # First window is named "Olympus" (home of the gods)
+    run("new-session", "-d", "-s", config.SESSION, "-n", "Olympus", claude_cmd)
 
     # Style the session
     run("set-option", "-t", config.SESSION, "status", "off")
