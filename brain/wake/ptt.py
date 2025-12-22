@@ -9,10 +9,18 @@ Modes:
 
 Combos:
 - CapsLock+Enter -> push Enter in master Iris pane
+
+Tap vs Hold:
+- Quick tap (< 300ms) -> triggers on_tap callback (skip TTS)
+- Longer hold -> triggers on_press/on_release (PTT recording)
 """
 
+import time
 import threading
 from evdev import InputDevice, ecodes, list_devices
+
+# Tap threshold in seconds
+TAP_THRESHOLD = 0.3
 
 # Key states
 KEY_UP = 0
@@ -43,12 +51,18 @@ def find_keyboards():
 
 
 class PTTListener:
-    """Listens for push-to-talk key (CapsLock) with modifier detection."""
+    """Listens for push-to-talk key (CapsLock) with modifier detection.
 
-    def __init__(self, on_press=None, on_release=None, on_enter=None, key=ecodes.KEY_CAPSLOCK):
+    Supports tap vs hold detection:
+    - Quick tap (< TAP_THRESHOLD) -> on_tap callback
+    - Longer hold -> on_press at press time, on_release at release time
+    """
+
+    def __init__(self, on_press=None, on_release=None, on_enter=None, on_tap=None, key=ecodes.KEY_CAPSLOCK):
         self.on_press = on_press
         self.on_release = on_release
         self.on_enter = on_enter  # Called when CapsLock+Enter is pressed
+        self.on_tap = on_tap  # Called on quick tap (< TAP_THRESHOLD)
         self.key = key
         self._running = False
         self._threads = []
@@ -56,6 +70,20 @@ class PTTListener:
         self._shift_held = False
         self._capslock_held = False
         self._current_mode = None  # Track mode during press-release cycle
+        self._press_time = None  # Track when CapsLock was pressed
+        self._press_handled = False  # Whether on_press was called (for hold)
+
+    def _start_delayed_press(self):
+        """Start timer to trigger on_press after TAP_THRESHOLD."""
+        def delayed_press():
+            time.sleep(TAP_THRESHOLD)
+            # Only fire if key is still held and we haven't handled it
+            if self._capslock_held and not self._press_handled:
+                self._press_handled = True
+                if self.on_press:
+                    self.on_press(self._current_mode)
+
+        threading.Thread(target=delayed_press, daemon=True).start()
 
     def start(self):
         """Start listening on all keyboards."""
@@ -91,19 +119,31 @@ class PTTListener:
                         self._shift_held = False
                     continue
 
-                # Track CapsLock state and handle PTT
+                # Track CapsLock state and handle PTT with tap detection
                 if event.type == ecodes.EV_KEY and event.code == self.key:
                     if event.value == KEY_DOWN:
                         self._capslock_held = True
+                        self._press_time = time.monotonic()
+                        self._press_handled = False
                         # Determine mode based on shift state at press time
                         self._current_mode = "iris" if self._shift_held else "paste"
-                        if self.on_press:
-                            self.on_press(self._current_mode)
+                        # Start delayed press timer
+                        self._start_delayed_press()
                     elif event.value == KEY_UP:
                         self._capslock_held = False
-                        if self.on_release:
-                            self.on_release(self._current_mode or "paste")
+                        duration = time.monotonic() - self._press_time if self._press_time else 0
+
+                        if duration < TAP_THRESHOLD and not self._press_handled:
+                            # Quick tap - just stop TTS
+                            if self.on_tap:
+                                self.on_tap()
+                        elif self._press_handled:
+                            # Normal hold release - stop recording
+                            if self.on_release:
+                                self.on_release(self._current_mode or "paste")
+
                         self._current_mode = None
+                        self._press_time = None
                     # Ignore KEY_HOLD (repeat) events
                     continue
 
@@ -130,22 +170,26 @@ class PTTListener:
 if __name__ == "__main__":
     # Test the listener
     def on_press(mode):
-        print(f"CapsLock PRESSED (mode={mode}) - start recording")
+        print(f"CapsLock HOLD (mode={mode}) - start recording")
 
     def on_release(mode):
         print(f"CapsLock RELEASED (mode={mode}) - stop recording")
+
+    def on_tap():
+        print("CapsLock TAP - skip TTS!")
 
     def on_enter():
         print("CapsLock+Enter - submit to Iris!")
 
     print("Testing PTT listener (Ctrl+C to exit)")
-    print("Press CapsLock, Shift+CapsLock, or CapsLock+Enter...")
+    print(f"Quick tap (<{TAP_THRESHOLD}s) = skip TTS")
+    print(f"Hold (>{TAP_THRESHOLD}s) = PTT recording")
+    print("CapsLock+Enter = submit to Iris")
 
-    listener = PTTListener(on_press=on_press, on_release=on_release, on_enter=on_enter)
+    listener = PTTListener(on_press=on_press, on_release=on_release, on_tap=on_tap, on_enter=on_enter)
     listener.start()
 
     try:
-        import time
         while True:
             time.sleep(1)
     except KeyboardInterrupt:

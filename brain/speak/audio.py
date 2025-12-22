@@ -90,6 +90,7 @@ class AudioPlayer:
         self._lock = threading.Lock()
         self._is_playing = False
         self._stop_requested = False
+        self._current_stream = None  # Reference to active stream for aborting
 
     def play(self, audio: np.ndarray, blocking: bool = True) -> None:
         """
@@ -209,6 +210,7 @@ class AudioPlayer:
                 dtype=np.float32,
                 device=self.device,
             )
+            self._current_stream = stream
 
             with stream:
                 # Write silent padding to let audio device initialize
@@ -229,14 +231,22 @@ class AudioPlayer:
                     total_samples += chunk.size
                     stream.write(chunk.reshape(-1, 1))
 
+            self._current_stream = None
             return total_samples / self.sample_rate
         finally:
+            self._current_stream = None
             with self._lock:
                 self._is_playing = False
 
     def stop(self) -> None:
         """Stop any currently playing audio."""
         self._stop_requested = True
+        # Abort active stream if any
+        if self._current_stream is not None:
+            try:
+                self._current_stream.abort()
+            except Exception:
+                pass
         sd.stop()
         with self._lock:
             self._is_playing = False

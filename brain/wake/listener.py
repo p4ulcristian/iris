@@ -103,6 +103,17 @@ def on_capslock_release(mode):
     threading.Thread(target=process, daemon=True).start()
 
 
+def on_capslock_tap():
+    """Handle quick CapsLock tap - just stop TTS, no recording"""
+    logger.info("CapsLock TAP - stopping TTS")
+
+    # Stop current TTS playback
+    try:
+        requests.post(f"{SPEAK_SERVER}/stop", timeout=1)
+    except Exception as e:
+        logger.warning(f"Failed to stop speak server: {e}")
+
+
 def on_iris_enter():
     """Handle CapsLock+Enter - send Enter to Iris"""
     logger.info("CapsLock+Enter - sending Enter to Iris")
@@ -139,6 +150,7 @@ def main():
     listener = PTTListener(
         on_press=on_capslock_press,
         on_release=on_capslock_release,
+        on_tap=on_capslock_tap,
         on_enter=on_iris_enter
     )
     listener.start()
