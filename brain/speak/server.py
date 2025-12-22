@@ -115,7 +115,6 @@ def speak():
 
     text = data.get('text', '')
     voice = data.get('voice')
-    cfg_scale = data.get('cfg_scale', 1.5)
     stream = data.get('stream', True)  # Streaming mode (lower latency)
 
     if not text:
@@ -124,17 +123,17 @@ def speak():
     # Prepend filler word to give model warmup runway (fixes bad first syllable)
     text = "So, " + text
 
-    logger.info(f"[SPEAK] voice={voice}, stream={stream}, text={text[:50]}{'...' if len(text) > 50 else ''}")
+    logger.info(f"[SPEAK] voice={voice}, text={text[:50]}{'...' if len(text) > 50 else ''}")
 
     with speak_lock:
         if stream:
             # Streaming mode - lower latency
             # trim_prefix removes the "So, " we prepended for model warmup
-            audio_iter = tts_model.synthesize_stream(text, voice=voice, cfg_scale=cfg_scale)
+            audio_iter = tts_model.synthesize_stream(text, voice=voice)
             duration = player.play_stream(audio_iter, blocking=True, trim_prefix=True)
         else:
             # Non-streaming mode - generate all then play
-            audio = tts_model.synthesize(text, voice=voice, cfg_scale=cfg_scale)
+            audio = tts_model.synthesize(text, voice=voice)
 
             if audio.size == 0:
                 logger.warning("No audio generated")

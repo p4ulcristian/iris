@@ -85,6 +85,7 @@ python -m brain.say "Hello Paul"
 python -m brain.say "Hello" --voice french
 python -m brain.say "Background speech" --bg
 python -m brain.say --greet
+python -m brain.say "[sigh] Monday again." --voice poseidon
 ```
 
 **Options:**
@@ -94,10 +95,30 @@ python -m brain.say --greet
 
 **Voice aliases:** `emma`, `french`, `german`, `italian`, `japanese`, `indian`, `korean`, `dutch`, `polish`, `portuguese`, `spanish` (and more in `brain/say.py`)
 
+### Paralinguistic Tags
+
+Add natural vocal expressions inline in your text:
+
+| Tag | Effect |
+|-----|--------|
+| `[sigh]` | Sighing sound |
+| `[laugh]` | Laughter |
+| `[chuckle]` | Light laugh |
+| `[gasp]` | Surprised gasp |
+| `[cough]` | Coughing |
+
+**Examples:**
+```bash
+python -m brain.say "[sigh] The build failed again."
+python -m brain.say "What?! [gasp] That's incredible!"
+python -m brain.say "[laugh] That was easier than expected."
+```
+
 **When to speak:**
 - Greet Paul when starting a session
 - Announce task completion
 - Read back important information when asked
+- Use paralinguistic tags to add personality
 - Use sparingly - don't narrate everything
 
 ---

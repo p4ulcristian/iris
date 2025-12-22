@@ -2,7 +2,7 @@
 
 **Messenger of the Gods**
 
-Iris is a voice assistant that summons the Greek pantheon to do your bidding. She orchestrates divine workers - Apollo, Artemis, Athena, and their kin - each god bringing their power to your tasks.
+Iris is a voice assistant that summons the Greek pantheon to do your bidding. She orchestrates divine workers - Zeus, Apollo, Artemis, Athena, and their kin - each god bringing their power to your tasks.
 
 ## The Mythology
 
@@ -14,6 +14,7 @@ Here, Iris serves a similar role. She listens for your voice, interprets your co
 
 | God | Domain |
 |-----|--------|
+| **Zeus** | Supreme authority |
 | **Apollo** | Light and knowledge |
 | **Artemis** | Swift execution |
 | **Athena** | Wisdom and strategy |

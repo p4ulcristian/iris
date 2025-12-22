@@ -14,7 +14,7 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 
 **Iris** is the orchestrator running in the master tmux pane. She can work directly on simple tasks or delegate larger work to gods.
 
-**Gods** are Claude instances summoned in separate tmux panes. Each god is named from the Greek pantheon (Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter) and does the actual work.
+**Gods** are Claude instances summoned in separate tmux panes. Each god is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter) and does the actual work.
 
 ## tmux Session Structure
 

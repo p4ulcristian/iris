@@ -3,13 +3,13 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use vibevoice venv which has all TTS deps (torch 2.5.1 + flash-attn)
-VENV_DIR="/home/p4ulcristian/Work/vibevoice/.venv"
+# Use local .venv symlink (points to test_chatterbox/.venv with chatterbox-tts)
+VENV_DIR="$SCRIPT_DIR/.venv"
 
 # Activate venv
 if [[ ! -d "$VENV_DIR" ]]; then
     echo "Error: Virtual environment not found at $VENV_DIR"
-    echo "Please set up vibevoice first"
+    echo "Please create .venv symlink or set up chatterbox venv"
     exit 1
 fi
 

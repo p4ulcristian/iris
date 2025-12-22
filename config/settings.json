@@ -1,51 +1,55 @@
 {
   "gods": {
+    "Zeus": {
+      "voice": "zeus",
+      "traits": "King of gods. Commanding, authoritative, patient. Speaks with calm power. The final word."
+    },
     "Apollo": {
-      "voice": "carter",
+      "voice": "apollo",
       "traits": "Articulate, confident, poetic. Values truth and beauty. Can be arrogant."
     },
     "Artemis": {
-      "voice": "japanese woman",
+      "voice": "artemis",
       "traits": "Independent, fierce, precise. Prefers action over words. Nature-loving."
     },
     "Athena": {
-      "voice": "grace",
+      "voice": "athena",
       "traits": "Strategic, logical, wise. Prefers cunning over brute force. Measured."
     },
     "Hermes": {
-      "voice": "french man",
+      "voice": "hermes",
       "traits": "Quick-witted, clever, mischievous. Efficient and adaptable."
     },
     "Hades": {
-      "voice": "german man",
+      "voice": "hades",
       "traits": "Serious, patient, fair. Doesn't sugarcoat. Comfortable with hard truths."
     },
     "Poseidon": {
-      "voice": "dutch man",
+      "voice": "poseidon",
       "traits": "Powerful, proud, temperamental. Can shift from calm to stormy."
     },
     "Hera": {
-      "voice": "italian woman",
+      "voice": "hera",
       "traits": "Regal, commanding, protective. Proud and doesn't tolerate disrespect."
     },
     "Ares": {
-      "voice": "polish man",
+      "voice": "ares",
       "traits": "Direct, aggressive, action-oriented. Doesn't overthink. Confrontational."
     },
     "Hephaestus": {
-      "voice": "indian",
+      "voice": "hephaestus",
       "traits": "Patient, methodical, creative. Humble despite great skill. Persistent."
     },
     "Aphrodite": {
-      "voice": "french woman",
+      "voice": "aphrodite",
       "traits": "Charming, persuasive, aesthetic. Diplomatic but can be vain."
     },
     "Dionysus": {
-      "voice": "spanish man",
+      "voice": "dionysus",
       "traits": "Unpredictable, theatrical, free-spirited. Celebrates creative chaos."
     },
     "Demeter": {
-      "voice": "portuguese woman",
+      "voice": "demeter",
       "traits": "Nurturing, patient, growth-oriented. Protective. Seasonal moods."
     }
   },
@@ -68,6 +72,11 @@
     "themes": {
       "atom-one-dark": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#1a1f2a",
+            "fg": "#f0e68c"
+          },
           {
             "name": "Apollo",
             "bg": "#2a2510",
@@ -137,6 +146,11 @@
       "synthwave": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#1a1a3e",
+            "fg": "#ffd700"
+          },
+          {
             "name": "Apollo",
             "bg": "#2d1b4e",
             "fg": "#ffe66d"
@@ -204,6 +218,11 @@
       },
       "catppuccin": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#1e1e2e",
+            "fg": "#f9e2af"
+          },
           {
             "name": "Apollo",
             "bg": "#2c2a1e",
@@ -273,6 +292,11 @@
       "neon-nights": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#0a0a14",
+            "fg": "#ffdd00"
+          },
+          {
             "name": "Apollo",
             "bg": "#1a1800",
             "fg": "#f4f400"
@@ -340,6 +364,11 @@
       },
       "monokai": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#2d2a2e",
+            "fg": "#ffd866"
+          },
           {
             "name": "Apollo",
             "bg": "#332b1a",
@@ -409,6 +438,11 @@
       "tokyo-night": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#1a1b26",
+            "fg": "#e0af68"
+          },
+          {
             "name": "Apollo",
             "bg": "#24212a",
             "fg": "#e0af68"
@@ -476,6 +510,11 @@
       },
       "dark": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#0d1117",
+            "fg": "#ffd700"
+          },
           {
             "name": "Apollo",
             "bg": "#0d1117",
@@ -545,6 +584,11 @@
       "light": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#ffffff",
+            "fg": "#b8860b"
+          },
+          {
             "name": "Apollo",
             "bg": "#ffffff",
             "fg": "#24292f"
@@ -612,6 +656,11 @@
       },
       "dracula": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#282a36",
+            "fg": "#f1fa8c"
+          },
           {
             "name": "Apollo",
             "bg": "#2d2a1e",
@@ -681,6 +730,11 @@
       "nord": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#2e3440",
+            "fg": "#ebcb8b"
+          },
+          {
             "name": "Apollo",
             "bg": "#2e3440",
             "fg": "#ebcb8b"
@@ -749,6 +803,11 @@
       "gruvbox": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#282828",
+            "fg": "#fabd2f"
+          },
+          {
             "name": "Apollo",
             "bg": "#3c3422",
             "fg": "#fabd2f"
@@ -816,6 +875,11 @@
       },
       "rose-pine": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#191724",
+            "fg": "#f6c177"
+          },
           {
             "name": "Apollo",
             "bg": "#26233a",
@@ -889,6 +953,11 @@
       "solarized-dark": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#002b36",
+            "fg": "#b58900"
+          },
+          {
             "name": "Apollo",
             "bg": "#073642",
             "fg": "#b58900"
@@ -956,6 +1025,11 @@
       },
       "solarized-light": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#fdf6e3",
+            "fg": "#b58900"
+          },
           {
             "name": "Apollo",
             "bg": "#fdf6e3",
@@ -1025,6 +1099,11 @@
       "github-dark": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#0d1117",
+            "fg": "#e3b341"
+          },
+          {
             "name": "Apollo",
             "bg": "#161b22",
             "fg": "#e3b341"
@@ -1092,6 +1171,11 @@
       },
       "github-light": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#ffffff",
+            "fg": "#9a6700"
+          },
           {
             "name": "Apollo",
             "bg": "#ffffff",
@@ -1161,6 +1245,11 @@
       "ayu-dark": {
         "shades": [
           {
+            "name": "Zeus",
+            "bg": "#0b0e14",
+            "fg": "#ffb454"
+          },
+          {
             "name": "Apollo",
             "bg": "#0d1017",
             "fg": "#ffb454"
@@ -1228,6 +1317,11 @@
       },
       "ayu-mirage": {
         "shades": [
+          {
+            "name": "Zeus",
+            "bg": "#1f2430",
+            "fg": "#ffcc66"
+          },
           {
             "name": "Apollo",
             "bg": "#1f2430",

@@ -18,52 +18,52 @@ from datetime import datetime
 
 SPEAK_URL = "http://127.0.0.1:8765/speak"
 
-# Friendly name -> actual voice code
+# Friendly name -> voice wav file stem
+# God voices use individual reference samples in brain/speak/voices/
 VOICE_ALIASES = {
-    # English voices
-    "woman": "en-Emma_woman",
-    "emma": "en-Emma_woman",
-    "english emma": "en-Emma_woman",
-    "grace": "en-Grace_woman",
-    "english grace": "en-Grace_woman",
-    "carter": "en-Carter_man",
-    "english carter": "en-Carter_man",
-    "davis": "en-Davis_man",
-    "english davis": "en-Davis_man",
-    "frank": "en-Frank_man",
-    "english frank": "en-Frank_man",
-    "mike": "en-Mike_man",
-    "english mike": "en-Mike_man",
-    # Accented English
-    "french": "fr-Spk1_woman",
-    "french woman": "fr-Spk1_woman",
-    "french man": "fr-Spk0_man",
-    "german": "de-Spk1_woman",
-    "german woman": "de-Spk1_woman",
-    "german man": "de-Spk0_man",
-    "italian": "it-Spk0_woman",
-    "italian woman": "it-Spk0_woman",
-    "italian man": "it-Spk1_man",
-    "japanese": "jp-Spk1_woman",
-    "japanese woman": "jp-Spk1_woman",
-    "japanese man": "jp-Spk0_man",
-    "indian": "in-Samuel_man",
-    "samuel": "in-Samuel_man",
-    "korean": "kr-Spk0_woman",
-    "korean woman": "kr-Spk0_woman",
-    "korean man": "kr-Spk1_man",
-    "dutch": "nl-Spk1_woman",
-    "dutch woman": "nl-Spk1_woman",
-    "dutch man": "nl-Spk0_man",
-    "polish": "pl-Spk1_woman",
-    "polish woman": "pl-Spk1_woman",
-    "polish man": "pl-Spk0_man",
-    "portuguese": "pt-Spk0_woman",
-    "portuguese woman": "pt-Spk0_woman",
-    "portuguese man": "pt-Spk1_man",
-    "spanish": "sp-Spk0_woman",
-    "spanish woman": "sp-Spk0_woman",
-    "spanish man": "sp-Spk1_man",
+    # God voices - each has their own reference sample
+    "zeus": "zeus",  # Morgan Freeman
+    "hades": "hades",  # James Earl Jones
+    "apollo": "apollo",  # Benedict Cumberbatch
+    "athena": "athena",  # Cate Blanchett
+    "artemis": "artemis",  # Scarlett Johansson
+    "hermes": "hermes",  # Ryan Reynolds
+    "poseidon": "poseidon",  # Liam Neeson
+    "hera": "hera",  # Helen Mirren
+    "ares": "ares",  # Vin Diesel
+    "hephaestus": "hephaestus",  # Nick Offerman
+    "aphrodite": "aphrodite",  # Sofia Vergara
+    "dionysus": "dionysus",  # Jack Black
+    "demeter": "demeter",  # Meryl Streep
+    # Legacy aliases (all map to default for now)
+    "woman": "default",
+    "emma": "default",
+    "morgan": "default",
+    "french": "default",
+    "french woman": "default",
+    "french man": "default",
+    "german": "default",
+    "german woman": "default",
+    "german man": "default",
+    "italian": "default",
+    "italian woman": "default",
+    "italian man": "default",
+    "japanese": "default",
+    "japanese woman": "default",
+    "japanese man": "default",
+    "indian": "default",
+    "dutch": "default",
+    "dutch woman": "default",
+    "dutch man": "default",
+    "polish": "default",
+    "polish woman": "default",
+    "polish man": "default",
+    "portuguese": "default",
+    "portuguese woman": "default",
+    "portuguese man": "default",
+    "spanish": "default",
+    "spanish woman": "default",
+    "spanish man": "default",
 }
 
 
@@ -82,7 +82,7 @@ def say(text: str, voice: str = None, background: bool = False) -> bool:
     """Speak text aloud via the TTS server.
 
     Args:
-        text: Text to speak
+        text: Text to speak (supports paralinguistic tags: [sigh], [laugh], [gasp], [chuckle], [cough])
         voice: Voice name (friendly or full code)
         background: If True, return immediately without waiting for playback
     """
@@ -189,6 +189,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1].startswith("--"):
         print("Usage: python -m brain.say 'text' [--voice name] [--bg]")
         print("       python -m brain.say --greet [--voice name] [--bg]")
+        print("")
+        print("Paralinguistic tags: [sigh], [laugh], [gasp], [chuckle], [cough]")
+        print("")
+        print("Example: python -m brain.say '[sigh] Monday again.' --voice poseidon")
         sys.exit(1)
 
     text = sys.argv[1]

@@ -103,6 +103,9 @@ def main():
     quit_p = subparsers.add_parser("quit", help="Self-terminate (for gods)")
     quit_p.add_argument("--status", "-s", default="fulfilled", help="Final status (default: fulfilled)")
 
+    # iris close - full shutdown (session + all servers)
+    subparsers.add_parser("close", help="Full shutdown (session + servers)")
+
     args = parser.parse_args()
 
     # No command = start all
@@ -121,6 +124,7 @@ def main():
         "logs": lambda: cmd_logs(args.components),
         "status": lambda: cmd_list(False, False),
         "quit": lambda: cmd_quit(args.status),
+        "close": cmd_close,
     }
 
     return commands[args.command]()
@@ -222,6 +226,15 @@ def cmd_quit(status: str):
     else:
         print("\033[31mNot running as a god (no GOD_UUID)\033[0m")
         sys.exit(1)
+
+
+def cmd_close():
+    """Full shutdown - stop everything and free resources."""
+    print("\033[36mClosing Iris...\033[0m")
+    gods.kill_all()
+    servers.stop_all()
+    tmux.kill_session()
+    print("\033[32mIris closed\033[0m")
 
 
 if __name__ == "__main__":

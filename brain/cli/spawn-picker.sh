@@ -41,7 +41,7 @@ def hex_to_ansi_fg(hex_color):
 reset = '\033[0m'
 
 # Build list of available gods with colors
-gods = ['Apollo', 'Artemis', 'Athena', 'Hermes', 'Hades', 'Poseidon',
+gods = ['Zeus', 'Apollo', 'Artemis', 'Athena', 'Hermes', 'Hades', 'Poseidon',
         'Hera', 'Ares', 'Hephaestus', 'Aphrodite', 'Dionysus', 'Demeter']
 available = [g for g in gods if g not in used]
 random.shuffle(available)
