@@ -12,6 +12,7 @@ BRAIN_DIR = IRIS_DIR / "brain"
 CONFIG_DIR = IRIS_DIR / "config"
 SHADOWS_DIR = IRIS_DIR / "shadows"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
+TMUX_CONF = CONFIG_DIR / "tmux.conf"
 
 # Runtime directories
 PID_DIR = Path("/tmp/iris")

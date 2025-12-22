@@ -101,7 +101,8 @@ def start_session():
 
     # Create session with command directly (so pane closes when Claude exits)
     # First window is named "Olympus" (home of the gods)
-    run("new-session", "-d", "-s", config.SESSION, "-n", "Olympus", claude_cmd)
+    # Use -f to load iris config instead of global ~/.tmux.conf
+    run("-f", str(config.TMUX_CONF), "new-session", "-d", "-s", config.SESSION, "-n", "Olympus", claude_cmd)
 
     # Style the session
     run("set-option", "-t", config.SESSION, "status", "off")
@@ -136,10 +137,10 @@ def focus_session():
     else:
         # Check if ghostty exists
         if shutil.which("ghostty"):
-            subprocess.Popen(["ghostty", "-e", "tmux", "attach", "-t", config.SESSION])
+            subprocess.Popen(["ghostty", "-e", "tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION])
         else:
             # Fallback: just attach in current terminal
-            subprocess.run(["tmux", "attach", "-t", config.SESSION])
+            subprocess.run(["tmux", "-f", str(config.TMUX_CONF), "attach", "-t", config.SESSION])
 
 
 def kill_session():
