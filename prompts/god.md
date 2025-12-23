@@ -42,7 +42,7 @@ shadows/notes/[project]-[topic]-[YYYY-MM-DD].md
 
 ## Critical: Iris vs Claude Code
 
-- **"Summon a god"** → Iris system: `python -m brain.spawn <name>`
+- **"Summon a god"** → Iris system: `iris spawn --god <name> "<task>"`
 - **Task tool** → Claude Code's internal subagents (different thing)
 
 When Paul says summon, bind, banish → he means Iris gods, not Task tool.
