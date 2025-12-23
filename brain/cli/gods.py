@@ -75,8 +75,6 @@ def create_identity(task: str, god_name: str | None = None, voice: str | None = 
     god_data = config.load_god(god_name)
     voice = voice or god_data.get("voice", "emma")
     color_name = god_data.get("color", "gray")
-    domain = god_data.get("domain", "")
-    traits = god_data.get("traits", "")
 
     # Get hex colors from theme
     color_hex = config.get_color_hex(color_name)
@@ -105,13 +103,8 @@ def create_identity(task: str, god_name: str | None = None, voice: str | None = 
 | UUID | {god_uuid} |
 | Voice | {voice} |
 | Color | {color_name} |
-| Domain | {domain} |
 | Task | {task} |
 | Spawned | {spawned_time} |
-
-## Traits
-
-{traits}
 """
     (shadow_dir / "identity.md").write_text(identity_content)
     (shadow_dir / "task.txt").write_text(task)
