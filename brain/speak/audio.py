@@ -1,19 +1,39 @@
-"""Audio playback using sounddevice."""
+"""Audio playback using isolated subprocess."""
 
 import logging
-import queue
+import multiprocessing
+import os
+import signal
 import threading
-from typing import Iterator, Optional
+import time
+from multiprocessing.connection import Connection
+from typing import Optional
 
 import numpy as np
-import sounddevice as sd
 
 logger = logging.getLogger(__name__)
+
+# Default timeout for playback (seconds)
+DEFAULT_PLAYBACK_TIMEOUT = 60.0
+
+# Path to this module's directory (for subprocess imports)
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _player_subprocess_entry(pipe: Connection, sample_rate: int, device):
+    """Entry point for player subprocess - sets up imports then runs loop."""
+    import sys
+    # Add the speak directory to path so player.py can be imported
+    if _MODULE_DIR not in sys.path:
+        sys.path.insert(0, _MODULE_DIR)
+
+    from player import player_loop
+    player_loop(pipe, sample_rate, device)
 
 
 def find_prefix_trim_point(audio: np.ndarray, sample_rate: int = 24000,
                             speech_threshold: float = 0.01,
-                            prefix_duration_ms: int = 350,
+                            prefix_duration_ms: int = 300,
                             chunk_ms: int = 10) -> int:
     """
     Find where to trim the "So, " prefix from TTS output.
@@ -74,185 +94,211 @@ def find_prefix_trim_point(audio: np.ndarray, sample_rate: int = 24000,
     return trim_sample
 
 
-class AudioPlayer:
-    """Plays audio on the server's audio output device."""
+class PlayerSubprocess:
+    """
+    Manages an isolated subprocess for audio playback.
+
+    The subprocess can be killed and respawned if it hangs, providing
+    fault isolation from audio subsystem issues.
+    """
 
     def __init__(self, sample_rate: int = 24000, device: Optional[int] = None):
         """
-        Initialize the audio player.
+        Initialize the player subprocess manager.
 
         Args:
-            sample_rate: Audio sample rate in Hz (default: 24000 for VibeVoice)
-            device: Output device index, or None for default device
+            sample_rate: Audio sample rate in Hz
+            device: Output device index, or None for default
         """
         self.sample_rate = sample_rate
         self.device = device
-        self._lock = threading.Lock()
-        self._is_playing = False
-        self._stop_requested = False
-        self._current_stream = None  # Reference to active stream for aborting
+        self._process: Optional[multiprocessing.Process] = None
+        self._pipe: Optional[Connection] = None
+        self._pipe_lock = threading.Lock()  # Protect pipe from concurrent access
+        self._start_count = 0
 
-    def play(self, audio: np.ndarray, blocking: bool = True) -> None:
+    def _start(self) -> None:
+        """Start or restart the player subprocess."""
+        # Clean up any existing process
+        self._cleanup()
+
+        parent_conn, child_conn = multiprocessing.Pipe()
+        self._pipe = parent_conn
+
+        self._process = multiprocessing.Process(
+            target=_player_subprocess_entry,
+            args=(child_conn, self.sample_rate, self.device),
+            daemon=True  # Die with parent
+        )
+        self._process.start()
+        self._start_count += 1
+        logger.info(f"[PLAYER] Subprocess started (pid={self._process.pid}, count={self._start_count})")
+
+    def _cleanup(self) -> None:
+        """Clean up the subprocess."""
+        if self._process is not None:
+            if self._process.is_alive():
+                logger.info(f"[PLAYER] Killing subprocess (pid={self._process.pid})")
+                self._process.kill()
+                self._process.join(timeout=1.0)
+            self._process = None
+
+        if self._pipe is not None:
+            try:
+                self._pipe.close()
+            except:
+                pass
+            self._pipe = None
+
+    def _ensure_running(self) -> bool:
+        """Ensure subprocess is running, start if needed."""
+        if self._process is None or not self._process.is_alive():
+            self._start()
+        return self._process is not None and self._process.is_alive()
+
+    def play(self, audio: np.ndarray, timeout: float = DEFAULT_PLAYBACK_TIMEOUT) -> dict:
+        """
+        Play audio in the subprocess.
+
+        Args:
+            audio: Audio samples as float32 numpy array
+            timeout: Maximum time to wait for playback (seconds)
+
+        Returns:
+            Dict with status: "done", "timeout", "error", or "stopped"
+        """
+        if audio.size == 0:
+            return {"status": "done", "duration": 0.0}
+
+        if not self._ensure_running():
+            return {"status": "error", "error": "Failed to start subprocess"}
+
+        try:
+            # Send play command (protected by lock to avoid concurrent writes)
+            with self._pipe_lock:
+                self._pipe.send({"cmd": "play", "audio": audio})
+
+            # Wait for response with timeout (can be interrupted by stop)
+            if self._pipe.poll(timeout):
+                return self._pipe.recv()
+            else:
+                # Timeout - subprocess is hung
+                logger.warning(f"[PLAYER] Playback timeout after {timeout}s, restarting subprocess")
+                self._start()  # Kill and restart
+                return {"status": "timeout"}
+
+        except (BrokenPipeError, EOFError, OSError) as e:
+            logger.error(f"[PLAYER] Pipe error: {e}, restarting subprocess")
+            self._start()
+            return {"status": "error", "error": str(e)}
+
+    def stop(self) -> dict:
+        """Stop current playback.
+
+        Note: This only SENDS the stop command - it does NOT read the response.
+        The queue worker's play() call will receive the response.
+        This avoids race conditions between Flask thread and queue worker.
+        """
+        if self._pipe is None or self._process is None or not self._process.is_alive():
+            return {"status": "stopped"}
+
+        try:
+            with self._pipe_lock:
+                self._pipe.send({"cmd": "stop"})
+            # Don't read response - queue worker will get it
+            return {"status": "stopped"}
+        except (BrokenPipeError, EOFError, OSError) as e:
+            logger.warning(f"[PLAYER] Stop pipe error (will recover on next play): {e}")
+            return {"status": "stopped"}
+
+    def shutdown(self) -> None:
+        """Shutdown the subprocess gracefully."""
+        if self._pipe is not None and self._process is not None and self._process.is_alive():
+            try:
+                with self._pipe_lock:
+                    self._pipe.send({"cmd": "shutdown"})
+                self._process.join(timeout=2.0)
+            except:
+                pass
+        self._cleanup()
+
+    @property
+    def is_alive(self) -> bool:
+        """Check if subprocess is running."""
+        return self._process is not None and self._process.is_alive()
+
+
+# Legacy compatibility - simple wrapper class
+class AudioPlayer:
+    """
+    Legacy-compatible audio player using subprocess isolation.
+
+    This provides the same interface as the old AudioPlayer but uses
+    a subprocess for fault isolation.
+    """
+
+    def __init__(self, sample_rate: int = 24000, device: Optional[int] = None):
+        self.sample_rate = sample_rate
+        self._subprocess = PlayerSubprocess(sample_rate=sample_rate, device=device)
+        self._is_playing = False
+
+    def play(self, audio: np.ndarray, blocking: bool = True, trim_prefix: bool = False) -> float:
         """
         Play audio data.
 
         Args:
-            audio: Audio samples as float32 numpy array (values in [-1, 1])
+            audio: Audio samples as float32 numpy array
             blocking: If True, wait for playback to complete
+            trim_prefix: If True, trim the "So, " prefix
+
+        Returns:
+            Duration in seconds (0 if non-blocking or error)
         """
         if audio.size == 0:
-            return
+            return 0.0
 
         audio = np.asarray(audio, dtype=np.float32)
         if audio.ndim > 1:
             audio = audio.reshape(-1)
 
+        # Normalize
         peak = np.max(np.abs(audio))
         if peak > 1.0:
             audio = audio / peak
 
-        with self._lock:
-            self._is_playing = True
-
-        try:
-            sd.play(audio, samplerate=self.sample_rate, device=self.device)
-            if blocking:
-                sd.wait()
-        finally:
-            with self._lock:
-                self._is_playing = False
-
-    def play_stream(self, audio_iterator: Iterator[np.ndarray], blocking: bool = True,
-                     prebuffer_ms: int = 0, trim_prefix: bool = False) -> float:
-        """
-        Play audio chunks from an iterator as they arrive (streaming playback).
-        Uses direct writes instead of callbacks for smoother playback.
-
-        Args:
-            audio_iterator: Iterator yielding audio chunks as float32 numpy arrays
-            blocking: If True, wait for playback to complete
-            prebuffer_ms: Milliseconds of audio to buffer before starting playback
-            trim_prefix: If True, detect and trim prefix word (e.g., "So, ") before playback
-
-        Returns:
-            Total duration in seconds
-        """
-        total_samples = 0
-        prebuffer_samples = int(self.sample_rate * prebuffer_ms / 1000)
-
-        # For prefix trimming, we need to buffer more audio to detect the silence
+        # Trim prefix if requested
         if trim_prefix:
-            prebuffer_samples = max(prebuffer_samples, int(self.sample_rate * 1.0))  # At least 1000ms for speech detection + "So, "
+            trim_offset = find_prefix_trim_point(audio, self.sample_rate)
+            if trim_offset > 0:
+                audio = audio[trim_offset:]
+                # Apply short fade-in to smooth the transition (10ms)
+                fade_samples = min(int(self.sample_rate * 0.01), len(audio))
+                if fade_samples > 0:
+                    fade_curve = np.linspace(0, 1, fade_samples, dtype=np.float32)
+                    audio[:fade_samples] = audio[:fade_samples] * fade_curve
 
-        def process_chunk(chunk):
-            if chunk.size == 0:
-                return None
-            chunk = np.asarray(chunk, dtype=np.float32)
-            if chunk.ndim > 1:
-                chunk = chunk.reshape(-1)
-            peak = np.max(np.abs(chunk))
-            if peak > 1.0:
-                chunk = chunk / peak
-            return chunk
-
-        with self._lock:
-            self._is_playing = True
-            self._stop_requested = False
-
+        self._is_playing = True
         try:
-            # Pre-buffer phase: collect audio before starting playback
-            prebuffer = []
-            prebuffer_size = 0
-            iterator_exhausted = False
-
-            for chunk in audio_iterator:
-                if self._stop_requested:
-                    return 0
-                chunk = process_chunk(chunk)
-                if chunk is None:
-                    continue
-                prebuffer.append(chunk)
-                prebuffer_size += chunk.size
-
-                if prebuffer_size >= prebuffer_samples:
-                    break
+            if blocking:
+                result = self._subprocess.play(audio)
+                return result.get("duration", 0.0)
             else:
-                iterator_exhausted = True
-
-            # Concatenate pre-buffer into one array
-            if prebuffer:
-                prebuffer_audio = np.concatenate(prebuffer)
-            else:
-                prebuffer_audio = np.array([], dtype=np.float32)
-
-            # Trim prefix word (e.g., "So, ") if requested
-            trim_offset = 0
-            if trim_prefix and prebuffer_audio.size > 0:
-                prebuffer_ms = prebuffer_audio.size / self.sample_rate * 1000
-                logger.info(f"[TRIM] Analyzing {prebuffer_ms:.0f}ms ({prebuffer_audio.size} samples)")
-                trim_offset = find_prefix_trim_point(prebuffer_audio, self.sample_rate)
-                if trim_offset > 0:
-                    prebuffer_audio = prebuffer_audio[trim_offset:]
-
-            total_samples += prebuffer_audio.size
-
-            # If iterator exhausted, just play what we have
-            if iterator_exhausted:
-                if prebuffer_audio.size > 0:
-                    sd.play(prebuffer_audio, samplerate=self.sample_rate, device=self.device)
-                    sd.wait()
-                return total_samples / self.sample_rate
-
-            # Start stream with blocking writes
-            stream = sd.OutputStream(
-                samplerate=self.sample_rate,
-                channels=1,
-                dtype=np.float32,
-                device=self.device,
-            )
-            self._current_stream = stream
-
-            with stream:
-                # Write silent padding to let audio device initialize
-                silence = np.zeros(int(self.sample_rate * 0.03), dtype=np.float32)  # 30ms
-                stream.write(silence.reshape(-1, 1))
-
-                # Write pre-buffered audio
-                if prebuffer_audio.size > 0:
-                    stream.write(prebuffer_audio.reshape(-1, 1))
-
-                # Continue with remaining chunks
-                for chunk in audio_iterator:
-                    if self._stop_requested:
-                        break
-                    chunk = process_chunk(chunk)
-                    if chunk is None:
-                        continue
-                    total_samples += chunk.size
-                    stream.write(chunk.reshape(-1, 1))
-
-            self._current_stream = None
-            return total_samples / self.sample_rate
+                # Non-blocking not really supported with subprocess model
+                # Just play and return immediately
+                self._subprocess.play(audio, timeout=0.1)
+                return 0.0
         finally:
-            self._current_stream = None
-            with self._lock:
-                self._is_playing = False
+            self._is_playing = False
 
     def stop(self) -> None:
-        """Stop any currently playing audio."""
-        self._stop_requested = True
-        # Abort active stream if any
-        if self._current_stream is not None:
-            try:
-                self._current_stream.abort()
-            except Exception:
-                pass
-        sd.stop()
-        with self._lock:
-            self._is_playing = False
+        """Stop current playback."""
+        self._subprocess.stop()
+        self._is_playing = False
+
+    def shutdown(self) -> None:
+        """Shutdown the player subprocess."""
+        self._subprocess.shutdown()
 
     @property
     def is_playing(self) -> bool:
-        """Check if audio is currently playing."""
-        with self._lock:
-            return self._is_playing
+        return self._is_playing

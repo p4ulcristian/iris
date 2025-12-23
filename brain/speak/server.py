@@ -172,8 +172,8 @@ def queue_worker():
 
             # Synthesize and play
             try:
-                audio_iter = tts_model.synthesize_stream(text, voice=voice)
-                duration = player.play_stream(audio_iter, blocking=True, trim_prefix=True)
+                audio = tts_model.synthesize(text, voice=voice)
+                duration = player.play(audio, blocking=True, trim_prefix=True)
                 logger.info(f"[QUEUE] Played {duration:.2f}s of audio")
             except Exception as e:
                 logger.error(f"[QUEUE] Playback error: {e}")
