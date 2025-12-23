@@ -68,6 +68,7 @@ PORT = 8765
 MAX_QUEUE_SIZE = 30
 QUEUE_STATE_FILE = Path("/tmp/iris/speak-queue")
 MESSAGE_DISPLAY_TIME = 5.0  # seconds to show each message
+WATCHDOG_TIMEOUT = 60.0  # seconds before watchdog considers worker stuck
 
 # State
 tts_model = None
@@ -165,6 +166,8 @@ def queue_worker():
                 logger.info(f"[QUEUE] Played {duration:.2f}s of audio")
             except Exception as e:
                 logger.error(f"[QUEUE] Playback error: {e}")
+                import traceback
+                traceback.print_exc()
 
             current_message = None
             speak_queue.task_done()
@@ -172,7 +175,26 @@ def queue_worker():
 
         except Exception as e:
             logger.error(f"[QUEUE] Worker error: {e}")
+            import traceback
+            traceback.print_exc()
             current_message = None
+
+
+def watchdog():
+    """Watchdog thread that monitors the queue worker for hangs."""
+    global current_message_time, player
+
+    while True:
+        time.sleep(10)  # Check every 10 seconds
+
+        if current_message_time is not None:
+            elapsed = time.time() - current_message_time
+            if elapsed > WATCHDOG_TIMEOUT:
+                logger.warning(f"[WATCHDOG] Worker stuck for {elapsed:.0f}s, forcing stop")
+                if player:
+                    player.stop()
+                # Clear current message to allow queue to continue
+                current_message_time = None
 
 
 def init_models():
@@ -191,6 +213,11 @@ def init_models():
     queue_worker_thread = threading.Thread(target=queue_worker, daemon=True)
     queue_worker_thread.start()
     logger.info("Queue worker started")
+
+    # Start watchdog thread
+    watchdog_thread = threading.Thread(target=watchdog, daemon=True)
+    watchdog_thread.start()
+    logger.info("Watchdog started (timeout: {}s)".format(WATCHDOG_TIMEOUT))
 
     is_ready = True
     write_queue_state()
