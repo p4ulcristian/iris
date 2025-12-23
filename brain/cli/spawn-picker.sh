@@ -1,5 +1,12 @@
 #!/bin/bash
 # Spawn picker with god selection and task input
+# Usage: spawn-picker.sh [--new-tab]
+
+# Parse args
+NEW_TAB=false
+if [[ "$1" == "--new-tab" ]]; then
+    NEW_TAB=true
+fi
 
 # Self-locate: script is in brain/cli/, so go up 2 levels
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -111,4 +118,8 @@ if [ -z "$TASK" ]; then
 fi
 
 # Spawn the god with the task
-iris spawn -q "$TASK" --god "$SELECTED_GOD"
+if [ "$NEW_TAB" = true ]; then
+    iris spawn -q --new-tab "$TASK" --god "$SELECTED_GOD"
+else
+    iris spawn -q "$TASK" --god "$SELECTED_GOD"
+fi

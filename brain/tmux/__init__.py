@@ -224,6 +224,36 @@ def pipe_pane(pane_id: str, command: str | None) -> bool:
 # Window Operations
 # ─────────────────────────────────────────────────────────────────
 
+def create_window(
+    session: str,
+    window_name: str,
+    command: str,
+    working_dir: str | None = None,
+    env: dict | None = None,
+) -> str | None:
+    """Create a new window with a command.
+
+    Args:
+        session: Session name
+        window_name: Name for the new window
+        command: Command to run in the window
+        working_dir: Working directory for the window
+        env: Environment variables
+
+    Returns:
+        Pane ID of the new window's pane, or None on failure
+    """
+    args = ["new-window", "-t", session, "-n", window_name, "-P", "-F", "#{pane_id}"]
+    if working_dir:
+        args.extend(["-c", working_dir])
+    args.append(command)
+
+    result = run(*args, env=env)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
 def get_window_dimensions(session: str) -> tuple[int, int] | None:
     """Get window width and height."""
     result = run("display-message", "-t", session, "-p", "#{window_width}x#{window_height}")

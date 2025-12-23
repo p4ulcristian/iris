@@ -12,7 +12,7 @@
   Alt+k    Banish god by name
 
   ────── WINDOWS ──────
-  Alt+n    New window
+  Alt+n    Summon god in new tab
   Alt+1-9  Focus window
   Alt+,/.  Prev/next window
   Alt+w    Rename window
@@ -21,7 +21,7 @@
   Alt+Shift+n    Move pane to new window
 
   ─────── OTHER ───────
+  Ctrl+h   Resume Claude session
   Ctrl+t   Theme picker
   Ctrl+s   Skills list
-  Ctrl+h   This help
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["requests"]
+# dependencies = []
 # ///
 """
 Simple speak utility for Iris.
@@ -16,8 +16,10 @@ Usage:
 
 import sys
 import subprocess
-import requests
+import json
 import random
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 SPEAK_URL = "http://127.0.0.1:8765/speak"
@@ -96,21 +98,29 @@ def say(text: str, voice: str = None, background: bool = False) -> bool:
 
     def do_request():
         try:
-            resp = requests.post(SPEAK_URL, json=payload, timeout=60)
-            resp.raise_for_status()
-            return True
-        except requests.RequestException as e:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                SPEAK_URL,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return resp.status == 200
+        except (urllib.error.URLError, urllib.error.HTTPError) as e:
             print(f"Speak failed: {e}", file=sys.stderr)
             return False
 
     if background:
         # Spawn a detached Python subprocess that makes the request
-        import json
         payload_json = json.dumps(payload)
         python_code = f"""
-import requests
+import json
+import urllib.request
 try:
-    requests.post('{SPEAK_URL}', json={payload_json}, timeout=60)
+    data = json.dumps({payload_json}).encode('utf-8')
+    req = urllib.request.Request('{SPEAK_URL}', data=data, headers={{'Content-Type': 'application/json'}}, method='POST')
+    urllib.request.urlopen(req, timeout=60)
 except:
     pass
 """

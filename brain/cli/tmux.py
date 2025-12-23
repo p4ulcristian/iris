@@ -99,27 +99,16 @@ def start_session():
         focus_session()
         return
 
-    # Get colors - main pane is a shade too
-    border_colors = config.get_border_colors()
-    shade_color = config.get_next_shade_color(set())
-    color_name = shade_color["name"]
-    color_bg = shade_color.get("bg", "#1a1a1a")
-    color_fg = shade_color.get("fg", "#ffffff")
-
-    # Build Claude command using god prompt template
+    # Create god identity (lazy import to avoid circular dependency)
+    from . import gods
     task = "Help Paul with whatever he needs."
-    god_config = config.get_god_config(color_name)
-    voice = god_config.get("voice", "emma")
-    traits = god_config.get("traits", "")
+    god = gods.create_identity(task)
 
-    prompt_template = config.get_god_prompt()
-    god_prompt = prompt_template.replace("{{GOD_NAME}}", color_name)
-    god_prompt = god_prompt.replace("{{GOD_UUID}}", f"{color_name.lower()}-init")
-    god_prompt = god_prompt.replace("{{VOICE}}", voice)
-    god_prompt = god_prompt.replace("{{TRAITS}}", traits)
-    god_prompt = god_prompt.replace("{{TASK}}", task)
-    escaped = god_prompt.replace("'", "'\"'\"'")
-    claude_cmd = f"cd '{config.IRIS_DIR}' && claude --dangerously-skip-permissions -- '{escaped}'"
+    border_colors = config.get_border_colors()
+
+    # Build Claude command
+    escaped = god["init_msg"].replace("'", "'\"'\"'")
+    claude_cmd = f"cd '{config.IRIS_DIR}' && GOD_UUID='{god['uuid']}' GOD_NAME='{god['name']}' claude --dangerously-skip-permissions -- '{escaped}'"
 
     # Create session
     tmux_ops.create_session(
@@ -144,15 +133,16 @@ def start_session():
     tmux_ops.set_option(config.SESSION, "pane-border-format", f"#[bg={border_colors['bg']},fg={border_colors['fg']},bold] #{{pane_title}} ")
     tmux_ops.set_option(config.SESSION, "allow-set-title", "off")
 
-    # Style main pane as a shade
-    # Get the pane ID of the first pane
+    # Style main pane
     panes = tmux_ops.list_panes(config.SESSION)
     if panes:
         main_pane = panes[0].pane_id
-        tmux_ops.set_pane_style(main_pane, color_bg, color_fg)
-        tmux_ops.set_pane_title(main_pane, f"{color_name}: {task}")
+        tmux_ops.set_pane_style(main_pane, god["color_bg"], god["color_fg"])
+        tmux_ops.set_pane_title(main_pane, f"{god['name']}: {task}")
+        # Store pane_id for UUID lookup
+        (god["shadow_dir"] / "pane_id.txt").write_text(main_pane)
 
-    print(f"\033[32mIris session started ({color_name})\033[0m")
+    print(f"\033[32mIris session started ({god['name']})\033[0m")
     focus_session()
 
 
@@ -216,6 +206,16 @@ def create_pane(command: str) -> str | None:
     if not session_exists():
         return None
     return tmux_ops.create_pane(config.SESSION, command, horizontal=True, env=_get_env())
+
+
+def create_window(window_name: str, command: str) -> str | None:
+    """Create a new window (tab) in the Iris session with a command."""
+    if not session_exists():
+        return None
+    return tmux_ops.create_window(
+        config.SESSION, window_name, command,
+        working_dir=str(config.IRIS_DIR), env=_get_env()
+    )
 
 
 def kill_pane(pane_id: str) -> bool:

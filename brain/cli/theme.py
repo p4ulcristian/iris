@@ -43,9 +43,13 @@ def apply_theme(theme_name: str = None):
         print(f"Theme '{current}' not found")
         return False
 
-    shade_list = theme.get("shades", [])
+    # Build shades list from color entries (exclude border/active_border)
+    shade_list = [
+        v for k, v in theme.items()
+        if isinstance(v, dict) and k not in ("border", "active_border") and "bg" in v
+    ]
     if not shade_list:
-        print(f"Theme '{current}' has no shades defined")
+        print(f"Theme '{current}' has no colors defined")
         return False
 
     # Apply to all panes - cycle through theme colors

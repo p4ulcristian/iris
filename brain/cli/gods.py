@@ -60,12 +60,8 @@ def _find_uuid_by_name(name: str) -> str | None:
     return None
 
 
-def spawn(task: str, project: str | None = None, model: str | None = None, voice: str | None = None, god_name: str | None = None) -> dict | None:
-    """Summon a new god with a task."""
-    if not tmux.session_exists():
-        print("\033[31mIris not running. Start with: iris\033[0m")
-        return None
-
+def create_identity(task: str, god_name: str | None = None, voice: str | None = None, project: str | None = None) -> dict:
+    """Create god identity (shadow dir, identity.md). Returns god info dict."""
     config.ensure_dirs()
 
     # Get god name
@@ -125,44 +121,84 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     if project:
         (shadow_dir / "project.txt").write_text(project)
 
-    # Init message: mission first, then identity reference
-    init_msg = f"{task}\n\nYour identity: shadows/{god_uuid}/identity.md"
+    return {
+        "name": god_name,
+        "uuid": god_uuid,
+        "voice": voice,
+        "color_name": color_name,
+        "color_bg": color_bg,
+        "color_fg": color_fg,
+        "task": task,
+        "project": project,
+        "project_dir": project_dir,
+        "shadow_dir": shadow_dir,
+        "init_msg": f"{task}\n\nYour identity: shadows/{god_uuid}/identity.md\n\nFirst: read your identity, then announce yourself aloud before doing anything else.",
+    }
+
+
+def spawn(task: str, project: str | None = None, model: str | None = None, voice: str | None = None, god_name: str | None = None, new_tab: bool = False) -> dict | None:
+    """Summon a new god with a task.
+
+    Args:
+        task: The task for the god
+        project: Optional project name
+        model: Optional model override
+        voice: Optional voice override
+        god_name: Optional specific god name
+        new_tab: If True, create god in a new window/tab instead of a pane
+    """
+    if not tmux.session_exists():
+        print("\033[31mIris not running. Start with: iris\033[0m")
+        return None
+
+    # Create identity
+    god = create_identity(task, god_name=god_name, voice=voice, project=project)
 
     # Build claude command
     model_flag = f"--model {model}" if model else ""
-    project_flag = f"--add-dir '{project_dir}'" if project_dir else ""
+    project_flag = f"--add-dir '{god['project_dir']}'" if god["project_dir"] else ""
 
     claude_cmd = (
         f"cd '{config.IRIS_DIR}' && "
-        f"GOD_UUID='{god_uuid}' GOD_NAME='{god_name}' "
-        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{init_msg}'"
+        f"GOD_UUID='{god['uuid']}' GOD_NAME='{god['name']}' "
+        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{god['init_msg']}'"
     )
 
-    # Create pane
-    pane_id = tmux.create_pane(claude_cmd)
+    # Create pane or window
+    if new_tab:
+        # Get realm name for the new window
+        import subprocess
+        realm_result = subprocess.run(
+            [str(config.IRIS_DIR / "brain/cli/realm-name.sh")],
+            capture_output=True, text=True
+        )
+        realm_name = realm_result.stdout.strip() or "Realm"
+        pane_id = tmux.create_window(realm_name, claude_cmd)
+    else:
+        pane_id = tmux.create_pane(claude_cmd)
+
     if not pane_id:
         return None
 
     # Store pane_id for UUID lookup
-    (shadow_dir / "pane_id.txt").write_text(pane_id)
+    (god["shadow_dir"] / "pane_id.txt").write_text(pane_id)
 
-    # Set pane title: "Name: Task" (truncate task if too long)
-    task_display = task[:50] + "..." if len(task) > 50 else task
-    title = f"{god_name}: {task_display}"
+    # Set pane title: "Name: Task"
+    title = f"{god['name']}: {task}"
     tmux.set_pane_title(pane_id, title)
-    tmux.set_pane_style(pane_id, color_bg, color_fg)
+    tmux.set_pane_style(pane_id, god["color_bg"], god["color_fg"])
 
     # Start logging
-    tmux.pipe_pane(pane_id, f"cat >> '{shadow_dir}/output.log'")
+    tmux.pipe_pane(pane_id, f"cat >> '{god['shadow_dir']}/output.log'")
 
     # Apply layout
     tmux.apply_layout()
 
     return {
-        "name": god_name,
-        "uuid": god_uuid,
+        "name": god["name"],
+        "uuid": god["uuid"],
         "pane_id": pane_id,
-        "project": project,
+        "project": god["project"],
     }
 
 

@@ -72,13 +72,14 @@ def main():
     stop_p.add_argument("components", nargs="*", help="Components to stop (default: servers only)")
     stop_p.add_argument("--all", action="store_true", help="Stop everything including CLI")
 
-    # iris spawn [--project NAME] [--model MODEL] [--voice VOICE] [--god NAME] [--quiet] TASK
+    # iris spawn [--project NAME] [--model MODEL] [--voice VOICE] [--god NAME] [--quiet] [--new-tab] TASK
     spawn_p = subparsers.add_parser("spawn", help="Summon a new god")
     spawn_p.add_argument("--project", "-p", help="Project context")
     spawn_p.add_argument("--model", "-m", help="Model to use")
     spawn_p.add_argument("--voice", "-v", help="Voice for god (overrides god default)")
     spawn_p.add_argument("--god", "-g", help="Specific god to summon")
     spawn_p.add_argument("--quiet", "-q", action="store_true", help="Suppress output (for keybindings)")
+    spawn_p.add_argument("--new-tab", "-t", action="store_true", help="Spawn in a new tab/window")
     spawn_p.add_argument("task", nargs="+", help="Task description")
 
     # iris kill NAME|all
@@ -124,7 +125,7 @@ def main():
     commands = {
         "start": lambda: cmd_start(args.components),
         "stop": lambda: cmd_stop(args.components, args.all),
-        "spawn": lambda: cmd_spawn(" ".join(args.task), args.project, args.model, args.voice, args.god, args.quiet),
+        "spawn": lambda: cmd_spawn(" ".join(args.task), args.project, args.model, args.voice, args.god, args.quiet, args.new_tab),
         "kill": lambda: cmd_kill(args.name),
         "list": lambda: cmd_list(args.all, args.json),
         "send": lambda: cmd_send(args.name, " ".join(args.message)),
@@ -171,9 +172,9 @@ def cmd_stop(components: list[str], stop_all: bool):
             servers.stop(comp)
 
 
-def cmd_spawn(task: str, project: str | None, model: str | None, voice: str | None, god_name: str | None, quiet: bool = False):
+def cmd_spawn(task: str, project: str | None, model: str | None, voice: str | None, god_name: str | None, quiet: bool = False, new_tab: bool = False):
     """Summon a new god."""
-    result = gods.spawn(task, project=project, model=model, voice=voice, god_name=god_name)
+    result = gods.spawn(task, project=project, model=model, voice=voice, god_name=god_name, new_tab=new_tab)
     if result and not quiet:
         print(f"\033[32mSummoned \033[1m{result['name']}\033[0m\033[32m ({result['pane_id']})\033[0m")
         print(f"  Task: {task}")

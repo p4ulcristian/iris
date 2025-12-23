@@ -2,6 +2,7 @@
 
 import os
 import logging
+import time
 from pathlib import Path
 from typing import Dict, Iterator, Optional
 
@@ -47,7 +48,6 @@ class TextToSpeech:
 
         # Load Turbo model (downloads from HuggingFace if needed)
         self.model = ChatterboxTurboTTS.from_pretrained(device=self.device)
-
 
         # Load voice presets (wav files)
         self.voice_presets: Dict[str, Path] = {}
@@ -100,11 +100,17 @@ class TextToSpeech:
         Returns:
             Audio as float32 numpy array (values in [-1, 1])
         """
+        t0 = time.time()
+
         text = text.strip().replace("'", "'")
         if not text:
             return np.array([], dtype=np.float32)
 
+        # Get voice path
         voice_path = self._get_voice_path(voice)
+
+        t1 = time.time()
+        logger.info(f"[TIMING] Prep took {(t1-t0)*1000:.0f}ms, calling model.generate...")
 
         # Generate audio
         wav = self.model.generate(
@@ -112,6 +118,8 @@ class TextToSpeech:
             audio_prompt_path=voice_path,
             exaggeration=cfg_scale,
         )
+        t2 = time.time()
+        logger.info(f"[TIMING] model.generate took {(t2-t1)*1000:.0f}ms")
 
         # Convert to numpy
         if torch.is_tensor(wav):
