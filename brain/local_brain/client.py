@@ -2,6 +2,7 @@
 Local LLM client using vLLM for running Qwen3 with tool use support.
 Ultra-fast inference: 80-120 tok/s (2-3x faster than Ollama).
 """
+from __future__ import annotations
 
 import json
 import os

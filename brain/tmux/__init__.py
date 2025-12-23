@@ -3,6 +3,7 @@
 This module provides portable tmux operations that can be used
 independently of Iris. All functions take session name as parameter.
 """
+from __future__ import annotations
 
 import math
 import os

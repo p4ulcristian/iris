@@ -1,4 +1,5 @@
 """Configuration loading and path resolution."""
+from __future__ import annotations
 
 import json
 import os

@@ -2,6 +2,7 @@
 
 Opens Chrome with remote debugging enabled so Claude can connect via MCP.
 """
+from __future__ import annotations
 
 import sys
 import subprocess

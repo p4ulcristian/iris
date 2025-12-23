@@ -1,4 +1,5 @@
 """Server management - start/stop hear, speak, express, wake."""
+from __future__ import annotations
 
 import os
 import signal

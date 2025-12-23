@@ -2,6 +2,7 @@
 
 Runs commands in a tmux pane alongside the workers so you can watch the output.
 """
+from __future__ import annotations
 
 import sys
 import shlex

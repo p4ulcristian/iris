@@ -1,4 +1,5 @@
 """Iris CLI - Python-based orchestration for Iris."""
+from __future__ import annotations
 
 import argparse
 import grp

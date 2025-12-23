@@ -5,6 +5,7 @@ This module wraps brain.tmux with Iris-specific functionality:
 - Iris session configuration
 - Theme and styling
 """
+from __future__ import annotations
 
 import shutil
 import subprocess

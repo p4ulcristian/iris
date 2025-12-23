@@ -1,4 +1,5 @@
 """God management - summon, banish, list, send, peek."""
+from __future__ import annotations
 
 import json
 import os
