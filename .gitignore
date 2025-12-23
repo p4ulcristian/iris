@@ -41,3 +41,7 @@ benchmark_*.py
 
 # Bin symlinks
 bin/
+
+# Vendored binaries (downloaded, not committed)
+vendor/bin/*
+!vendor/bin/.gitkeep
