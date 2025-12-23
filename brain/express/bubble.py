@@ -19,6 +19,7 @@ MARGIN_RIGHT = 20
 
 # State file for communication with server
 STATE_FILE = Path("/tmp/iris/express-state")
+SPEAK_QUEUE_FILE = Path("/tmp/iris/speak-queue")
 
 # Worker sessions directory (shades managed by Iris orchestrator)
 WORKERS_DIR = Path.home() / "Iris" / "shadows"
@@ -88,6 +89,14 @@ SPK_SIZE = 14
 SPK_MARGIN_TOP = 104  # Below position button
 SPK_HIT_RADIUS = 15
 
+# Speech bubble settings
+SPEECH_BUBBLE_PADDING = 12
+SPEECH_BUBBLE_LINE_HEIGHT = 20
+SPEECH_BUBBLE_FONT_SIZE = 12
+SPEECH_BUBBLE_WIDTH = 350  # Fixed width for text wrapping
+SPEECH_BUBBLE_GAP = 8  # Gap between speech bubbles and orb
+SPEECH_BUBBLE_MSG_GAP = 6  # Gap between individual messages
+
 
 class IrisBubble(Gtk.Application):
     def __init__(self):
@@ -125,6 +134,12 @@ class IrisBubble(Gtk.Application):
         self.device_overlay = None  # Overlay window for device selection
         # Worker tracking
         self.workers = []  # List of {"id": "red", "status": "idle|working|done|error"}
+        # Speech queue display
+        self.speech_messages = []  # List of message strings to display
+        self.speech_playing = None  # Currently playing message
+        # Dynamic orb position (updated each frame)
+        self.orb_cx = BUBBLE_SIZE / 2
+        self.orb_cy = BUBBLE_SIZE / 2 - 10
 
     def do_activate(self):
         self.window = Gtk.ApplicationWindow(application=self)
@@ -159,6 +174,8 @@ class IrisBubble(Gtk.Application):
         self.load_css()
         self.start_state_listener()
         self.start_worker_listener()
+        self.start_speech_queue_listener()
+        self.start_capslock_listener()
         self.animation_id = GLib.timeout_add(16, self.animate)
 
         self.window.present()
@@ -173,19 +190,25 @@ class IrisBubble(Gtk.Application):
         )
 
     def get_x_center(self):
-        return (BUBBLE_SIZE - X_MARGIN - X_SIZE // 2, X_MARGIN + X_SIZE // 2)
+        # Anchored to right edge of window
+        width = self.drawing_area.get_width() if self.drawing_area else BUBBLE_SIZE
+        return (width - X_MARGIN - X_SIZE // 2, X_MARGIN + X_SIZE // 2)
 
     def get_vol_center(self):
-        return (BUBBLE_SIZE - X_MARGIN - VOL_SIZE // 2, VOL_MARGIN_TOP + VOL_SIZE // 2)
+        width = self.drawing_area.get_width() if self.drawing_area else BUBBLE_SIZE
+        return (width - X_MARGIN - VOL_SIZE // 2, VOL_MARGIN_TOP + VOL_SIZE // 2)
 
     def get_mute_center(self):
-        return (BUBBLE_SIZE - X_MARGIN - MUTE_SIZE // 2, MUTE_MARGIN_TOP + MUTE_SIZE // 2)
+        width = self.drawing_area.get_width() if self.drawing_area else BUBBLE_SIZE
+        return (width - X_MARGIN - MUTE_SIZE // 2, MUTE_MARGIN_TOP + MUTE_SIZE // 2)
 
     def get_pos_center(self):
-        return (BUBBLE_SIZE - X_MARGIN - POS_SIZE // 2, POS_MARGIN_TOP + POS_SIZE // 2)
+        width = self.drawing_area.get_width() if self.drawing_area else BUBBLE_SIZE
+        return (width - X_MARGIN - POS_SIZE // 2, POS_MARGIN_TOP + POS_SIZE // 2)
 
     def get_spk_center(self):
-        return (BUBBLE_SIZE - X_MARGIN - SPK_SIZE // 2, SPK_MARGIN_TOP + SPK_SIZE // 2)
+        width = self.drawing_area.get_width() if self.drawing_area else BUBBLE_SIZE
+        return (width - X_MARGIN - SPK_SIZE // 2, SPK_MARGIN_TOP + SPK_SIZE // 2)
 
     def on_mouse_motion(self, controller, x, y):
         self.mouse_x = x
@@ -743,6 +766,95 @@ class IrisBubble(Gtk.Application):
         self.worker_thread = threading.Thread(target=poll_workers, daemon=True)
         self.worker_thread.start()
 
+    def start_speech_queue_listener(self):
+        """Poll speech queue file for messages to display."""
+        def poll_queue():
+            import time
+            import json
+            while True:
+                try:
+                    if SPEAK_QUEUE_FILE.exists():
+                        data = json.loads(SPEAK_QUEUE_FILE.read_text())
+                        self.speech_playing = data.get("playing")
+                        self.speech_messages = data.get("displayed", [])
+                except Exception:
+                    pass
+                time.sleep(0.1)  # Poll every 100ms
+
+        self.queue_thread = threading.Thread(target=poll_queue, daemon=True)
+        self.queue_thread.start()
+
+    def start_capslock_listener(self):
+        """Listen for Caps Lock to skip current TTS message."""
+        def listen_capslock():
+            try:
+                import evdev
+                from evdev import ecodes
+                import select
+
+                # Find keyboard devices (filter out mice, trackpads, etc.)
+                devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+                keyboards = []
+                for d in devices:
+                    caps = d.capabilities()
+                    # Must have KEY events and specifically have CAPSLOCK key
+                    if ecodes.EV_KEY in caps:
+                        keys = caps[ecodes.EV_KEY]
+                        if ecodes.KEY_CAPSLOCK in keys and ecodes.KEY_A in keys:
+                            keyboards.append(d)
+
+                if not keyboards:
+                    print("[CAPSLOCK] No keyboard devices found", flush=True)
+                    return
+
+                # Listen on all keyboards
+                print(f"[CAPSLOCK] Listening on {len(keyboards)} keyboard(s)", flush=True)
+                for kbd in keyboards:
+                    print(f"[CAPSLOCK]   - {kbd.name}", flush=True)
+
+                while True:
+                    r, w, x = select.select(keyboards, [], [])
+                    for kbd in r:
+                        for event in kbd.read():
+                            if event.type == ecodes.EV_KEY:
+                                if event.code == ecodes.KEY_CAPSLOCK and event.value == 1:  # Key down
+                                    print("[CAPSLOCK] Skip triggered", flush=True)
+                                    try:
+                                        import requests
+                                        requests.post("http://127.0.0.1:8765/stop", timeout=1)
+                                    except Exception as e:
+                                        print(f"[CAPSLOCK] Skip failed: {e}", flush=True)
+
+            except ImportError:
+                print("[CAPSLOCK] evdev not installed, caps lock skip disabled", flush=True)
+            except Exception as e:
+                print(f"[CAPSLOCK] Error: {e}", flush=True)
+
+        self.capslock_thread = threading.Thread(target=listen_capslock, daemon=True)
+        self.capslock_thread.start()
+
+    def calculate_required_size(self):
+        """Calculate required window size based on speech messages."""
+        base_height = BUBBLE_SIZE  # Orb + label area
+
+        if not self.speech_messages:
+            return BUBBLE_SIZE, base_height
+
+        # Fixed width for speech bubbles
+        total_width = max(BUBBLE_SIZE, SPEECH_BUBBLE_WIDTH + 20)
+
+        # Estimate height for messages (assume ~50 chars per line)
+        chars_per_line = 45
+        msg_height = 0
+        for msg in self.speech_messages:
+            num_lines = max(1, (len(msg) + chars_per_line - 1) // chars_per_line)
+            bubble_height = SPEECH_BUBBLE_PADDING * 2 + num_lines * SPEECH_BUBBLE_LINE_HEIGHT
+            msg_height += bubble_height + SPEECH_BUBBLE_MSG_GAP
+
+        total_height = base_height + msg_height + SPEECH_BUBBLE_GAP
+
+        return int(total_width), int(total_height)
+
     def animate(self):
         # Pulse animation for all active states (loading, listening, speaking, waking)
         if self.is_listening or self.is_speaking or self.is_loading or self.is_waking:
@@ -760,18 +872,122 @@ class IrisBubble(Gtk.Application):
                 self.dot_counter = 0
                 self.loading_dots = (self.loading_dots + 1) % 4  # 0, 1, 2, 3 dots
 
+        # Resize window based on speech messages
+        new_width, new_height = self.calculate_required_size()
+        current_width = self.drawing_area.get_width()
+        current_height = self.drawing_area.get_height()
+        if new_width != current_width or new_height != current_height:
+            self.drawing_area.set_size_request(new_width, new_height)
+            self.window.set_default_size(new_width, new_height)
+
         self.drawing_area.queue_draw()
         return True
 
+    def wrap_text(self, cr, text, max_width):
+        """Wrap text to fit within max_width. Returns list of lines."""
+        words = text.split()
+        lines = []
+        current_line = ""
+
+        for word in words:
+            test_line = f"{current_line} {word}".strip() if current_line else word
+            extents = cr.text_extents(test_line)
+            if extents.width <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines if lines else [text]
+
+    def draw_speech_bubbles(self, cr, width, start_y, messages):
+        """Draw speech message bubbles with text wrapping. Returns total height used."""
+        import cairo
+
+        if not messages:
+            return 0
+
+        cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(SPEECH_BUBBLE_FONT_SIZE)
+
+        total_height = 0
+        y = start_y
+        bubble_width = SPEECH_BUBBLE_WIDTH
+        text_area_width = bubble_width - SPEECH_BUBBLE_PADDING * 2
+
+        for i, msg in enumerate(messages):
+            # Wrap text to fit
+            lines = self.wrap_text(cr, msg, text_area_width)
+            num_lines = len(lines)
+
+            # Calculate bubble height based on lines
+            bubble_height = SPEECH_BUBBLE_PADDING * 2 + num_lines * SPEECH_BUBBLE_LINE_HEIGHT
+            bubble_x = width - bubble_width - 10  # Right-aligned with margin
+
+            # Draw bubble background (rounded rectangle) - SOLID
+            radius = 10
+            cr.set_source_rgba(0.08, 0.08, 0.12, 1.0)  # Fully opaque dark
+
+            cr.new_path()
+            cr.arc(bubble_x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
+            cr.arc(bubble_x + bubble_width - radius, y + radius, radius, 1.5 * math.pi, 2 * math.pi)
+            cr.arc(bubble_x + bubble_width - radius, y + bubble_height - radius, radius, 0, 0.5 * math.pi)
+            cr.arc(bubble_x + radius, y + bubble_height - radius, radius, 0.5 * math.pi, math.pi)
+            cr.close_path()
+            cr.fill()
+
+            # Draw border
+            cr.set_source_rgba(0.25, 0.25, 0.35, 1.0)
+            cr.set_line_width(1)
+            cr.new_path()
+            cr.arc(bubble_x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
+            cr.arc(bubble_x + bubble_width - radius, y + radius, radius, 1.5 * math.pi, 2 * math.pi)
+            cr.arc(bubble_x + bubble_width - radius, y + bubble_height - radius, radius, 0, 0.5 * math.pi)
+            cr.arc(bubble_x + radius, y + bubble_height - radius, radius, 0.5 * math.pi, math.pi)
+            cr.close_path()
+            cr.stroke()
+
+            # Draw text lines
+            text_x = bubble_x + SPEECH_BUBBLE_PADDING
+            for j, line in enumerate(lines):
+                text_y = y + SPEECH_BUBBLE_PADDING + (j + 1) * SPEECH_BUBBLE_LINE_HEIGHT - 4
+                cr.set_source_rgba(1, 1, 1, 0.95)
+                cr.move_to(text_x, text_y)
+                cr.show_text(line)
+
+            y += bubble_height + SPEECH_BUBBLE_MSG_GAP
+            total_height += bubble_height + SPEECH_BUBBLE_MSG_GAP
+
+        return total_height
+
     def draw_bubble(self, area, cr, width, height):
         import cairo
-        cx, cy = width / 2, height / 2 - 10  # Shift up to make room for label
+
         radius = 25
+
+        # Orb is anchored to right side (stays in place when window widens)
+        cx = width - BUBBLE_SIZE / 2  # Right-anchored
+        cy = BUBBLE_SIZE / 2 - 10  # Fixed vertical position
+
+        # Speech bubbles go below the orb area
+        messages_start_y = BUBBLE_SIZE  # Start after orb area
 
         # Clear background
         cr.set_operator(0)
         cr.paint()
         cr.set_operator(1)
+
+        # Draw speech bubbles below orb
+        if self.speech_messages:
+            self.draw_speech_bubbles(cr, width, messages_start_y, self.speech_messages)
+
+        # Store orb position for button hit detection
+        self.orb_cx = cx
+        self.orb_cy = cy
 
         # Determine colors based on state
         if self.is_listening and self.is_loading:

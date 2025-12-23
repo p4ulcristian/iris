@@ -14,6 +14,9 @@ Endpoints:
 from flask import Flask, request, jsonify
 import logging
 import threading
+import queue
+import json
+import time
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -62,18 +65,119 @@ logger = logging.getLogger(__name__)
 # Config
 HOST = "127.0.0.1"
 PORT = 8765
+MAX_QUEUE_SIZE = 30
+QUEUE_STATE_FILE = Path("/tmp/iris/speak-queue")
+MESSAGE_DISPLAY_TIME = 5.0  # seconds to show each message
 
 # State
 tts_model = None
 player = None
 is_ready = False
 is_muted = False  # When True, /speak returns immediately without playing
-speak_lock = threading.Lock()
+
+# Queue system
+speak_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
+queue_worker_thread = None
+current_message = None  # Currently playing message text
+current_message_time = None  # When current message started
+displayed_messages = []  # List of {"text": str, "time": float} for bubble display
+displayed_messages_lock = threading.Lock()
+
+
+def write_queue_state():
+    """Write current queue state to file for bubble to read."""
+    global current_message, displayed_messages
+
+    try:
+        QUEUE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        # Get queued messages (peek without removing)
+        queued = []
+        try:
+            # Get a snapshot of queue contents, remove "So, " prefix for display
+            with speak_queue.mutex:
+                for item in list(speak_queue.queue):
+                    text = item["text"]
+                    if text.startswith("So, "):
+                        text = text[4:]
+                    queued.append(text)
+        except Exception:
+            pass
+
+        # Clean up old displayed messages
+        now = time.time()
+        with displayed_messages_lock:
+            displayed_messages = [
+                msg for msg in displayed_messages
+                if now - msg["time"] < MESSAGE_DISPLAY_TIME
+            ]
+            display_list = [msg["text"] for msg in displayed_messages]
+
+        state = {
+            "playing": current_message,
+            "queued": queued,
+            "displayed": display_list,
+            "timestamp": now
+        }
+
+        QUEUE_STATE_FILE.write_text(json.dumps(state))
+    except Exception as e:
+        logger.warning(f"Failed to write queue state: {e}")
+
+
+def queue_worker():
+    """Worker thread that processes the speak queue."""
+    global current_message, current_message_time, tts_model, player
+
+    while True:
+        try:
+            # Get next item from queue (blocks until available)
+            item = speak_queue.get()
+
+            if item is None:  # Shutdown signal
+                break
+
+            text = item["text"]
+            voice = item.get("voice")
+
+            # Set current message and add to displayed
+            current_message = text.replace("So, ", "", 1) if text.startswith("So, ") else text  # Remove warmup prefix for display
+            current_message_time = time.time()
+
+            with displayed_messages_lock:
+                displayed_messages.append({"text": current_message, "time": current_message_time})
+
+            write_queue_state()
+
+            if is_muted:
+                logger.info(f"[QUEUE] Muted - skipping: {text[:50]}...")
+                current_message = None
+                speak_queue.task_done()
+                write_queue_state()
+                continue
+
+            logger.info(f"[QUEUE] Playing: {text[:50]}{'...' if len(text) > 50 else ''}")
+
+            # Synthesize and play
+            try:
+                audio_iter = tts_model.synthesize_stream(text, voice=voice)
+                duration = player.play_stream(audio_iter, blocking=True, trim_prefix=True)
+                logger.info(f"[QUEUE] Played {duration:.2f}s of audio")
+            except Exception as e:
+                logger.error(f"[QUEUE] Playback error: {e}")
+
+            current_message = None
+            speak_queue.task_done()
+            write_queue_state()
+
+        except Exception as e:
+            logger.error(f"[QUEUE] Worker error: {e}")
+            current_message = None
 
 
 def init_models():
     """Initialize TTS model on startup"""
-    global tts_model, player, is_ready
+    global tts_model, player, is_ready, queue_worker_thread
 
     if TTS_AVAILABLE:
         logger.info("Initializing TTS model...")
@@ -82,7 +186,14 @@ def init_models():
 
     tts_model = TextToSpeech()
     player = AudioPlayer(sample_rate=tts_model.sample_rate)
+
+    # Start queue worker thread
+    queue_worker_thread = threading.Thread(target=queue_worker, daemon=True)
+    queue_worker_thread.start()
+    logger.info("Queue worker started")
+
     is_ready = True
+    write_queue_state()
 
     if TTS_AVAILABLE:
         logger.info("TTS model initialized and ready")
@@ -98,15 +209,15 @@ def health():
 
 @app.route('/speak', methods=['POST'])
 def speak():
-    """Speak text"""
-    global tts_model, player, is_muted
+    """Add text to speak queue"""
+    global is_muted
 
     if not is_ready:
         return jsonify({"error": "TTS model not ready"}), 503
 
     if is_muted:
         logger.info("[SPEAK] Muted - ignoring request")
-        return jsonify({"status": "muted", "duration_seconds": 0})
+        return jsonify({"status": "muted", "queued": False})
 
     data = request.get_json()
 
@@ -115,46 +226,35 @@ def speak():
 
     text = data.get('text', '')
     voice = data.get('voice')
-    stream = data.get('stream', True)  # Streaming mode (lower latency)
 
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
     # Prepend filler word to give model warmup runway (fixes bad first syllable)
-    text = "So, " + text
+    text_with_prefix = "So, " + text
 
-    logger.info(f"[SPEAK] voice={voice}, text={text[:50]}{'...' if len(text) > 50 else ''}")
-
-    with speak_lock:
-        if stream:
-            # Streaming mode - lower latency
-            # trim_prefix removes the "So, " we prepended for model warmup
-            audio_iter = tts_model.synthesize_stream(text, voice=voice)
-            duration = player.play_stream(audio_iter, blocking=True, trim_prefix=True)
-        else:
-            # Non-streaming mode - generate all then play
-            audio = tts_model.synthesize(text, voice=voice)
-
-            if audio.size == 0:
-                logger.warning("No audio generated")
-                return jsonify({"status": "ok", "duration_seconds": 0})
-
-            duration = audio.size / tts_model.sample_rate
-            player.play(audio, blocking=True)
-
-        logger.info(f"[SPEAK] Played {duration:.2f}s of audio")
-
-    return jsonify({"status": "ok", "duration_seconds": round(duration, 2)})
+    # Try to add to queue
+    try:
+        speak_queue.put_nowait({"text": text_with_prefix, "voice": voice})
+        queue_size = speak_queue.qsize()
+        logger.info(f"[SPEAK] Queued ({queue_size} in queue): {text[:50]}{'...' if len(text) > 50 else ''}")
+        write_queue_state()
+        return jsonify({"status": "queued", "queue_size": queue_size})
+    except queue.Full:
+        logger.warning(f"[SPEAK] Queue full, rejecting: {text[:50]}...")
+        return jsonify({"error": "Queue full", "max_size": MAX_QUEUE_SIZE}), 503
 
 
 @app.route('/stop', methods=['POST'])
 def stop():
-    """Stop playback"""
-    global player
+    """Stop current playback (skip to next in queue)"""
+    global player, current_message
 
     if player:
         player.stop()
-        logger.info("[STOP] Playback stopped")
+        current_message = None
+        write_queue_state()
+        logger.info("[STOP] Skipped current message")
 
     return jsonify({"status": "ok"})
 
