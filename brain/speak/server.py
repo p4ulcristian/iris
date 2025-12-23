@@ -1,8 +1,19 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script --python 3.11
+# /// script
+# requires-python = ">=3.10,<3.12"
+# dependencies = [
+#     "flask",
+#     "torch",
+#     "sounddevice",
+#     "setuptools",
+#     "resemble-perth",
+#     "chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git",
+# ]
+# ///
 """
 Iris Speak Server - TTS HTTP API
 
-Uses VibeVoice for text-to-speech synthesis.
+Uses Chatterbox Turbo for text-to-speech synthesis.
 
 Endpoints:
   GET  /health  - Health check
@@ -112,7 +123,7 @@ def write_queue_state():
                 msg for msg in displayed_messages
                 if now - msg["time"] < MESSAGE_DISPLAY_TIME
             ]
-            display_list = [msg["text"] for msg in displayed_messages]
+            display_list = [{"text": msg["text"], "voice": msg.get("voice")} for msg in displayed_messages]
 
         state = {
             "playing": current_message,
@@ -146,7 +157,7 @@ def queue_worker():
             current_message_time = time.time()
 
             with displayed_messages_lock:
-                displayed_messages.append({"text": current_message, "time": current_message_time})
+                displayed_messages.append({"text": current_message, "voice": voice, "time": current_message_time})
 
             write_queue_state()
 
@@ -197,6 +208,13 @@ def watchdog():
                 current_message_time = None
 
 
+def display_cleanup():
+    """Periodically clean up old displayed messages."""
+    while True:
+        time.sleep(1)  # Check every second
+        write_queue_state()  # This cleans up old displayed messages
+
+
 def init_models():
     """Initialize TTS model on startup"""
     global tts_model, player, is_ready, queue_worker_thread
@@ -218,6 +236,24 @@ def init_models():
     watchdog_thread = threading.Thread(target=watchdog, daemon=True)
     watchdog_thread.start()
     logger.info("Watchdog started (timeout: {}s)".format(WATCHDOG_TIMEOUT))
+
+    # Start display cleanup thread
+    cleanup_thread = threading.Thread(target=display_cleanup, daemon=True)
+    cleanup_thread.start()
+    logger.info("Display cleanup started")
+
+    # Warmup: synthesize and play startup announcement
+    # This warms up CUDA kernels so first real request is fast
+    if TTS_AVAILABLE:
+        logger.info("Warming up TTS with startup announcement...")
+        try:
+            warmup_text = "Iris has been started."
+            audio = tts_model.synthesize(warmup_text)
+            if audio.size > 0:
+                player.play(audio, blocking=True)
+            logger.info("Warmup complete")
+        except Exception as e:
+            logger.warning(f"Warmup failed: {e}")
 
     is_ready = True
     write_queue_state()

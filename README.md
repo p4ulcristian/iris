@@ -50,6 +50,28 @@ iris peek <name>      # Observe a god's work
 | `Alt+l` | List gods |
 | `Alt+k` | Banish by name |
 
+## Requirements
+
+### System Tools
+
+| Tool | Package (Arch) | Purpose |
+|------|----------------|---------|
+| `uv` | `uv` | Python package manager |
+| `tmux` | `tmux` | Session management |
+| `wtype` | `wtype` | Wayland text input (PTT) |
+| `gtk4-layer-shell` | `gtk4-layer-shell` | Wayland overlay (bubble) |
+
+### Optional
+
+| Tool | Purpose |
+|------|---------|
+| NVIDIA GPU + CUDA | Faster TTS/STT |
+| `claude` CLI | Required for spawning gods |
+
+### Python
+
+Python dependencies are handled automatically via `uv` inline script metadata. Each module declares its own deps - no manual installation needed.
+
 ## Architecture
 
 Iris runs in a tmux session. The master pane is her throne; summoned gods occupy surrounding panes. Each god runs Claude with full autonomy, communicating through the file system.

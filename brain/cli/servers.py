@@ -46,15 +46,6 @@ def _is_running(name: str) -> tuple[bool, int | None]:
         return False, None
 
 
-def _get_venv_python() -> Path:
-    """Get the path to the venv Python interpreter."""
-    venv = config.BRAIN_DIR / ".venv"
-    if venv.exists():
-        return venv / "bin" / "python"
-    # Fallback to current Python
-    return Path(sys.executable)
-
-
 def start(name: str) -> bool:
     """Start a server component."""
     if name not in SERVERS:
@@ -73,40 +64,17 @@ def start(name: str) -> bool:
     log_file = _log_file(name)
     pid_file = _pid_file(name)
 
-    # Check for run scripts (handles venv + env vars)
-    # First try script-specific run file (e.g., run_detector.sh for detector.py)
-    script_name = script_path.stem  # e.g., "detector" from "detector.py"
-    specific_run_script = script_path.parent / f"run_{script_name}.sh"
-    generic_run_script = script_path.parent / "run.sh"
-
     print(f"\033[36mStarting {name}...\033[0m")
 
     # Open log file for output
     with open(log_file, "a") as log:
-        if specific_run_script.exists():
-            # Use script-specific run file
-            process = subprocess.Popen(
-                ["bash", str(specific_run_script)],
-                stdout=log,
-                stderr=log,
-                start_new_session=True,
-            )
-        elif generic_run_script.exists():
-            # Use generic run.sh which sets up venv and env vars correctly
-            process = subprocess.Popen(
-                ["bash", str(generic_run_script)],
-                stdout=log,
-                stderr=log,
-                start_new_session=True,
-            )
-        else:
-            # Fallback to direct python execution
-            process = subprocess.Popen(
-                [str(_get_venv_python()), str(script_path)],
-                stdout=log,
-                stderr=log,
-                start_new_session=True,
-            )
+        # Use uv run to handle dependencies via inline script metadata
+        process = subprocess.Popen(
+            ["uv", "run", str(script_path)],
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+        )
 
     # Write PID
     pid_file.write_text(str(process.pid))
@@ -181,23 +149,51 @@ def status() -> dict[str, dict]:
 
 
 def tail_logs(components: list[str] | None = None):
-    """Tail log files for components."""
+    """Tail log files for components (pure Python implementation)."""
     if not components:
         components = list(SERVERS.keys())
 
-    log_files = []
+    # Build list of (name, log_file) pairs
+    logs = []
     for name in components:
         if name in SERVERS:
             log_file = _log_file(name)
             if log_file.exists():
-                log_files.append(str(log_file))
+                logs.append((name, log_file))
 
-    if not log_files:
+    if not logs:
         print("\033[33mNo log files found\033[0m")
         return
 
+    # Open files and seek to end
+    handles = []
+    for name, log_file in logs:
+        f = open(log_file, 'r')
+        f.seek(0, 2)  # Seek to end
+        handles.append((name, f))
+
+    # Colors for different components
+    colors = {
+        "speak": "\033[33m",    # Yellow
+        "hear": "\033[36m",     # Cyan
+        "express": "\033[35m",  # Magenta
+        "wake": "\033[32m",     # Green
+        "wakeword": "\033[34m", # Blue
+    }
+    reset = "\033[0m"
+
+    print("\033[36mTailing logs (Ctrl+C to stop)...\033[0m")
+
     try:
-        # Use tail -f to follow logs
-        subprocess.run(["tail", "-f"] + log_files)
+        while True:
+            for name, f in handles:
+                line = f.readline()
+                if line:
+                    color = colors.get(name, "\033[37m")
+                    print(f"{color}[{name}]{reset} {line}", end="")
+            time.sleep(0.1)
     except KeyboardInterrupt:
         pass
+    finally:
+        for _, f in handles:
+            f.close()

@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["flask"]
+# ///
 """
 Iris Express Server - Visual UI HTTP API
 
@@ -83,11 +87,9 @@ def start_bubble():
         logger.info("Starting bubble overlay...")
         env = os.environ.copy()
         env['LD_PRELOAD'] = '/usr/lib/libgtk4-layer-shell.so'
-        # Use venv python
-        venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
-        python_cmd = str(venv_python) if venv_python.exists() else sys.executable
+        # Use uv run to handle dependencies
         bubble_process = subprocess.Popen(
-            [python_cmd, str(BUBBLE_SCRIPT)],
+            ["uv", "run", str(BUBBLE_SCRIPT)],
             start_new_session=True,
             env=env
         )

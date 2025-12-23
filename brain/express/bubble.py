@@ -1,12 +1,28 @@
-#!/usr/bin/env python3
-"""Echo floating bubble overlay using GTK4 + layer-shell."""
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "PyGObject",
+#     "pycairo",
+#     "evdev",
+#     "requests",
+#     "pulsectl",
+# ]
+# ///
+"""Iris floating bubble overlay using GTK4 + layer-shell."""
+
+import sys
+from pathlib import Path
+
+# Add iris root to path so we can import brain.cli.config
+IRIS_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(IRIS_ROOT))
 
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 
 from gi.repository import Gtk, Gdk, GLib, Gtk4LayerShell as LayerShell
-from pathlib import Path
 import math
 import os
 import signal
@@ -98,6 +114,27 @@ SPEECH_BUBBLE_GAP = 8  # Gap between speech bubbles and orb
 SPEECH_BUBBLE_MSG_GAP = 6  # Gap between individual messages
 
 
+def hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex color (#RRGGBB) to RGB tuple (0-1 range)."""
+    hex_color = hex_color.lstrip('#')
+    return tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+
+
+def get_god_colors(voice: str) -> tuple:
+    """Get (bg_rgb, fg_rgb) for a god's voice from config."""
+    try:
+        from brain.cli.config import load_god, get_color_hex
+        god = load_god(voice) if voice else {}
+        color_name = god.get("color", "cyan")
+        colors = get_color_hex(color_name)
+        bg = hex_to_rgb(colors.get("bg", "#1a1a1a"))
+        fg = hex_to_rgb(colors.get("fg", "#00ffff"))
+        return bg, fg
+    except Exception:
+        # Fallback: cyan on dark
+        return (0.05, 0.08, 0.12), (0.0, 1.0, 1.0)
+
+
 class IrisBubble(Gtk.Application):
     def __init__(self):
         super().__init__(application_id='com.iris.bubble')
@@ -135,7 +172,8 @@ class IrisBubble(Gtk.Application):
         # Worker tracking
         self.workers = []  # List of {"id": "red", "status": "idle|working|done|error"}
         # Speech queue display
-        self.speech_messages = []  # List of message strings to display
+        self.speech_messages = []  # List of message dicts to display (playing/recent)
+        self.speech_queued = []    # List of queued messages waiting to play
         self.speech_playing = None  # Currently playing message
         # Dynamic orb position (updated each frame)
         self.orb_cx = BUBBLE_SIZE / 2
@@ -505,9 +543,8 @@ class IrisBubble(Gtk.Application):
         return False
 
     def get_audio_devices(self):
-        """Get list of available audio devices (pro-audio mode)."""
-        import subprocess
-        import re
+        """Get list of available audio devices using pulsectl."""
+        import pulsectl
         try:
             # Pro-audio output mapping (discovered via testing)
             PRO_OUTPUT_NAMES = {
@@ -517,27 +554,15 @@ class IrisBubble(Gtk.Application):
 
             devices = [('auto', 'Autoselect device')]
 
-            # Get all active sinks
-            sinks_result = subprocess.run(
-                ['pactl', 'list', 'sinks'],
-                capture_output=True, text=True, timeout=5
-            )
-
-            for sink_block in re.split(r'\nSink #\d+\n', sinks_result.stdout):
-                name_match = re.search(r'Name: (\S+)', sink_block)
-                desc_match = re.search(r'Description: (.+)', sink_block)
-
-                if name_match and desc_match:
-                    sink_name = name_match.group(1)
-                    sink_desc = desc_match.group(1).strip()
-
-                    # Skip echo-cancel and echo virtual sink
-                    if 'echo' in sink_name.lower():
+            with pulsectl.Pulse('iris-bubble') as pulse:
+                for sink in pulse.sink_list():
+                    # Skip echo-cancel and echo virtual sinks
+                    if 'echo' in sink.name.lower():
                         continue
 
                     # Use custom name if available, otherwise use description
-                    display_name = PRO_OUTPUT_NAMES.get(sink_name, sink_desc)
-                    devices.append((sink_name, display_name))
+                    display_name = PRO_OUTPUT_NAMES.get(sink.name, sink.description)
+                    devices.append((sink.name, display_name))
 
             return devices if len(devices) > 1 else [('auto', 'Autoselect device')]
         except Exception as e:
@@ -777,6 +802,7 @@ class IrisBubble(Gtk.Application):
                         data = json.loads(SPEAK_QUEUE_FILE.read_text())
                         self.speech_playing = data.get("playing")
                         self.speech_messages = data.get("displayed", [])
+                        self.speech_queued = data.get("queued", [])
                 except Exception:
                     pass
                 time.sleep(0.1)  # Poll every 100ms
@@ -837,7 +863,8 @@ class IrisBubble(Gtk.Application):
         """Calculate required window size based on speech messages."""
         base_height = BUBBLE_SIZE  # Orb + label area
 
-        if not self.speech_messages:
+        all_messages = list(self.speech_messages) + list(self.speech_queued)
+        if not all_messages:
             return BUBBLE_SIZE, base_height
 
         # Fixed width for speech bubbles
@@ -846,8 +873,9 @@ class IrisBubble(Gtk.Application):
         # Estimate height for messages (assume ~50 chars per line)
         chars_per_line = 45
         msg_height = 0
-        for msg in self.speech_messages:
-            num_lines = max(1, (len(msg) + chars_per_line - 1) // chars_per_line)
+        for msg in all_messages:
+            text = msg.get("text", "") if isinstance(msg, dict) else msg
+            num_lines = max(1, (len(text) + chars_per_line - 1) // chars_per_line)
             bubble_height = SPEECH_BUBBLE_PADDING * 2 + num_lines * SPEECH_BUBBLE_LINE_HEIGHT
             msg_height += bubble_height + SPEECH_BUBBLE_MSG_GAP
 
@@ -904,7 +932,7 @@ class IrisBubble(Gtk.Application):
 
         return lines if lines else [text]
 
-    def draw_speech_bubbles(self, cr, width, start_y, messages):
+    def draw_speech_bubbles(self, cr, width, start_y, messages, dimmed=False):
         """Draw speech message bubbles with text wrapping. Returns total height used."""
         import cairo
 
@@ -914,23 +942,64 @@ class IrisBubble(Gtk.Application):
         cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         cr.set_font_size(SPEECH_BUBBLE_FONT_SIZE)
 
+        # Opacity multiplier for dimmed (queued) messages
+        dim = 0.4 if dimmed else 1.0
+
         total_height = 0
         y = start_y
         bubble_width = SPEECH_BUBBLE_WIDTH
         text_area_width = bubble_width - SPEECH_BUBBLE_PADDING * 2
 
         for i, msg in enumerate(messages):
-            # Wrap text to fit
-            lines = self.wrap_text(cr, msg, text_area_width)
+            # Handle both string and dict formats
+            if isinstance(msg, dict):
+                text = msg.get("text", "")
+                voice = msg.get("voice")
+            else:
+                text = msg
+                voice = None
+
+            # Get god name and colors from config
+            god_name = voice.capitalize() if voice else None
+            bg_color, text_color = get_god_colors(voice)
+
+            # Wrap text to fit (reserve space for god name on first line)
+            if god_name:
+                # Measure god name width in bold
+                cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                name_prefix = f"{god_name}: "
+                name_width = cr.text_extents(name_prefix).width
+                cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+                # First line has less space
+                first_line_width = text_area_width - name_width
+                lines = self.wrap_text(cr, text, text_area_width)
+                # Re-wrap first line to account for name prefix
+                if lines:
+                    first_words = []
+                    remaining = text.split()
+                    current_width = 0
+                    for word in remaining:
+                        test_width = cr.text_extents(" ".join(first_words + [word])).width
+                        if test_width <= first_line_width:
+                            first_words.append(word)
+                        else:
+                            break
+                    if first_words:
+                        first_line = " ".join(first_words)
+                        rest_text = " ".join(remaining[len(first_words):])
+                        lines = [first_line] + (self.wrap_text(cr, rest_text, text_area_width) if rest_text else [])
+            else:
+                lines = self.wrap_text(cr, text, text_area_width)
+
             num_lines = len(lines)
 
             # Calculate bubble height based on lines
             bubble_height = SPEECH_BUBBLE_PADDING * 2 + num_lines * SPEECH_BUBBLE_LINE_HEIGHT
             bubble_x = width - bubble_width - 10  # Right-aligned with margin
 
-            # Draw bubble background (rounded rectangle) - SOLID
+            # Draw bubble background (rounded rectangle)
             radius = 10
-            cr.set_source_rgba(0.08, 0.08, 0.12, 1.0)  # Fully opaque dark
+            cr.set_source_rgba(*bg_color, 1.0 * dim)
 
             cr.new_path()
             cr.arc(bubble_x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
@@ -940,8 +1009,8 @@ class IrisBubble(Gtk.Application):
             cr.close_path()
             cr.fill()
 
-            # Draw border
-            cr.set_source_rgba(0.25, 0.25, 0.35, 1.0)
+            # Draw border (slightly brighter than text color)
+            cr.set_source_rgba(*text_color, 0.4 * dim)
             cr.set_line_width(1)
             cr.new_path()
             cr.arc(bubble_x + radius, y + radius, radius, math.pi, 1.5 * math.pi)
@@ -955,9 +1024,20 @@ class IrisBubble(Gtk.Application):
             text_x = bubble_x + SPEECH_BUBBLE_PADDING
             for j, line in enumerate(lines):
                 text_y = y + SPEECH_BUBBLE_PADDING + (j + 1) * SPEECH_BUBBLE_LINE_HEIGHT - 4
-                cr.set_source_rgba(1, 1, 1, 0.95)
-                cr.move_to(text_x, text_y)
-                cr.show_text(line)
+                cr.set_source_rgba(*text_color, 0.95 * dim)
+
+                if j == 0 and god_name:
+                    # First line: draw god name in bold, then rest in normal
+                    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+                    cr.move_to(text_x, text_y)
+                    cr.show_text(name_prefix)
+                    # Continue with rest of line in normal weight
+                    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+                    cr.show_text(line)
+                else:
+                    cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+                    cr.move_to(text_x, text_y)
+                    cr.show_text(line)
 
             y += bubble_height + SPEECH_BUBBLE_MSG_GAP
             total_height += bubble_height + SPEECH_BUBBLE_MSG_GAP
@@ -981,9 +1061,13 @@ class IrisBubble(Gtk.Application):
         cr.paint()
         cr.set_operator(1)
 
-        # Draw speech bubbles below orb
+        # Draw speech bubbles below orb (displayed first, then queued dimmed)
+        bubbles_y = messages_start_y
         if self.speech_messages:
-            self.draw_speech_bubbles(cr, width, messages_start_y, self.speech_messages)
+            height_used = self.draw_speech_bubbles(cr, width, bubbles_y, self.speech_messages, dimmed=False)
+            bubbles_y += height_used
+        if self.speech_queued:
+            self.draw_speech_bubbles(cr, width, bubbles_y, self.speech_queued, dimmed=True)
 
         # Store orb position for button hit detection
         self.orb_cx = cx

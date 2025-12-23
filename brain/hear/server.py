@@ -1,4 +1,15 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "flask",
+#     "numpy",
+#     "sounddevice",
+#     "soundfile",
+#     "resampy",
+#     "nemo_toolkit[asr]",
+# ]
+# ///
 """
 Iris Hear Server - STT HTTP API
 
