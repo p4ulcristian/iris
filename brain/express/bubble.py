@@ -1124,7 +1124,7 @@ class IrisBubble(Gtk.Application):
             else:
                 label_text = "Loading" + "." * self.loading_dots
         else:
-            label_text = "Idle"
+            label_text = "Iris"
         label_y = cy + radius + 28  # Lower position
 
         cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
