@@ -1,0 +1,133 @@
+# Iris Configuration
+
+# Audio input
+audio:
+  input_device: Arctis 7X+ Mono
+
+# Text-to-speech
+tts:
+  temperature: 0.6
+
+# Project paths
+projects:
+  ironrainbow: $HOME/Work/ironrainbow
+  elevathor: $HOME/Work/elevathor
+  colormecrazy: $HOME/Work/colormecrazy
+
+# Color themes
+# Maps god color names to hex values per theme
+colors:
+  current_theme: catppuccin
+
+  themes:
+    catppuccin:
+      gold:   { bg: "#1e1e2e", fg: "#f9e2af" }
+      yellow: { bg: "#2c2a1e", fg: "#f9e2af" }
+      teal:   { bg: "#1e2c2c", fg: "#94e2d5" }
+      blue:   { bg: "#1e2430", fg: "#89b4fa" }
+      orange: { bg: "#302820", fg: "#fab387" }
+      purple: { bg: "#28203a", fg: "#cba6f7" }
+      cyan:   { bg: "#1e2830", fg: "#89dceb" }
+      pink:   { bg: "#2e2030", fg: "#f5c2e7" }
+      red:    { bg: "#302028", fg: "#f38ba8" }
+      bronze: { bg: "#2e2420", fg: "#fab387" }
+      rose:   { bg: "#2a2030", fg: "#f5c2e7" }
+      violet: { bg: "#24203e", fg: "#b4befe" }
+      green:  { bg: "#1e2e24", fg: "#a6e3a1" }
+      border: { bg: "#cba6f7", fg: "#1e1e2e" }
+
+    dracula:
+      gold:   { bg: "#282a36", fg: "#f1fa8c" }
+      yellow: { bg: "#2d2a1e", fg: "#f1fa8c" }
+      teal:   { bg: "#1e2d2d", fg: "#8be9fd" }
+      blue:   { bg: "#1e2030", fg: "#6272a4" }
+      orange: { bg: "#302818", fg: "#ffb86c" }
+      purple: { bg: "#2a1e32", fg: "#bd93f9" }
+      cyan:   { bg: "#1e282e", fg: "#8be9fd" }
+      pink:   { bg: "#301e2a", fg: "#ff79c6" }
+      red:    { bg: "#301e1e", fg: "#ff5555" }
+      bronze: { bg: "#2e2418", fg: "#ffb86c" }
+      rose:   { bg: "#2e1e2a", fg: "#ff79c6" }
+      violet: { bg: "#241e34", fg: "#bd93f9" }
+      green:  { bg: "#1e2e1e", fg: "#50fa7b" }
+      border: { bg: "#bd93f9", fg: "#282a36" }
+
+    tokyo-night:
+      gold:   { bg: "#1a1b26", fg: "#e0af68" }
+      yellow: { bg: "#24212a", fg: "#e0af68" }
+      teal:   { bg: "#1a1b2c", fg: "#7dcfff" }
+      blue:   { bg: "#1a1f2e", fg: "#7aa2f7" }
+      orange: { bg: "#24212a", fg: "#ff9e64" }
+      purple: { bg: "#1f1a2e", fg: "#bb9af7" }
+      cyan:   { bg: "#1a2230", fg: "#2ac3de" }
+      pink:   { bg: "#261a2a", fg: "#ff007c" }
+      red:    { bg: "#2a1a1e", fg: "#f7768e" }
+      bronze: { bg: "#26201a", fg: "#e0af68" }
+      rose:   { bg: "#2a1a28", fg: "#ff9aca" }
+      violet: { bg: "#1e1a30", fg: "#9d7cd8" }
+      green:  { bg: "#1a2620", fg: "#9ece6a" }
+      border: { bg: "#7aa2f7", fg: "#1a1b26" }
+
+    gruvbox:
+      gold:   { bg: "#282828", fg: "#fabd2f" }
+      yellow: { bg: "#3c3422", fg: "#fabd2f" }
+      teal:   { bg: "#283432", fg: "#8ec07c" }
+      blue:   { bg: "#282e3c", fg: "#83a598" }
+      orange: { bg: "#3c2e22", fg: "#fe8019" }
+      purple: { bg: "#34283c", fg: "#d3869b" }
+      cyan:   { bg: "#28343c", fg: "#83a598" }
+      pink:   { bg: "#3c2834", fg: "#d3869b" }
+      red:    { bg: "#3c2828", fg: "#fb4934" }
+      bronze: { bg: "#3a3224", fg: "#fe8019" }
+      rose:   { bg: "#382832", fg: "#d3869b" }
+      violet: { bg: "#302838", fg: "#b16286" }
+      green:  { bg: "#2e3c28", fg: "#b8bb26" }
+      border: { bg: "#fabd2f", fg: "#282828" }
+
+    nord:
+      gold:   { bg: "#2e3440", fg: "#ebcb8b" }
+      yellow: { bg: "#2e3440", fg: "#ebcb8b" }
+      teal:   { bg: "#2e3844", fg: "#88c0d0" }
+      blue:   { bg: "#2e3648", fg: "#81a1c1" }
+      orange: { bg: "#3b3836", fg: "#d08770" }
+      purple: { bg: "#363244", fg: "#b48ead" }
+      cyan:   { bg: "#2e3a44", fg: "#8fbcbb" }
+      pink:   { bg: "#3a3240", fg: "#b48ead" }
+      red:    { bg: "#3b3238", fg: "#bf616a" }
+      bronze: { bg: "#383632", fg: "#d08770" }
+      rose:   { bg: "#38323c", fg: "#b48ead" }
+      violet: { bg: "#343244", fg: "#5e81ac" }
+      green:  { bg: "#323c38", fg: "#a3be8c" }
+      border: { bg: "#88c0d0", fg: "#2e3440" }
+
+    monokai:
+      gold:   { bg: "#2d2a2e", fg: "#ffd866" }
+      yellow: { bg: "#332b1a", fg: "#ffd866" }
+      teal:   { bg: "#1a3330", fg: "#78dce8" }
+      blue:   { bg: "#1a2533", fg: "#78dce8" }
+      orange: { bg: "#33251a", fg: "#fc9867" }
+      purple: { bg: "#2a1a33", fg: "#ab9df2" }
+      cyan:   { bg: "#1a2d33", fg: "#78dce8" }
+      pink:   { bg: "#331a25", fg: "#ff6188" }
+      red:    { bg: "#331a1a", fg: "#ff6188" }
+      bronze: { bg: "#302315", fg: "#fc9867" }
+      rose:   { bg: "#2d1a28", fg: "#ff6188" }
+      violet: { bg: "#221a33", fg: "#ab9df2" }
+      green:  { bg: "#1a3320", fg: "#a9dc76" }
+      border: { bg: "#a9dc76", fg: "#2d2a2e" }
+
+    rose-pine:
+      gold:   { bg: "#191724", fg: "#f6c177" }
+      yellow: { bg: "#26233a", fg: "#f6c177" }
+      teal:   { bg: "#1f2a32", fg: "#9ccfd8" }
+      blue:   { bg: "#1f2536", fg: "#31748f" }
+      orange: { bg: "#2a2520", fg: "#ea9a97" }
+      purple: { bg: "#2a1f36", fg: "#c4a7e7" }
+      cyan:   { bg: "#1f2830", fg: "#3e8fb0" }
+      pink:   { bg: "#2e1f2a", fg: "#eb6f92" }
+      red:    { bg: "#2e1f22", fg: "#eb6f92" }
+      bronze: { bg: "#2a241e", fg: "#ea9a97" }
+      rose:   { bg: "#2a1f28", fg: "#ebbcba" }
+      violet: { bg: "#241f32", fg: "#c4a7e7" }
+      green:  { bg: "#1f2a24", fg: "#9ccfd8" }
+      border: { bg: "#c4a7e7", fg: "#191724" }

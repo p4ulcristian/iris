@@ -26,9 +26,9 @@ fi
 
 # Get available gods with theme colors (excludes active gods, shuffled)
 GODS_COLORED=$(python3 -c "
-import json
 import random
 import subprocess
+import yaml
 
 # Get used gods from tmux
 result = subprocess.run(
@@ -41,12 +41,14 @@ if result.returncode == 0:
         if ':' in line:
             used.add(line.split(':')[0].strip())
 
-# Load theme colors
-with open('config/settings.json') as f:
-    settings = json.load(f)
+# Load settings and pantheon
+with open('config/settings.yaml') as f:
+    settings = yaml.safe_load(f)
+with open('prompts/pantheon.yaml') as f:
+    pantheon = yaml.safe_load(f)
+
 current_theme = settings.get('colors', {}).get('current_theme', 'catppuccin')
 theme = settings.get('colors', {}).get('themes', {}).get(current_theme, {})
-shades = {s['name']: s for s in theme.get('shades', [])}
 
 # Helper to convert hex to ANSI 24-bit color
 def hex_to_ansi_bg(hex_color):
@@ -61,14 +63,16 @@ def hex_to_ansi_fg(hex_color):
 
 reset = '\033[0m'
 
-# Build list of available gods with colors
-gods = ['Zeus', 'Apollo', 'Artemis', 'Athena', 'Hermes', 'Hades', 'Poseidon',
-        'Hera', 'Ares', 'Hephaestus', 'Aphrodite', 'Dionysus', 'Demeter']
+# Build list of available gods from pantheon
+gods = [name.capitalize() for name in pantheon.keys()]
 available = [g for g in gods if g not in used]
 random.shuffle(available)
 
 for god in available:
-    colors = shades.get(god, {'bg': '#1a1a1a', 'fg': '#ffffff'})
+    # Get god's color name from pantheon, then hex values from theme
+    god_data = pantheon.get(god.lower(), {})
+    color_name = god_data.get('color', 'gray')
+    colors = theme.get(color_name, {'bg': '#1a1a1a', 'fg': '#ffffff'})
     bg = hex_to_ansi_bg(colors['bg'])
     fg = hex_to_ansi_fg(colors['fg'])
     # Full width, centered text (popup is ~50 chars, minus some padding)
@@ -94,7 +98,8 @@ RESULT=$(echo "$GODS_COLORED" | \
 
 # First line is the mission (query), second line is the god
 TASK=$(echo "$RESULT" | head -n1)
-SELECTED_GOD=$(echo "$RESULT" | tail -n1 | xargs)
+# Strip ANSI codes and whitespace from god name
+SELECTED_GOD=$(echo "$RESULT" | tail -n1 | sed 's/\x1b\[[0-9;]*m//g' | xargs)
 
 if [ -z "$SELECTED_GOD" ]; then
     exit 0

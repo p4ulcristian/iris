@@ -1,10 +1,11 @@
 """Configuration loading and path resolution."""
 from __future__ import annotations
 
-import json
 import os
 import random
 from pathlib import Path
+
+import yaml
 
 
 # Derive IRIS_DIR from this file's location
@@ -12,7 +13,10 @@ IRIS_DIR = Path(__file__).parent.parent.parent.resolve()
 BRAIN_DIR = IRIS_DIR / "brain"
 CONFIG_DIR = IRIS_DIR / "config"
 SHADOWS_DIR = IRIS_DIR / "shadows"
-SETTINGS_FILE = CONFIG_DIR / "settings.json"
+PROMPTS_DIR = IRIS_DIR / "prompts"
+
+SETTINGS_FILE = CONFIG_DIR / "settings.yaml"
+PANTHEON_FILE = PROMPTS_DIR / "pantheon.yaml"
 TMUX_CONF = CONFIG_DIR / "tmux.conf"
 
 # Runtime directories
@@ -31,17 +35,41 @@ def ensure_dirs():
 
 
 def load_settings() -> dict:
-    """Load settings from config/settings.json (fresh read, no cache)."""
+    """Load settings from YAML (fresh read, no cache)."""
     if not SETTINGS_FILE.exists():
         return {}
     with open(SETTINGS_FILE) as f:
-        return json.load(f)
+        return yaml.safe_load(f) or {}
 
 
 def save_settings(settings: dict):
-    """Save settings to config/settings.json."""
+    """Save settings to YAML."""
     with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f, indent=2)
+        yaml.dump(settings, f, default_flow_style=False, sort_keys=False)
+
+
+def load_pantheon() -> dict:
+    """Load all gods from pantheon.yaml."""
+    if not PANTHEON_FILE.exists():
+        return {}
+    with open(PANTHEON_FILE) as f:
+        return yaml.safe_load(f) or {}
+
+
+def load_god(name: str) -> dict:
+    """Load a single god's config from pantheon."""
+    pantheon = load_pantheon()
+    return pantheon.get(name.lower(), {
+        "voice": "emma",
+        "color": "gray",
+        "domain": "",
+        "traits": ""
+    })
+
+
+def get_god_names() -> list[str]:
+    """Get list of all god names."""
+    return list(load_pantheon().keys())
 
 
 def get_projects() -> dict[str, Path]:
@@ -49,7 +77,6 @@ def get_projects() -> dict[str, Path]:
     settings = load_settings()
     projects = {}
     for name, path_str in settings.get("projects", {}).items():
-        # Expand $HOME
         expanded = path_str.replace("$HOME", os.environ.get("HOME", ""))
         projects[name] = Path(expanded)
     return projects
@@ -84,7 +111,7 @@ def resolve_project(name: str) -> Path | None:
 def get_current_theme() -> str:
     """Get the current theme name."""
     settings = load_settings()
-    return settings.get("colors", {}).get("current_theme", "atom-one-dark")
+    return settings.get("colors", {}).get("current_theme", "catppuccin")
 
 
 def get_theme_names() -> list[str]:
@@ -102,6 +129,8 @@ def set_current_theme(theme_name: str) -> bool:
     if theme_name not in themes:
         return False
 
+    if "colors" not in settings:
+        settings["colors"] = {}
     settings["colors"]["current_theme"] = theme_name
     save_settings(settings)
     return True
@@ -117,58 +146,24 @@ def get_theme(theme_name: str = None) -> dict:
     return themes.get(theme_name, {})
 
 
-def get_shade_colors() -> list[dict]:
-    """Get shade color definitions from current theme."""
+def get_color_hex(color_name: str) -> dict:
+    """Get hex values for a color name from current theme."""
     theme = get_theme()
-    return theme.get("shades", [])
-
-
-def get_iris_colors() -> dict:
-    """Get iris color scheme."""
-    settings = load_settings()
-    return settings.get("colors", {}).get("iris", {"bg": "#1f1a28", "header": "#c9b1d4"})
+    return theme.get(color_name, {"bg": "#1a1a1a", "fg": "#808080"})
 
 
 def get_border_colors() -> dict:
     """Get border color scheme from current theme."""
     theme = get_theme()
-    if "border" in theme:
-        return theme["border"]
-    # Fallback to global border
-    settings = load_settings()
-    return settings.get("colors", {}).get("border", {"bg": "#c9b1d4", "fg": "#1f1a28"})
+    return theme.get("border", {"bg": "#c9b1d4", "fg": "#1f1a28"})
 
 
-def get_next_shade_color(used_names: set[str]) -> dict:
-    """Get the next available shade color."""
-    colors = get_shade_colors()
-    available = [c for c in colors if c["name"] not in used_names]
+def get_next_god(used_names: set[str]) -> str:
+    """Get the next available god name."""
+    all_gods = get_god_names()
+    available = [n for n in all_gods if n.capitalize() not in used_names]
 
     if available:
         return random.choice(available)
     else:
-        # All used, pick random
-        return random.choice(colors) if colors else {"name": "Gray", "bg": "#1a1a1a", "fg": "#808080"}
-
-
-def get_shade_color_by_name(name: str) -> dict | None:
-    """Get a specific shade color by name (case insensitive)."""
-    colors = get_shade_colors()
-    search = name.lower()
-    for color in colors:
-        if color["name"].lower() == search:
-            return color
-    return None
-
-
-def get_god_config(name: str) -> dict:
-    """Get god configuration (voice, traits) by name."""
-    settings = load_settings()
-    gods = settings.get("gods", {})
-    return gods.get(name, {"voice": "emma", "traits": ""})
-
-
-def get_god_prompt() -> str:
-    """Get the god prompt template."""
-    settings = load_settings()
-    return settings.get("prompts", {}).get("god", "You are {{GOD_NAME}}, a god. Task: {{TASK}}")
+        return random.choice(all_gods) if all_gods else "apollo"

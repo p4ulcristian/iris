@@ -68,22 +68,24 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
 
     config.ensure_dirs()
 
-    # Get god name and colors
+    # Get god name
     used = _get_used_names()
     if god_name:
-        # Use specified god, get their color from theme
-        color = config.get_shade_color_by_name(god_name) or config.get_next_shade_color(used)
-        god_name = color["name"]  # Normalize casing
+        god_name = god_name.capitalize()
     else:
-        color = config.get_next_shade_color(used)
-        god_name = color["name"]
-    color_bg = color.get("bg", "#1a1a1a")
-    color_fg = color.get("fg", "#ffffff")
+        god_name = config.get_next_god(used).capitalize()
 
-    # Get god config (voice, traits) - voice param overrides config
-    god_config = config.get_god_config(god_name)
-    voice = voice or god_config.get("voice", "emma")
-    traits = god_config.get("traits", "")
+    # Load god data from pantheon
+    god_data = config.load_god(god_name)
+    voice = voice or god_data.get("voice", "emma")
+    color_name = god_data.get("color", "gray")
+    domain = god_data.get("domain", "")
+    traits = god_data.get("traits", "")
+
+    # Get hex colors from theme
+    color_hex = config.get_color_hex(color_name)
+    color_bg = color_hex.get("bg", "#1a1a1a")
+    color_fg = color_hex.get("fg", "#ffffff")
 
     # Generate UUID
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -93,16 +95,38 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     # Resolve project
     project_dir = config.resolve_project(project) if project else None
 
-    # Build init message from template
-    prompt_template = config.get_god_prompt()
-    init_msg = prompt_template.replace("{{GOD_NAME}}", god_name)
-    init_msg = init_msg.replace("{{GOD_UUID}}", god_uuid)
-    init_msg = init_msg.replace("{{VOICE}}", voice)
-    init_msg = init_msg.replace("{{TRAITS}}", traits)
-    init_msg = init_msg.replace("{{TASK}}", task)
+    # Create shadows folder
+    shadow_dir = config.SHADOWS_DIR / god_uuid
+    shadow_dir.mkdir(parents=True, exist_ok=True)
 
-    # Escape for shell
-    escaped_msg = init_msg.replace("'", "'\"'\"'")
+    # Write identity.md for the god to read
+    spawned_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    identity_content = f"""# Identity
+
+| Key | Value |
+|-----|-------|
+| God | {god_name} |
+| UUID | {god_uuid} |
+| Voice | {voice} |
+| Color | {color_name} |
+| Domain | {domain} |
+| Task | {task} |
+| Spawned | {spawned_time} |
+
+## Traits
+
+{traits}
+"""
+    (shadow_dir / "identity.md").write_text(identity_content)
+    (shadow_dir / "task.txt").write_text(task)
+    (shadow_dir / "name.txt").write_text(god_name)
+    (shadow_dir / "spawned.txt").write_text(datetime.now().isoformat())
+    (shadow_dir / "status.txt").write_text("laboring")
+    if project:
+        (shadow_dir / "project.txt").write_text(project)
+
+    # Simple init message - context comes from @imports in CLAUDE.md
+    init_msg = "Start."
 
     # Build claude command
     model_flag = f"--model {model}" if model else ""
@@ -111,18 +135,8 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     claude_cmd = (
         f"cd '{config.IRIS_DIR}' && "
         f"GOD_UUID='{god_uuid}' GOD_NAME='{god_name}' "
-        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{escaped_msg}'"
+        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{init_msg}'"
     )
-
-    # Create shadows folder
-    shadow_dir = config.SHADOWS_DIR / god_uuid
-    shadow_dir.mkdir(parents=True, exist_ok=True)
-    (shadow_dir / "task.txt").write_text(task)
-    (shadow_dir / "name.txt").write_text(god_name)
-    (shadow_dir / "spawned.txt").write_text(datetime.now().isoformat())
-    (shadow_dir / "status.txt").write_text("laboring")
-    if project:
-        (shadow_dir / "project.txt").write_text(project)
 
     # Create pane
     pane_id = tmux.create_pane(claude_cmd)
