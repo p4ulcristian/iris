@@ -158,10 +158,13 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     model_flag = f"--model {model}" if model else ""
     project_flag = f"--add-dir '{god['project_dir']}'" if god["project_dir"] else ""
 
+    # Escape single quotes for shell: ' -> '\''
+    init_msg_escaped = god['init_msg'].replace("'", "'\\''")
+
     claude_cmd = (
         f"cd '{config.IRIS_DIR}' && "
         f"GOD_UUID='{god['uuid']}' GOD_NAME='{god['name']}' "
-        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{god['init_msg']}'"
+        f"claude {model_flag} --dangerously-skip-permissions {project_flag} -- '{init_msg_escaped}'"
     )
 
     # Create pane or window
