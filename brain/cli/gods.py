@@ -125,8 +125,8 @@ def spawn(task: str, project: str | None = None, model: str | None = None, voice
     if project:
         (shadow_dir / "project.txt").write_text(project)
 
-    # Simple init message - context comes from @imports in CLAUDE.md
-    init_msg = "Start."
+    # Init message: mission first, then identity reference
+    init_msg = f"{task}\n\nYour identity: shadows/{god_uuid}/identity.md"
 
     # Build claude command
     model_flag = f"--model {model}" if model else ""
