@@ -112,7 +112,7 @@ def write_queue_state():
                     text = item["text"]
                     if text.startswith("So, "):
                         text = text[4:]
-                    queued.append(text)
+                    queued.append({"text": text, "voice": item.get("voice")})
         except Exception:
             pass
 

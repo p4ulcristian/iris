@@ -425,6 +425,90 @@ def _get_active_gods() -> dict:
     return result
 
 
+def resume(session_id: str, god_uuid: str | None = None, god_name: str | None = None) -> dict | None:
+    """Resume a Claude session as a god.
+
+    Args:
+        session_id: The Claude session UUID to resume
+        god_uuid: The god's UUID (from shadows/*)
+        god_name: The god's name (Zeus, Apollo, etc.)
+    """
+    if not tmux.session_exists():
+        print("\033[31mIris not running. Start with: iris\033[0m")
+        return None
+
+    # If we have god info, set up proper god pane
+    if god_uuid and god_name:
+        god_data = config.load_god(god_name)
+        color_name = god_data.get("color", "gray")
+        color_hex = config.get_color_hex(color_name)
+        color_bg = color_hex.get("bg", "#1a1a1a")
+        color_fg = color_hex.get("fg", "#ffffff")
+
+        # Check if shadow dir exists, get task for title
+        shadow_dir = config.SHADOWS_DIR / god_uuid
+        task = ""
+        if shadow_dir.exists():
+            task_file = shadow_dir / "task.txt"
+            if task_file.exists():
+                task = task_file.read_text().strip()
+
+        # Build claude command with god environment
+        claude_cmd = (
+            f"cd '{config.IRIS_DIR}' && "
+            f"GOD_UUID='{god_uuid}' GOD_NAME='{god_name}' "
+            f"claude --dangerously-skip-permissions --resume '{session_id}'"
+        )
+
+        pane_id = tmux.create_pane(claude_cmd)
+        if not pane_id:
+            return None
+
+        # Update shadow dir with new pane_id
+        if shadow_dir.exists():
+            (shadow_dir / "pane_id.txt").write_text(pane_id)
+            (shadow_dir / "status.txt").write_text("laboring")
+            # Remove died marker if present
+            died_file = shadow_dir / "died.txt"
+            if died_file.exists():
+                died_file.unlink()
+
+        # Set pane title and style
+        title = f"{god_name}: {task[:40]}" if task else f"{god_name}: resumed"
+        tmux.set_pane_title(pane_id, title)
+        tmux.set_pane_style(pane_id, color_bg, color_fg)
+
+        # Start logging
+        tmux.pipe_pane(pane_id, f"cat >> '{shadow_dir}/output.log'")
+
+        # Apply layout
+        tmux.apply_layout()
+
+        return {
+            "name": god_name,
+            "uuid": god_uuid,
+            "pane_id": pane_id,
+            "session_id": session_id,
+        }
+    else:
+        # Not a god session, just resume normally
+        claude_cmd = (
+            f"cd '{config.IRIS_DIR}' && "
+            f"claude --dangerously-skip-permissions --resume '{session_id}'"
+        )
+
+        pane_id = tmux.create_pane(claude_cmd)
+        if not pane_id:
+            return None
+
+        tmux.apply_layout()
+
+        return {
+            "pane_id": pane_id,
+            "session_id": session_id,
+        }
+
+
 def _get_history(active_uuids: set[str]) -> list:
     """Get history from shadows folders (non-active)."""
     result = []

@@ -7,6 +7,7 @@
 #     "evdev",
 #     "requests",
 #     "pulsectl",
+#     "pyyaml",
 # ]
 # ///
 """Iris floating bubble overlay using GTK4 + layer-shell."""
