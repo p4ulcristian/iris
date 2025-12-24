@@ -60,6 +60,7 @@ def main():
         prog="iris",
         description="Iris - messenger of the gods, orchestrating divine workers",
     )
+    parser.add_argument("--no-servers", action="store_true", help="Start tmux session without voice servers")
     subparsers = parser.add_subparsers(dest="command")
 
     # iris (no command) - start everything
@@ -119,7 +120,7 @@ def main():
 
     # No command = start all
     if args.command is None:
-        return cmd_start([])
+        return cmd_start([], no_servers=args.no_servers)
 
     # Dispatch
     commands = {
@@ -139,18 +140,19 @@ def main():
     return commands[args.command]()
 
 
-def cmd_start(components: list[str]):
+def cmd_start(components: list[str], no_servers: bool = False):
     """Start Iris components."""
     # Check input group when starting wake (needed for CapsLock)
     starting_wake = not components or "wake" in components
-    if starting_wake and not check_input_group():
+    if starting_wake and not no_servers and not check_input_group():
         fix_input_group()
         # Continue anyway - they might have just added themselves
 
     if not components:
-        # Start everything
+        # Start everything (or just tmux if --no-servers)
         tmux.start_session()
-        servers.start_all()
+        if not no_servers:
+            servers.start_all()
     else:
         for comp in components:
             if comp == "cli":
