@@ -123,7 +123,7 @@ def start_session():
     tmux_ops.set_environment(config.SESSION, "IRIS_DIR", str(config.IRIS_DIR))
 
     # Style the session
-    tmux_ops.set_option(config.SESSION, "status", "off")
+    tmux_ops.set_option(config.SESSION, "status", "on")
     tmux_ops.set_option(config.SESSION, "pane-border-status", "top")
     tmux_ops.set_option(config.SESSION, "pane-border-lines", "heavy")
 
