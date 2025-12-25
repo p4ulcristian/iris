@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "bunx",
+      "args": ["-y", "@playwright/mcp@latest", "--isolated"]
+    },
+    "linear": {
+      "command": "bunx",
+      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+    }
+  }
+}

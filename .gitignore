@@ -45,3 +45,13 @@ bin/
 # Vendored binaries (downloaded, not committed)
 vendor/bin/*
 !vendor/bin/.gitkeep
+
+# Playwright
+.playwright-mcp/
+
+# Voice backups
+brain/speak/voices/originals_backup/
+brain/speak/voices/pre_libritts_backup/
+
+# Test folders
+test_chatterbox/
