@@ -1,0 +1,31 @@
+{
+  "name": "iris",
+  "version": "2.0.0",
+  "description": "Voice assistant that summons the Greek pantheon",
+  "main": "main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"node -e 'setTimeout(()=>{},2000)' && electron . --dev\"",
+    "dev:vite": "vite",
+    "dev:electron": "electron . --dev",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "node-pty": "^1.1.0",
+    "motion": "^12.0.0",
+    "ws": "^8.18.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "electron": "^39.0.0",
+    "vite": "^6.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "tailwindcss": "^4.0.0",
+    "concurrently": "^9.0.0"
+  }
+}
