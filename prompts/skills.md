@@ -16,6 +16,7 @@ python -m brain.skills.<skill> <args>
 | `glow` | `python -m brain.skills.glow file.md` | Open markdown in glow pane |
 | `nvim` | `python -m brain.skills.nvim file` | Open file in neovim pane |
 | `run` | `python -m brain.skills.run "cmd"` | Run command in new pane |
+| `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
 
 ## nvim-highlight
 
