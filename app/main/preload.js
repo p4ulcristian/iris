@@ -1,6 +1,7 @@
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
-// Only expose the WebSocket URL - everything else goes through WS
 contextBridge.exposeInMainWorld('iris', {
-  wsUrl: 'ws://localhost:9999'
+  wsUrl: 'ws://localhost:9999',
+  // Window controls for frameless
+  windowControl: (action) => ipcRenderer.send('window-control', action)
 })

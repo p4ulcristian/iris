@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { AnimatePresence } from 'motion/react'
 import GodTabs from './components/GodTabs'
 import GodCard from './components/GodCard'
 import StatusBar from './components/StatusBar'
@@ -35,7 +34,7 @@ export default function App() {
 
     switch (event) {
       case 'connected':
-        // Initial state from server
+        // Initial state from server - discover existing gods
         if (data.gods) {
           data.gods.forEach(god => addGod(god))
         }
@@ -46,12 +45,12 @@ export default function App() {
         break
 
       case 'god:status':
-        updateGodStatus(data.sessionName, data.status)
+        updateGodStatus(data.godName || data.name, data.status)
         break
 
       case 'god:killed':
       case 'god:exited':
-        removeGod(data.sessionName)
+        removeGod(data.godName || data.name)
         break
 
       case 'voice:listening':
@@ -84,10 +83,10 @@ export default function App() {
   }, [gods, send])
 
   // Banish a god
-  const handleBanish = useCallback((sessionName) => {
+  const handleBanish = useCallback((godName) => {
     send({
       event: 'god:kill',
-      sessionName
+      godName
     })
   }, [send])
 
@@ -110,9 +109,9 @@ export default function App() {
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault()
         if (gods.length > 1) {
-          const idx = gods.findIndex(g => g.sessionName === activeGod)
+          const idx = gods.findIndex(g => g.name === activeGod)
           const nextIdx = (idx + 1) % gods.length
-          setActiveGod(gods[nextIdx].sessionName)
+          setActiveGod(gods[nextIdx].name)
         }
       }
     }
@@ -121,7 +120,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [gods, activeGod, handleSummon, handleBanish, setActiveGod])
 
-  const activeGodData = gods.find(g => g.sessionName === activeGod)
+  const activeGodData = gods.find(g => g.name === activeGod)
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
@@ -138,22 +137,23 @@ export default function App() {
 
       {/* Main content */}
       <main className="flex-1 relative overflow-hidden">
-        <AnimatePresence mode="wait">
-          {activeGodData ? (
+        {gods.length === 0 ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-secondary">
+            <p className="text-base">No gods summoned</p>
+            <p className="text-sm opacity-70">
+              Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> or click Summon
+            </p>
+          </div>
+        ) : (
+          gods.map(god => (
             <GodCard
-              key={activeGodData.sessionName}
-              god={activeGodData}
-              onClose={() => handleBanish(activeGodData.sessionName)}
+              key={god.name}
+              god={god}
+              isActive={god.name === activeGod}
+              onClose={() => handleBanish(god.name)}
             />
-          ) : (
-            <div key="empty" className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-secondary">
-              <p className="text-base">No gods summoned</p>
-              <p className="text-sm opacity-70">
-                Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> or click Summon
-              </p>
-            </div>
-          )}
-        </AnimatePresence>
+          ))
+        )}
       </main>
 
       {/* Status bar */}

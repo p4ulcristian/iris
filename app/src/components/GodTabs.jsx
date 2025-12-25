@@ -13,22 +13,22 @@ export default function GodTabs({ gods, activeGod, onSelect, onClose, onSummon, 
       <AnimatePresence mode="popLayout">
         {gods.map(god => (
           <motion.button
-            key={god.sessionName}
+            key={god.name}
             initial={{ opacity: 0, x: 20, scale: 0.9 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.15 } }}
             transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            onClick={() => onSelect(god.sessionName)}
+            onClick={() => onSelect(god.name)}
             className={`
               flex items-center gap-2 h-8 px-3
               bg-bg-tertiary border border-border rounded-md
               text-sm cursor-pointer transition-all duration-200
               hover:bg-[#222] hover:border-[#333]
-              ${activeGod === god.sessionName ? 'bg-bg-primary text-text-primary' : 'text-text-secondary'}
+              ${activeGod === god.name ? 'bg-bg-primary text-text-primary' : 'text-text-secondary'}
             `}
             style={{
-              borderColor: activeGod === god.sessionName ? god.color : undefined,
-              boxShadow: activeGod === god.sessionName ? `0 0 12px ${god.color}33` : undefined
+              borderColor: activeGod === god.name ? god.color : undefined,
+              boxShadow: activeGod === god.name ? `0 0 12px ${god.color}33` : undefined
             }}
           >
             <span className="text-[10px]" style={{ color: god.color }}>●</span>
@@ -39,7 +39,7 @@ export default function GodTabs({ gods, activeGod, onSelect, onClose, onSummon, 
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                onClose(god.sessionName)
+                onClose(god.name)
               }}
               className="w-4 h-4 flex items-center justify-center text-text-secondary text-sm opacity-0 hover:opacity-100 hover:bg-white/10 hover:text-red-500 rounded transition-all group-hover:opacity-100"
               title="Banish"

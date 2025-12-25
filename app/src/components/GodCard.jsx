@@ -1,15 +1,16 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'motion/react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
-export default function GodCard({ god, onClose }) {
+export default function GodCard({ god, isActive, onClose }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
   const wsRef = useRef(null)
 
-  const { sessionName, name, color, status } = god
+  const { name, color } = god
+  const godName = name
 
   // Connect to PTY via WebSocket
   useEffect(() => {
@@ -40,19 +41,19 @@ export default function GodCard({ god, onClose }) {
     requestAnimationFrame(() => {
       fitAddon.fit()
       // Request PTY attachment
-      sendWs({ event: 'pty:attach', sessionName, cols: term.cols, rows: term.rows })
+      sendWs({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows })
     })
 
     // Handle user input -> send to PTY
     term.onData((data) => {
-      sendWs({ event: 'pty:input', sessionName, data })
+      sendWs({ event: 'pty:input', godName, data })
     })
 
     // Resize observer
     const resizeObserver = new ResizeObserver(() => {
       if (fitAddonRef.current && termRef.current) {
         fitAddonRef.current.fit()
-        sendWs({ event: 'pty:resize', sessionName, cols: termRef.current.cols, rows: termRef.current.rows })
+        sendWs({ event: 'pty:resize', godName, cols: termRef.current.cols, rows: termRef.current.rows })
       }
     })
     resizeObserver.observe(containerRef.current)
@@ -63,13 +64,13 @@ export default function GodCard({ god, onClose }) {
 
     ws.onopen = () => {
       // Request attachment
-      ws.send(JSON.stringify({ event: 'pty:attach', sessionName, cols: term.cols, rows: term.rows }))
+      ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
     }
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
-        if (msg.event === 'pty:output' && msg.sessionName === sessionName) {
+        if (msg.event === 'pty:output' && msg.godName === godName) {
           term.write(msg.data)
         }
       } catch (e) {
@@ -91,15 +92,11 @@ export default function GodCard({ god, onClose }) {
       term.dispose()
       ws.close()
     }
-  }, [sessionName, color])
+  }, [godName, color])
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-      className="absolute inset-0 flex flex-col bg-bg-primary"
+    <div
+      className={`absolute inset-0 flex flex-col bg-bg-primary transition-opacity duration-150 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
     >
       {/* Header */}
       <div
@@ -110,7 +107,6 @@ export default function GodCard({ god, onClose }) {
         }}
       >
         <span className="text-sm font-medium" style={{ color }}>{name}</span>
-        <span className="ml-2 text-xs text-text-secondary opacity-60">{sessionName}</span>
         <div className="flex-1" />
         <button
           onClick={onClose}
@@ -122,7 +118,7 @@ export default function GodCard({ god, onClose }) {
       </div>
 
       {/* Terminal */}
-      <div ref={containerRef} className="flex-1 overflow-hidden p-2" style={{ minHeight: 0 }} />
-    </motion.div>
+      <div ref={containerRef} className="flex-1 overflow-hidden" style={{ minHeight: 0 }} />
+    </div>
   )
 }

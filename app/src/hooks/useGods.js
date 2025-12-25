@@ -21,34 +21,34 @@ export function useGods() {
   const [activeGod, setActiveGod] = useState(null)
 
   const addGod = useCallback((god) => {
-    const name = god.name.toLowerCase()
-    const color = GOD_COLORS[name] || '#888'
+    const nameLower = god.name.toLowerCase()
+    const color = GOD_COLORS[nameLower] || god.color || '#888'
 
     setGods(prev => {
-      // Don't add if already exists
-      if (prev.find(g => g.sessionName === god.sessionName)) {
+      // Don't add if already exists (by name)
+      if (prev.find(g => g.name.toLowerCase() === nameLower)) {
         return prev
       }
-      return [...prev, { ...god, color, status: 'laboring' }]
+      return [...prev, { ...god, color, status: god.status || 'laboring' }]
     })
 
     // Auto-focus new god
-    setActiveGod(god.sessionName)
+    setActiveGod(god.name)
   }, [])
 
-  const removeGod = useCallback((sessionName) => {
-    setGods(prev => prev.filter(g => g.sessionName !== sessionName))
+  const removeGod = useCallback((godName) => {
+    setGods(prev => prev.filter(g => g.name !== godName))
 
     // If removing active god, switch to another
     setActiveGod(current => {
-      if (current !== sessionName) return current
-      return gods.find(g => g.sessionName !== sessionName)?.sessionName || null
+      if (current !== godName) return current
+      return gods.find(g => g.name !== godName)?.name || null
     })
   }, [gods])
 
-  const updateGodStatus = useCallback((sessionName, status) => {
+  const updateGodStatus = useCallback((godName, status) => {
     setGods(prev => prev.map(g =>
-      g.sessionName === sessionName ? { ...g, status } : g
+      g.name === godName ? { ...g, status } : g
     ))
   }, [])
 

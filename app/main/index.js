@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import path from 'path'
+import fs from 'fs'
+import os from 'os'
 import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
 import { execSync, spawn } from 'child_process'
@@ -8,13 +10,18 @@ import pty from 'node-pty'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const WS_PORT = 9999
-const SESSION_PREFIX = 'iris-'
+const SOCKET_DIR = path.join(os.homedir(), '.local/share/iris/sockets')
+
+// Ensure socket directory exists
+if (!fs.existsSync(SOCKET_DIR)) {
+  fs.mkdirSync(SOCKET_DIR, { recursive: true })
+}
 
 // State
 let mainWindow = null
 let wss = null
 const wsClients = new Set()
-const ptyProcesses = new Map() // sessionName -> { pty, clients: Set<ws> }
+const ptyProcesses = new Map() // godName -> { pty, clients: Set<ws> }
 
 const GOD_COLORS = {
   zeus: '#ffd700',
@@ -32,37 +39,28 @@ const GOD_COLORS = {
   demeter: '#4caf50'
 }
 
-// --- TMUX HELPERS ---
+// --- DTACH HELPERS ---
 
-function tmux(...args) {
-  try {
-    return execSync(`tmux ${args.join(' ')}`, { encoding: 'utf-8' }).trim()
-  } catch (e) {
-    return null
-  }
+function getSocketPath(godName) {
+  return path.join(SOCKET_DIR, `${godName.toLowerCase()}.sock`)
 }
 
-function sessionExists(name) {
-  try {
-    execSync(`tmux has-session -t ${SESSION_PREFIX}${name} 2>/dev/null`)
-    return true
-  } catch {
-    return false
-  }
+function socketExists(godName) {
+  const socketPath = getSocketPath(godName)
+  return fs.existsSync(socketPath)
 }
 
-function listGodSessions() {
+function listGodSockets() {
   try {
-    const output = execSync(`tmux list-sessions -F "#{session_name}" 2>/dev/null`, { encoding: 'utf-8' })
-    return output
-      .split('\n')
-      .filter(s => s.startsWith(SESSION_PREFIX))
-      .map(s => {
-        const name = s.replace(SESSION_PREFIX, '')
+    const files = fs.readdirSync(SOCKET_DIR)
+    return files
+      .filter(f => f.endsWith('.sock'))
+      .map(f => {
+        const name = f.replace('.sock', '')
         const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
         return {
-          sessionName: s,
           name: capitalName,
+          socketPath: path.join(SOCKET_DIR, f),
           color: GOD_COLORS[name.toLowerCase()] || '#888',
           status: 'laboring'
         }
@@ -73,13 +71,20 @@ function listGodSessions() {
 }
 
 function createGodSession(name, task = '') {
-  const sessionName = `${SESSION_PREFIX}${name.toLowerCase()}`
+  const godName = name.toLowerCase()
+  const socketPath = getSocketPath(godName)
 
-  if (sessionExists(name.toLowerCase())) {
-    return { sessionName, name, color: GOD_COLORS[name.toLowerCase()] || '#888', status: 'laboring', exists: true }
+  if (socketExists(godName)) {
+    return {
+      name,
+      socketPath,
+      color: GOD_COLORS[godName] || '#888',
+      status: 'laboring',
+      exists: true
+    }
   }
 
-  // Create tmux session with claude
+  // Build command
   let cmd = 'claude'
   if (task) {
     const escapedTask = task.replace(/"/g, '\\"')
@@ -87,56 +92,93 @@ function createGodSession(name, task = '') {
   }
 
   try {
-    execSync(`tmux new-session -d -s ${sessionName} "${cmd}"`)
+    // Create detached dtach session
+    // -n = create new socket, run detached
+    // -E = disable detach character (we manage lifecycle)
+    const projectRoot = path.join(__dirname, '../..')
+    execSync(`dtach -n "${socketPath}" -E ${cmd}`, {
+      stdio: 'ignore',
+      detached: true,
+      cwd: projectRoot
+    })
+
+    // Give it a moment to start
+    execSync('sleep 0.3')
+
     return {
-      sessionName,
       name,
-      color: GOD_COLORS[name.toLowerCase()] || '#888',
+      socketPath,
+      color: GOD_COLORS[godName] || '#888',
       status: 'laboring'
     }
   } catch (e) {
-    console.error('Failed to create session:', e)
+    console.error('Failed to create dtach session:', e)
     return null
   }
 }
 
-function killGodSession(sessionName) {
+function killGodSession(godName) {
+  const socketPath = getSocketPath(godName.toLowerCase())
+
+  // Find and kill the process attached to this socket
   try {
-    execSync(`tmux kill-session -t ${sessionName}`)
-    return true
-  } catch {
-    return false
-  }
+    // Get PID from lsof
+    const output = execSync(`lsof -t "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' }).trim()
+    if (output) {
+      const pids = output.split('\n')
+      pids.forEach(pid => {
+        try {
+          process.kill(parseInt(pid), 'SIGTERM')
+        } catch {}
+      })
+    }
+  } catch {}
+
+  // Remove socket file if it still exists
+  try {
+    if (fs.existsSync(socketPath)) {
+      fs.unlinkSync(socketPath)
+    }
+  } catch {}
+
+  return true
 }
 
 // --- PTY MANAGEMENT ---
 
-function attachPty(sessionName, ws, cols, rows) {
-  // If PTY already exists for this session, just add client
-  if (ptyProcesses.has(sessionName)) {
-    const entry = ptyProcesses.get(sessionName)
+function attachPty(godName, ws, cols, rows) {
+  const socketPath = getSocketPath(godName.toLowerCase())
+
+  if (!fs.existsSync(socketPath)) {
+    ws.send(JSON.stringify({ event: 'error', message: `Socket not found: ${socketPath}` }))
+    return
+  }
+
+  // If PTY already exists for this god, just add client
+  if (ptyProcesses.has(godName)) {
+    const entry = ptyProcesses.get(godName)
     entry.clients.add(ws)
     return
   }
 
-  // Spawn PTY running tmux attach
-  const ptyProcess = pty.spawn('tmux', ['attach', '-t', sessionName], {
+  // Spawn PTY running dtach attach
+  const ptyProcess = pty.spawn('dtach', ['-a', socketPath], {
     name: 'xterm-256color',
-    cols: cols || 80,
-    rows: rows || 24,
+    cols: cols || 120,
+    rows: rows || 40,
     cwd: process.env.HOME,
     env: process.env
   })
 
   const clients = new Set([ws])
-  ptyProcesses.set(sessionName, { pty: ptyProcess, clients })
+  ptyProcesses.set(godName, { pty: ptyProcess, clients, socketPath })
 
   // Forward PTY output to all connected clients
   ptyProcess.onData((data) => {
-    const entry = ptyProcesses.get(sessionName)
+    const entry = ptyProcesses.get(godName)
     if (!entry) return
 
-    const msg = JSON.stringify({ event: 'pty:output', sessionName, data })
+    const msg = JSON.stringify({ event: 'pty:output', godName, data })
     entry.clients.forEach(client => {
       if (client.readyState === 1) {
         client.send(msg)
@@ -146,41 +188,41 @@ function attachPty(sessionName, ws, cols, rows) {
 
   // Handle PTY exit
   ptyProcess.onExit(({ exitCode }) => {
-    console.log(`PTY for ${sessionName} exited with code ${exitCode}`)
-    const entry = ptyProcesses.get(sessionName)
+    console.log(`PTY for ${godName} exited with code ${exitCode}`)
+    const entry = ptyProcesses.get(godName)
     if (entry) {
       entry.clients.forEach(client => {
         if (client.readyState === 1) {
-          client.send(JSON.stringify({ event: 'god:exited', sessionName }))
+          client.send(JSON.stringify({ event: 'god:exited', godName }))
         }
       })
-      ptyProcesses.delete(sessionName)
+      ptyProcesses.delete(godName)
     }
   })
 }
 
-function detachPty(sessionName, ws) {
-  const entry = ptyProcesses.get(sessionName)
+function detachPty(godName, ws) {
+  const entry = ptyProcesses.get(godName)
   if (!entry) return
 
   entry.clients.delete(ws)
 
-  // If no more clients, kill PTY
+  // If no more clients, kill PTY (but NOT the dtach session)
   if (entry.clients.size === 0) {
     entry.pty.kill()
-    ptyProcesses.delete(sessionName)
+    ptyProcesses.delete(godName)
   }
 }
 
-function sendToPty(sessionName, data) {
-  const entry = ptyProcesses.get(sessionName)
+function sendToPty(godName, data) {
+  const entry = ptyProcesses.get(godName)
   if (entry) {
     entry.pty.write(data)
   }
 }
 
-function resizePty(sessionName, cols, rows) {
-  const entry = ptyProcesses.get(sessionName)
+function resizePty(godName, cols, rows) {
+  const entry = ptyProcesses.get(godName)
   if (entry) {
     entry.pty.resize(cols, rows)
   }
@@ -212,43 +254,43 @@ function handleMessage(ws, msg) {
     }
 
     case 'god:kill': {
-      const { sessionName } = data
+      const godName = data.godName || data.name
       // Detach all PTYs first
-      if (ptyProcesses.has(sessionName)) {
-        const entry = ptyProcesses.get(sessionName)
+      if (ptyProcesses.has(godName)) {
+        const entry = ptyProcesses.get(godName)
         entry.pty.kill()
-        ptyProcesses.delete(sessionName)
+        ptyProcesses.delete(godName)
       }
-      // Kill tmux session
-      killGodSession(sessionName)
-      broadcast('god:killed', { sessionName })
+      // Kill dtach session
+      killGodSession(godName)
+      broadcast('god:killed', { godName })
       break
     }
 
     case 'god:list': {
-      const gods = listGodSessions()
+      const gods = listGodSockets()
       ws.send(JSON.stringify({ event: 'god:list', gods }))
       break
     }
 
     // PTY management
     case 'pty:attach': {
-      attachPty(data.sessionName, ws, data.cols, data.rows)
+      attachPty(data.godName, ws, data.cols, data.rows)
       break
     }
 
     case 'pty:detach': {
-      detachPty(data.sessionName, ws)
+      detachPty(data.godName, ws)
       break
     }
 
     case 'pty:input': {
-      sendToPty(data.sessionName, data.data)
+      sendToPty(data.godName, data.data)
       break
     }
 
     case 'pty:resize': {
-      resizePty(data.sessionName, data.cols, data.rows)
+      resizePty(data.godName, data.cols, data.rows)
       break
     }
 
@@ -265,8 +307,8 @@ function createWSServer() {
     wsClients.add(ws)
     console.log(`Client connected (${wsClients.size} total)`)
 
-    // Send initial state
-    const gods = listGodSessions()
+    // Send initial state - discover existing god sessions
+    const gods = listGodSockets()
     ws.send(JSON.stringify({
       event: 'connected',
       gods
@@ -284,11 +326,11 @@ function createWSServer() {
     ws.on('close', () => {
       wsClients.delete(ws)
       // Detach from all PTYs this client was connected to
-      ptyProcesses.forEach((entry, sessionName) => {
+      ptyProcesses.forEach((entry, godName) => {
         entry.clients.delete(ws)
         if (entry.clients.size === 0) {
           entry.pty.kill()
-          ptyProcesses.delete(sessionName)
+          ptyProcesses.delete(godName)
         }
       })
       console.log(`Client disconnected (${wsClients.size} total)`)
@@ -306,14 +348,16 @@ function createWindow() {
     width: 1400,
     height: 900,
     backgroundColor: '#0a0a0a',
-    frame: false,
-    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     }
   })
+
+  // Hide menu bar completely
+  mainWindow.setMenuBarVisibility(false)
 
   // In development, load from Vite dev server
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
@@ -342,7 +386,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  // Kill all PTY processes
+  // Kill all PTY processes (but NOT the dtach sessions - they persist)
   ptyProcesses.forEach((entry) => {
     entry.pty.kill()
   })
