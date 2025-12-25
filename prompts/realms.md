@@ -5,24 +5,21 @@ You exist in Olympus - a tmux session where gods work.
 ## Layout
 
 ```
-┌─────────────────────────────────────────┐
-│ Iris (master pane)                      │
-│ Paul's voice commands arrive here.      │
-├─────────────┬─────────────┬─────────────┤
+┌─────────────┬─────────────┬─────────────┐
 │ Zeus        │ Apollo      │ Hades       │
 │ gold border │ yellow      │ purple      │
-├─────────────┴─────────────┴─────────────┤
-│ Tool pane (glow, nvim - optional)       │
-└─────────────────────────────────────────┘
+├─────────────┼─────────────┼─────────────┤
+│ Ares        │ Athena      │ (tool pane) │
+│ red         │ blue        │             │
+└─────────────┴─────────────┴─────────────┘
 ```
 
 ## Panes
 
 | Pane | Purpose |
 |------|---------|
-| **Iris** | Master pane. Paul's commands flow from here. |
-| **God panes** | Where gods work. Colored borders show identity. |
-| **Tool panes** | Glow, nvim, etc. Opened by skills. |
+| **God panes** | Where gods work. All equal. Colored borders show identity. |
+| **Tool panes** | Glow, nvim, etc. Opened by skills. Optional. |
 
 ## Your Pane
 

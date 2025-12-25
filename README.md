@@ -74,6 +74,6 @@ Python dependencies are handled automatically via `uv` inline script metadata. E
 
 ## Architecture
 
-Iris runs in a tmux session. The master pane is her throne; summoned gods occupy surrounding panes. Each god runs Claude with full autonomy, communicating through the file system.
+Iris is the invisible orchestrator - the CLI and servers that manage everything. Gods are summoned into tmux panes, all equal, arranged in a grid. Each god runs Claude with full autonomy.
 
 For details, see `architecture.md`.

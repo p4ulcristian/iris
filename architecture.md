@@ -10,24 +10,26 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
               └──────── responses ─────────┘
 ```
 
-**brain/** is Iris's voice system - modular servers for speech-to-text (Parakeet) and text-to-speech (VibeVoice), plus the Python CLI for orchestration.
+**brain/** is the voice and orchestration system - modular servers for speech-to-text (Parakeet) and text-to-speech (VibeVoice), plus the Python CLI.
 
-**Iris** is the orchestrator running in the master tmux pane. She can work directly on simple tasks or delegate larger work to gods.
+**Iris** is the invisible orchestrator - the CLI, the servers, the system itself. She has no pane. She spawns, manages, and banishes gods.
 
-**Gods** are Claude instances summoned in separate tmux panes. Each god is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter) and does the actual work.
+**Gods** are Claude instances in tmux panes. All gods are equal. Each is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter).
 
 ## tmux Session Structure
 
 ```
 iris (session)
-├── %0 - Iris (master pane, 50% width)
-└── Workers (50% right side)
-    └── Gods stacked vertically
+└── Gods in grid layout
+    ├── Zeus (gold border)
+    ├── Apollo (yellow border)
+    ├── Hades (purple border)
+    └── ...
 ```
 
-- Master pane stays on the left
-- Workers stack on the right (main-vertical layout)
-- Each pane has a colored background and title bar showing god name
+- All panes are gods - no special "master" pane
+- Grid layout distributes panes evenly
+- Each pane has a colored border matching the god's identity
 
 ## File Structure
 

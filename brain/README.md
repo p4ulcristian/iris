@@ -23,8 +23,8 @@ Listens for CapsLock press/release and coordinates the other servers.
 
 - Uses evdev to monitor keyboard (no grab, so typing still works)
 - CapsLock alone = paste transcribed text at cursor
-- Shift+CapsLock = send transcribed text to Iris tmux pane
-- CapsLock+Enter = send Enter to Iris tmux pane
+- Shift+CapsLock = send transcribed text to focused tmux pane
+- CapsLock+Enter = send Enter to focused tmux pane
 
 Coordinates via HTTP:
 - Tells `speak/` to stop on CapsLock press
