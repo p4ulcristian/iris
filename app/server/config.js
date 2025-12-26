@@ -27,3 +27,18 @@ export const PANTHEON = {
   dionysus:   { color: '#7c4dff', voice: 'dionysus' },
   demeter:    { color: '#4caf50', voice: 'demeter' }
 }
+
+export const REALMS = [
+  'Olympus',
+  'Elysium',
+  'Tartarus',
+  'Agora',
+  'Forge',
+  'Grove',
+  'Styx',
+  'Temple',
+  'Acropolis',
+  'Nectar Hall',
+  'Labyrinth',
+  'Oracle'
+]

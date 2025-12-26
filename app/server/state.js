@@ -17,7 +17,7 @@ export function broadcast(event, data = {}) {
 // App state (source of truth)
 export const appState = {
   version: 1,
-  tabs: [{ id: 1, name: 'Main' }],
+  tabs: [{ id: 1, name: 'Olympus' }],
   activeTabId: 1,
   tabCounter: 1,
   gods: {},

@@ -27,8 +27,8 @@ export default function TabBar({
               }
             `}
           >
-            <span className="text-xs text-text-secondary opacity-60">{idx + 1}</span>
             <span>{tab.name}</span>
+            <span className="text-xs text-text-secondary opacity-50">Alt+{idx + 1}</span>
             {tabGodCount > 0 && (
               <span className="text-xs text-text-secondary">({tabGodCount})</span>
             )}

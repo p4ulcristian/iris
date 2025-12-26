@@ -49,3 +49,18 @@ dionysus:
 demeter:
   voice: demeter
   color: "#4caf50"
+
+# Realms - places in Greek mythology for tab names
+realms:
+  - Olympus      # Home of the gods
+  - Elysium      # Paradise for heroes
+  - Tartarus     # The abyss
+  - Agora        # The marketplace
+  - Forge        # Hephaestus's workshop
+  - Grove        # Sacred forest
+  - Styx         # River crossing
+  - Temple       # Sanctuary
+  - Acropolis    # High city
+  - Nectar Hall  # Feasting hall
+  - Labyrinth    # The maze
+  - Oracle       # Place of prophecy

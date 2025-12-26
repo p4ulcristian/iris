@@ -1,8 +1,25 @@
-import { SERVICES } from './config.js'
+import { SERVICES, REALMS } from './config.js'
 import { appState, saveState, broadcastState, broadcast } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses } from './pty.js'
+
+function getRandomRealmName() {
+  const usedNames = new Set(appState.tabs.map(t => t.name))
+  const available = REALMS.filter(r => !usedNames.has(r))
+
+  if (available.length > 0) {
+    return available[Math.floor(Math.random() * available.length)]
+  }
+
+  // All realms used, add numeral
+  let counter = 2
+  while (true) {
+    const candidate = `${REALMS[Math.floor(Math.random() * REALMS.length)]} ${counter}`
+    if (!usedNames.has(candidate)) return candidate
+    counter++
+  }
+}
 
 export function handleMessage(ws, msg, projectRoot) {
   const { event, ...data } = msg
@@ -44,7 +61,7 @@ export function handleMessage(ws, msg, projectRoot) {
       const godName = data.godName || data.name
       if (ptyProcesses.has(godName)) {
         const entry = ptyProcesses.get(godName)
-        entry.pty.kill()
+        entry.proc.kill()
         ptyProcesses.delete(godName)
       }
       killGodSession(godName)
@@ -117,7 +134,7 @@ export function handleMessage(ws, msg, projectRoot) {
     // Tab management
     case 'tab:add': {
       appState.tabCounter++
-      const newTab = { id: appState.tabCounter, name: data.name || `Tab ${appState.tabCounter}` }
+      const newTab = { id: appState.tabCounter, name: data.name || getRandomRealmName() }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
       saveState()
@@ -132,7 +149,7 @@ export function handleMessage(ws, msg, projectRoot) {
       })
       appState.tabs = appState.tabs.filter(t => t.id !== tabId)
       if (appState.tabs.length === 0) {
-        appState.tabs = [{ id: 1, name: 'Main' }]
+        appState.tabs = [{ id: 1, name: 'Olympus' }]
         appState.tabCounter = 1
         appState.activeTabId = 1
       } else if (appState.activeTabId === tabId) {
@@ -175,7 +192,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'god:move-to-new-tab': {
       appState.tabCounter++
-      const newTab = { id: appState.tabCounter, name: `Tab ${appState.tabCounter}` }
+      const newTab = { id: appState.tabCounter, name: getRandomRealmName() }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
       if (appState.gods[data.godName]) {

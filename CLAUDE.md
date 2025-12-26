@@ -21,6 +21,7 @@ Voice assistant for Paul.
 | **Olympus** | The full Electron app where gods work |
 | **god** | A Claude instance in a dtach terminal session |
 | **pane** | A god's terminal window |
+| **realm** | A tab/workspace (Olympus, Elysium, etc.) |
 | **summon** | Spawn a new god (`Ctrl+N`) |
 | **banish** | Kill a god's session (`Ctrl+K`) |
 | **laboring** | God is actively working |

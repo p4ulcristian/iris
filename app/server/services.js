@@ -95,16 +95,43 @@ export function startService(name, projectRoot) {
 
   const scriptPath = `${projectRoot}/${script}`
 
-  console.log(`Starting ${name} service...`)
+  console.log(`Starting ${name} service: uv run --script ${scriptPath}`)
 
   const proc = spawn('uv', ['run', '--script', scriptPath], {
     cwd: projectRoot,
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],  // Capture stdout/stderr briefly for debugging
     env: {
       ...process.env,
       CUDA_VISIBLE_DEVICES: '0'
     }
+  })
+
+  // Log initial output for debugging
+  let output = ''
+  if (proc.stdout) {
+    proc.stdout.on('data', (data) => {
+      output += data.toString()
+      if (output.length < 500) console.log(`[${name}] ${data.toString().trim()}`)
+    })
+  }
+  if (proc.stderr) {
+    proc.stderr.on('data', (data) => {
+      output += data.toString()
+      if (output.length < 500) console.log(`[${name}] ${data.toString().trim()}`)
+    })
+  }
+
+  proc.on('error', (err) => {
+    console.error(`Failed to start ${name}:`, err.message)
+    delete serviceProcesses[name]
+  })
+
+  proc.on('exit', (code, signal) => {
+    if (code !== 0 && code !== null) {
+      console.error(`${name} exited with code ${code}`)
+    }
+    delete serviceProcesses[name]
   })
 
   proc.unref()
