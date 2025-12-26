@@ -78,6 +78,15 @@ export default function App() {
   // Get gods for active tab
   const activeGods = getActiveGods()
 
+  // Dispatch refit event when god count changes (for terminal resizing)
+  useEffect(() => {
+    // Small delay to let layout settle
+    const timeout = setTimeout(() => {
+      window.dispatchEvent(new Event('iris:refit'))
+    }, 100)
+    return () => clearTimeout(timeout)
+  }, [activeGods.length])
+
   // Summon a new god
   const handleSummon = useCallback(() => {
     const names = Object.keys(GOD_COLORS)

@@ -89,14 +89,59 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
       sendWs({ event: 'pty:input', godName, data })
     })
 
-    // Refit on container resize
-    const resizeObserver = new ResizeObserver(() => {
+    // Refit on container resize using actual cell dimensions
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+
       try {
-        fitAddon.fit()
-        sendWs({ event: 'pty:resize', godName, cols: term.cols, rows: term.rows })
-      } catch {}
+        // Get actual cell dimensions from xterm's render service
+        const dims = term._core._renderService?.dimensions
+        console.log(`[${godName}] Resize - dims:`, dims?.css?.cell)
+        if (!dims?.css?.cell) {
+          console.log(`[${godName}] No cell dims, skipping`)
+          return
+        }
+
+        const cellHeight = dims.css.cell.height
+        const cellWidth = dims.css.cell.width
+        // Use container's bounding rect for accurate dimensions
+        const rect = containerRef.current.getBoundingClientRect()
+        const { width, height } = rect
+
+        const newCols = Math.floor(width / cellWidth)
+        const newRows = Math.floor(height / cellHeight)
+
+        console.log(`[${godName}] Container: ${width}x${height}, cell: ${cellWidth}x${cellHeight}, new: ${newCols}x${newRows}, current: ${term.cols}x${term.rows}`)
+
+        if (newRows > 0 && newCols > 0 && (newRows !== term.rows || newCols !== term.cols)) {
+          term.resize(newCols, newRows)
+          console.log(`[${godName}] Resized to ${newCols}x${newRows}`)
+          sendWs({ event: 'pty:resize', godName, cols: newCols, rows: newRows })
+        }
+      } catch (e) {
+        console.log(`[${godName}] Resize error:`, e)
+      }
     })
-    resizeObserver.observe(containerRef.current)
+    // Observe the parent (relative div) since it's what flex resizes
+    const parentEl = containerRef.current.parentElement
+    resizeObserver.observe(parentEl)
+
+    // Also listen for global refit event (fired when god count changes)
+    const handleRefit = () => {
+      try {
+        const dims = term._core._renderService?.dimensions
+        if (!dims?.css?.cell) return
+        const rect = containerRef.current.getBoundingClientRect()
+        const newCols = Math.floor(rect.width / dims.css.cell.width)
+        const newRows = Math.floor(rect.height / dims.css.cell.height)
+        if (newRows > 0 && newCols > 0 && (newRows !== term.rows || newCols !== term.cols)) {
+          term.resize(newCols, newRows)
+          sendWs({ event: 'pty:resize', godName, cols: newCols, rows: newRows })
+        }
+      } catch {}
+    }
+    window.addEventListener('iris:refit', handleRefit)
 
     // WebSocket connection
     const ws = new WebSocket('ws://localhost:9999')
@@ -129,6 +174,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
     return () => {
       clearTimeout(fitTimeout)
       onFirstRender.dispose()
+      window.removeEventListener('iris:refit', handleRefit)
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
       }
