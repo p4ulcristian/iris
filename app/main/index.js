@@ -412,6 +412,38 @@ function createWindow() {
   // Hide menu bar completely
   mainWindow.setMenuBarVisibility(false)
 
+  // Enable zoom shortcuts (Ctrl+Plus, Ctrl+Minus, Ctrl+0)
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && !input.alt && !input.meta) {
+      const zoomLevel = mainWindow.webContents.getZoomLevel()
+      let zoomed = false
+
+      // Ctrl++ or Ctrl+= (zoom in)
+      if (input.key === '+' || input.key === '=') {
+        mainWindow.webContents.setZoomLevel(zoomLevel + 0.5)
+        zoomed = true
+      }
+      // Ctrl+- (zoom out)
+      else if (input.key === '-') {
+        mainWindow.webContents.setZoomLevel(zoomLevel - 0.5)
+        zoomed = true
+      }
+      // Ctrl+0 (reset zoom)
+      else if (input.key === '0') {
+        mainWindow.webContents.setZoomLevel(0)
+        zoomed = true
+      }
+
+      if (zoomed) {
+        event.preventDefault()
+        // Trigger terminal refit after zoom
+        setTimeout(() => {
+          mainWindow.webContents.executeJavaScript("window.dispatchEvent(new Event('iris:refit'))")
+        }, 100)
+      }
+    }
+  })
+
   // In development, load from Vite dev server
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
     mainWindow.loadURL('http://localhost:5173')
