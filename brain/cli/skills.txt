@@ -1,7 +1,0 @@
-
-         IRIS SKILLS
-
-  glow            Markdown viewer pane
-  nvim            Neovim editor pane
-  nvim-highlight  Highlight code ranges
-  run             Run command in pane
