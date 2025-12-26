@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { motion } from 'motion/react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
-export default function GodCard({ god, onClose }) {
+export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose, onToggleFullscreen }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
@@ -33,6 +32,26 @@ export default function GodCard({ god, onClose }) {
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
+
+    // Let app-level shortcuts pass through xterm
+    term.attachCustomKeyEventHandler((e) => {
+      // Ctrl+N, Ctrl+K, Ctrl+F, Ctrl+L, Ctrl+M, Ctrl+T, Ctrl+R - let these bubble up
+      if (e.ctrlKey && ['n', 'k', 'f', 'l', 'm', 't', 'r'].includes(e.key.toLowerCase())) {
+        return false // Don't handle in xterm, let it bubble
+      }
+      // Alt+N, Alt+K, Alt+comma, Alt+period, Alt+1-9
+      if (e.altKey && (
+        ['n', 'k', ',', '.'].includes(e.key.toLowerCase()) ||
+        (e.key >= '1' && e.key <= '9')
+      )) {
+        return false
+      }
+      // Escape
+      if (e.key === 'Escape') {
+        return false
+      }
+      return true // Handle in xterm
+    })
 
     termRef.current = term
     fitAddonRef.current = fitAddon
@@ -96,10 +115,11 @@ export default function GodCard({ god, onClose }) {
 
   return (
     <div
-      className="flex flex-col bg-bg-primary rounded-lg overflow-hidden border-2"
+      onClick={onFocus}
+      className={`flex flex-col bg-bg-primary rounded-lg overflow-hidden border-2 transition-all ${isFocused ? 'ring-2 ring-white/20' : ''}`}
       style={{
         borderColor: color,
-        boxShadow: `0 0 20px ${color}22`
+        boxShadow: isFocused ? `0 0 30px ${color}44` : `0 0 20px ${color}22`
       }}
     >
       {/* Header */}
@@ -109,10 +129,27 @@ export default function GodCard({ god, onClose }) {
       >
         <span className="text-sm font-medium" style={{ color }}>{name}</span>
         <div className="flex-1" />
+
+        {/* Fullscreen button */}
         <button
-          onClick={onClose}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleFullscreen()
+          }}
+          className="w-5 h-5 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-white/10 rounded transition-all text-xs mr-1"
+          title={isFullscreen ? 'Exit fullscreen (Ctrl+F)' : 'Fullscreen (Ctrl+F)'}
+        >
+          {isFullscreen ? '⊙' : '⤢'}
+        </button>
+
+        {/* Close button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
           className="w-5 h-5 flex items-center justify-center text-text-secondary hover:text-red-500 hover:bg-white/10 rounded transition-all text-sm"
-          title="Banish"
+          title="Banish (Ctrl+K)"
         >
           ×
         </button>
