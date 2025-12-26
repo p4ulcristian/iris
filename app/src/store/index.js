@@ -35,6 +35,11 @@ const initialState = {
     hear: false,
     express: false
   },
+  servicesLoading: {
+    speak: false,
+    hear: false,
+    express: false
+  },
 
   // UI state
   focusedGod: null,
@@ -202,6 +207,14 @@ export const useStore = create(
 
       setServices: (services) => set((state) => {
         state.services = { ...state.services, ...services }
+        // Clear loading state when service status changes
+        Object.keys(services).forEach(key => {
+          state.servicesLoading[key] = false
+        })
+      }),
+
+      setServiceLoading: (service, loading) => set((state) => {
+        state.servicesLoading[service] = loading
       }),
 
       // ============ SELECTORS (computed) ============
