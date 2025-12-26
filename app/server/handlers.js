@@ -37,6 +37,10 @@ export function handleMessage(ws, msg, projectRoot) {
           mission: god.mission || null,
           spawnedAt: Date.now()
         }
+        // Auto-focus new god in focus mode
+        if (appState.viewMode === 'focus') {
+          appState.focusedGod = god.name
+        }
         saveState()
         broadcastState()
       } else if (god?.exists) {
@@ -60,6 +64,10 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           displayName: terminal.displayName,
           color: terminal.color
+        }
+        // Auto-focus new terminal in focus mode
+        if (appState.viewMode === 'focus') {
+          appState.focusedGod = terminal.name
         }
         saveState()
         broadcastState()
@@ -321,6 +329,10 @@ export function handleMessage(ws, msg, projectRoot) {
           displayName: terminal.displayName,
           color: terminal.color
         }
+        // Auto-focus new nvim in focus mode
+        if (appState.viewMode === 'focus') {
+          appState.focusedGod = terminal.name
+        }
         saveState()
         broadcastState()
       } else if (terminal?.exists) {
@@ -349,6 +361,10 @@ export function handleMessage(ws, msg, projectRoot) {
           order: godsInTab.length,
           mission: data.summary || null,
           spawnedAt: Date.now()
+        }
+        // Auto-focus resumed god in focus mode
+        if (appState.viewMode === 'focus') {
+          appState.focusedGod = god.name
         }
         saveState()
         broadcastState()
