@@ -29,6 +29,13 @@ const initialState = {
   // Gods - stored globally, with tabId reference
   gods: {},  // { [godName]: { name, color, status, tabId } }
 
+  // Services status
+  services: {
+    speak: false,
+    hear: false,
+    express: false
+  },
+
   // UI state
   focusedGod: null,
   fullscreenGod: null,
@@ -191,6 +198,10 @@ export const useStore = create(
 
       setInitialLoadDone: (done) => set((state) => {
         state.initialLoadDone = done
+      }),
+
+      setServices: (services) => set((state) => {
+        state.services = { ...state.services, ...services }
       }),
 
       // ============ SELECTORS (computed) ============

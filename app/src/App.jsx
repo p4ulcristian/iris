@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
+import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
 import DevPanel from './components/DevPanel'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -33,6 +34,7 @@ export default function App() {
   const rotateLayout = useStore(s => s.rotateLayout)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
+  const setServices = useStore(s => s.setServices)
   const toggleDevPanel = useStore(s => s.toggleDevPanel)
   const getActiveGods = useStore(s => s.getActiveGods)
   const getGodsForTab = useStore(s => s.getGodsForTab)
@@ -58,6 +60,16 @@ export default function App() {
           data.gods.forEach(god => addGod(god))
           setInitialLoadDone(true)
         }
+        // Always update services status
+        if (data.services) {
+          setServices(data.services)
+        }
+        break
+
+      case 'services:status':
+        if (data.services) {
+          setServices(data.services)
+        }
         break
 
       case 'god:spawned':
@@ -73,7 +85,7 @@ export default function App() {
         removeGod(data.godName || data.name)
         break
     }
-  }, [lastMessage, addGod, removeGod, updateGodStatus, initialLoadDone, setInitialLoadDone])
+  }, [lastMessage, addGod, removeGod, updateGodStatus, initialLoadDone, setInitialLoadDone, setServices])
 
   // Get gods for active tab
   const activeGods = getActiveGods()
@@ -366,6 +378,9 @@ export default function App() {
         onConfirm={confirmModal?.onConfirm}
         onCancel={() => setConfirmModal(null)}
       />
+
+      {/* Status bar */}
+      <StatusBar godCount={activeGods.length} connected={connected} />
 
       {/* Dev panel */}
       <DevPanel />

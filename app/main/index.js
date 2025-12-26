@@ -23,6 +23,21 @@ let wss = null
 const wsClients = new Set()
 const ptyProcesses = new Map() // godName -> { pty, clients: Set<ws> }
 let terminalCounter = 0
+let healthCheckInterval = null
+
+// Service definitions
+const SERVICES = {
+  speak: { port: 8765, name: 'Speak', icon: '🔊' },
+  hear: { port: 8766, name: 'Hear', icon: '👂' },
+  express: { port: 8767, name: 'Express', icon: '💬' }
+}
+
+// Current service status
+const serviceStatus = {
+  speak: false,
+  hear: false,
+  express: false
+}
 
 const PANTHEON = {
   zeus:       { color: '#ffd700', voice: 'zeus' },
@@ -38,6 +53,55 @@ const PANTHEON = {
   aphrodite:  { color: '#ff6b9d', voice: 'aphrodite' },
   dionysus:   { color: '#7c4dff', voice: 'dionysus' },
   demeter:    { color: '#4caf50', voice: 'demeter' }
+}
+
+// --- SERVICE HEALTH CHECKS ---
+
+async function checkServiceHealth(name, port) {
+  return new Promise((resolve) => {
+    const req = require('http').get(`http://127.0.0.1:${port}/health`, { timeout: 1000 }, (res) => {
+      resolve(res.statusCode === 200)
+    })
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => { req.destroy(); resolve(false) })
+  })
+}
+
+async function checkAllServices() {
+  const results = await Promise.all([
+    checkServiceHealth('speak', SERVICES.speak.port),
+    checkServiceHealth('hear', SERVICES.hear.port),
+    checkServiceHealth('express', SERVICES.express.port)
+  ])
+
+  const changed = (
+    serviceStatus.speak !== results[0] ||
+    serviceStatus.hear !== results[1] ||
+    serviceStatus.express !== results[2]
+  )
+
+  serviceStatus.speak = results[0]
+  serviceStatus.hear = results[1]
+  serviceStatus.express = results[2]
+
+  // Broadcast if changed
+  if (changed) {
+    broadcast('services:status', { services: serviceStatus })
+  }
+}
+
+function startHealthChecks() {
+  // Check immediately
+  checkAllServices()
+  // Then every 3 seconds
+  healthCheckInterval = setInterval(checkAllServices, 3000)
+}
+
+function stopHealthChecks() {
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval)
+    healthCheckInterval = null
+  }
 }
 
 // --- DTACH HELPERS ---
@@ -104,7 +168,7 @@ function createGodSession(name, task = '') {
     // -n = create new socket, run detached
     // -E = disable detach character (we manage lifecycle)
     const projectRoot = path.join(__dirname, '../..')
-    execSync(`GOD_NAME="${name}" dtach -n "${socketPath}" -E ${cmd}`, {
+    execSync(`TERM=xterm-256color GOD_NAME="${name}" dtach -n "${socketPath}" -E ${cmd}`, {
       stdio: 'ignore',
       detached: true,
       cwd: projectRoot
@@ -396,7 +460,8 @@ function createWSServer() {
     const gods = listGodSockets()
     ws.send(JSON.stringify({
       event: 'connected',
-      gods
+      gods,
+      services: serviceStatus
     }))
 
     ws.on('message', (data) => {
@@ -499,6 +564,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWSServer()
+  startHealthChecks()
   createWindow()
 
   app.on('activate', () => {
@@ -522,6 +588,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   // Clean up
+  stopHealthChecks()
   if (wss) {
     wss.close()
   }
