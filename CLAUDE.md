@@ -12,6 +12,28 @@ Voice assistant for Paul.
 
 ---
 
+## Terminology
+
+| Term | Meaning |
+|------|---------|
+| **Iris** | The Electron frontend — React app in `app/src/` |
+| **brain** | Python voice/utility system — `brain/` |
+| **Olympus** | The full Electron app where gods work |
+| **god** | A Claude instance in a dtach terminal session |
+| **pane** | A god's terminal window |
+| **summon** | Spawn a new god (`Ctrl+N`) |
+| **banish** | Kill a god's session (`Ctrl+K`) |
+| **laboring** | God is actively working |
+| **dormant** | God is idle |
+| **scattered** | God crashed |
+| **fulfilled** | Task complete |
+| **speak** | TTS service (`brain/speak/`, port 8765) |
+| **hear** | STT service (`brain/hear/`, port 8766) |
+| **wake** | Input listener for push-to-talk (`brain/wake/`) |
+| **express** | Visual overlay UI (`brain/express/`, port 8767) |
+
+---
+
 ## Conventions
 
 **Naming:** Use `lowercase-dashes` for all files (e.g., `grocery-list.md`, `workout-log.md`)
