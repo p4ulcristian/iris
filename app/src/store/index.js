@@ -129,9 +129,18 @@ export const useStore = create(
       }),
 
       removeGod: (godName) => set((state) => {
+        const wasFullscreen = state.fullscreenGod === godName
+        const wasFocused = state.focusedGod === godName
+        const tabId = state.gods[godName]?.tabId
+
         delete state.gods[godName]
-        if (state.focusedGod === godName) state.focusedGod = null
-        if (state.fullscreenGod === godName) state.fullscreenGod = null
+
+        if (wasFullscreen) state.fullscreenGod = null
+        if (wasFocused) {
+          // Auto-select another god from the same tab
+          const remainingGods = Object.values(state.gods).filter(g => g.tabId === tabId)
+          state.focusedGod = remainingGods.length > 0 ? remainingGods[0].name : null
+        }
       }),
 
       updateGodStatus: (godName, status) => set((state) => {

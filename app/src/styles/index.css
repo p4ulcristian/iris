@@ -72,17 +72,24 @@ body {
   background: #444;
 }
 
-/* xterm overrides */
+/* xterm overrides - fill container height */
 .xterm {
   padding: 4px;
+  height: 100% !important;
 }
 
 .xterm-screen {
   width: 100% !important;
+  height: 100% !important;
 }
 
 .xterm-viewport {
   overflow-y: auto !important;
+  height: 100% !important;
+}
+
+.xterm-rows {
+  height: 100% !important;
 }
 
 /* Animations */

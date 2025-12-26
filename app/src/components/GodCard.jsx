@@ -11,15 +11,23 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
   const { name, color } = god
   const godName = name
 
-  // Connect to PTY via WebSocket
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Create terminal
+    // Get container dimensions before creating terminal
+    const rect = containerRef.current.getBoundingClientRect()
+    // Estimate rows based on container height and approximate line height (17px for 14px font)
+    const estimatedRows = Math.floor(rect.height / 17) || 24
+    const estimatedCols = Math.floor(rect.width / 8.4) || 80
+
+    console.log(`[${godName}] Container: ${rect.width}x${rect.height}, estimated: ${estimatedCols}x${estimatedRows}`)
+
     const term = new XTerm({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+      rows: estimatedRows,
+      cols: estimatedCols,
       theme: {
         background: '#0a0a0a',
         foreground: '#e0e0e0',
@@ -33,59 +41,83 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
 
-    // Let app-level shortcuts pass through xterm
-    term.attachCustomKeyEventHandler((e) => {
-      const key = e.key.toLowerCase()
+    const textarea = term.textarea
 
-      // Ctrl+N, Ctrl+K, Ctrl+F, Ctrl+L, Ctrl+M, Ctrl+T, Ctrl+R, Ctrl+D - let these bubble up
-      if (e.ctrlKey && ['n', 'k', 'f', 'l', 'm', 't', 'r', 'd'].includes(key)) {
-        return false // Don't handle in xterm, let it bubble
-      }
-      // Alt+N, Alt+K, Alt+comma, Alt+period, Alt+1-9
-      if (e.altKey && (
+    const handleShortcut = (e) => {
+      const key = e.key.toLowerCase()
+      const isCtrlShortcut = e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
+      const isAltShortcut = e.altKey && (
         ['n', 'k', ',', '.'].includes(key) ||
         (e.key >= '1' && e.key <= '9')
-      )) {
-        return false
+      )
+
+      if (isCtrlShortcut || isAltShortcut) {
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: e.key,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          bubbles: true
+        }))
       }
-      // Escape
-      if (e.key === 'Escape') {
-        return false
-      }
-      return true // Handle in xterm
-    })
+    }
+
+    if (textarea) {
+      textarea.addEventListener('keydown', handleShortcut, true)
+    }
+
+    const container = containerRef.current
+    container.addEventListener('keydown', handleShortcut, true)
 
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Fit after mount
-    requestAnimationFrame(() => {
-      fitAddon.fit()
-      // Request PTY attachment
-      sendWs({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows })
+    // Wait for first render, then fit
+    const onFirstRender = term.onRender(() => {
+      onFirstRender.dispose()
+      try {
+        fitAddon.fit()
+        console.log(`[${godName}] Fit on render: cols=${term.cols}, rows=${term.rows}`)
+      } catch (e) {
+        console.log(`[${godName}] Fit on render error:`, e.message)
+      }
     })
 
-    // Handle user input -> send to PTY
+    // Also try fitting after a delay as backup
+    const fitTimeout = setTimeout(() => {
+      try {
+        fitAddon.fit()
+        console.log(`[${godName}] Delayed fit: cols=${term.cols}, rows=${term.rows}`)
+      } catch (e) {
+        console.log(`[${godName}] Delayed fit error:`, e.message)
+      }
+    }, 500)
+
     term.onData((data) => {
       sendWs({ event: 'pty:input', godName, data })
     })
 
-    // Resize observer
     const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && termRef.current) {
-        fitAddonRef.current.fit()
-        sendWs({ event: 'pty:resize', godName, cols: termRef.current.cols, rows: termRef.current.rows })
+      try {
+        fitAddon.fit()
+        sendWs({ event: 'pty:resize', godName, cols: term.cols, rows: term.rows })
+      } catch (e) {
+        // Not ready yet
       }
     })
     resizeObserver.observe(containerRef.current)
 
-    // Connect to WebSocket for PTY data
     const ws = new WebSocket('ws://localhost:9999')
     wsRef.current = ws
 
     ws.onopen = () => {
-      // Request attachment
-      ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
+      setTimeout(() => {
+        try { fitAddon.fit() } catch {}
+        ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
+      }, 100)
     }
 
     ws.onmessage = (event) => {
@@ -94,9 +126,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         if (msg.event === 'pty:output' && msg.godName === godName) {
           term.write(msg.data)
         }
-      } catch (e) {
-        // Might be binary data
-      }
+      } catch (e) {}
     }
 
     function sendWs(data) {
@@ -105,10 +135,15 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
       }
     }
 
-    // Focus terminal
     term.focus()
 
     return () => {
+      clearTimeout(fitTimeout)
+      onFirstRender.dispose()
+      if (textarea) {
+        textarea.removeEventListener('keydown', handleShortcut, true)
+      }
+      container.removeEventListener('keydown', handleShortcut, true)
       resizeObserver.disconnect()
       term.dispose()
       ws.close()
@@ -118,21 +153,19 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
   return (
     <div
       onClick={onFocus}
-      className={`flex flex-col bg-bg-primary rounded-lg overflow-hidden border-2 transition-all ${isFocused ? 'ring-2 ring-white/20' : ''}`}
+      className={`flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-all ${isFocused ? 'ring-2 ring-white/20' : ''}`}
       style={{
         borderColor: color,
         boxShadow: isFocused ? `0 0 30px ${color}44` : `0 0 20px ${color}22`
       }}
     >
-      {/* Header */}
       <div
-        className="flex items-center h-8 px-3 bg-bg-secondary"
+        className="flex-shrink-0 flex items-center h-8 px-3 bg-bg-secondary"
         style={{ borderBottom: `1px solid ${color}44` }}
       >
         <span className="text-sm font-medium" style={{ color }}>{name}</span>
         <div className="flex-1" />
 
-        {/* Fullscreen button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -144,7 +177,6 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
           {isFullscreen ? '⊙' : '⤢'}
         </button>
 
-        {/* Close button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -157,8 +189,14 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         </button>
       </div>
 
-      {/* Terminal */}
-      <div ref={containerRef} className="flex-1 overflow-hidden" style={{ minHeight: 0 }} />
+      {/* Terminal wrapper with relative positioning */}
+      <div className="flex-1 relative min-h-0">
+        <div
+          ref={containerRef}
+          className="absolute inset-0"
+          style={{ backgroundColor: '#0a0a0a' }}
+        />
+      </div>
     </div>
   )
 }

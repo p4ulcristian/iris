@@ -93,6 +93,13 @@ export default function App() {
     })
   }, [send, getAllGodNames])
 
+  // Spawn a raw terminal (no Claude)
+  const handleSpawnTerminal = useCallback(() => {
+    send({
+      event: 'terminal:spawn'
+    })
+  }, [send])
+
   // Kill a god (with confirmation)
   const handleKillGod = useCallback((godName) => {
     setConfirmModal({
@@ -156,8 +163,16 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore if in input field
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      const key = e.key.toLowerCase()
+
+      // Check if this is one of our app shortcuts (Escape only works outside xterm)
+      const isAppShortcut = (
+        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)) ||
+        (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
+      )
+
+      // Ignore inputs unless it's an app shortcut
+      if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
       // Ctrl+N: Summon god
       if (e.ctrlKey && e.key === 'n') {
@@ -192,6 +207,14 @@ export default function App() {
         e.preventDefault()
         e.stopPropagation()
         handleKillTab()
+        return
+      }
+
+      // Ctrl+R: Spawn raw terminal
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleSpawnTerminal()
         return
       }
 
@@ -257,7 +280,7 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSummon, createTab, handleKillGod, handleKillTab, toggleFullscreen,
+    handleSummon, handleSpawnTerminal, createTab, handleKillGod, handleKillTab, toggleFullscreen,
     rotateLayout, prevTab, nextTab, goToTab, focusedGod, fullscreenGod,
     activeGods, setFocusedGod, toggleDevPanel
   ])
@@ -283,7 +306,7 @@ export default function App() {
       />
 
       {/* Grid of gods */}
-      <main className="flex-1 overflow-hidden p-4">
+      <main className="flex-1 min-h-0 overflow-hidden p-4">
         {activeGods.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
             <p className="text-base">No gods summoned</p>
@@ -292,7 +315,7 @@ export default function App() {
             </p>
           </div>
         ) : (
-          <div className={`grid ${getGridClass(displayGods.length)} gap-4 h-full`}>
+          <div className={`grid ${getGridClass(displayGods.length)} gap-4 h-full auto-rows-fr`}>
             {displayGods.map(god => (
               <GodCard
                 key={god.name}

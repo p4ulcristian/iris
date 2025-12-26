@@ -22,6 +22,7 @@ let mainWindow = null
 let wss = null
 const wsClients = new Set()
 const ptyProcesses = new Map() // godName -> { pty, clients: Set<ws> }
+let terminalCounter = 0
 
 const GOD_COLORS = {
   zeus: '#ffd700',
@@ -113,6 +114,35 @@ function createGodSession(name, task = '') {
     }
   } catch (e) {
     console.error('Failed to create dtach session:', e)
+    return null
+  }
+}
+
+function createTerminalSession() {
+  terminalCounter++
+  const name = `Terminal${terminalCounter}`
+  const socketPath = getSocketPath(name.toLowerCase())
+
+  try {
+    // Create detached dtach session with bash
+    const projectRoot = path.join(__dirname, '../..')
+    execSync(`dtach -n "${socketPath}" -E bash`, {
+      stdio: 'ignore',
+      detached: true,
+      cwd: projectRoot
+    })
+
+    // Give it a moment to start
+    execSync('sleep 0.2')
+
+    return {
+      name,
+      socketPath,
+      color: '#888888',  // Gray for raw terminals
+      status: 'laboring'
+    }
+  } catch (e) {
+    console.error('Failed to create terminal session:', e)
     return null
   }
 }
@@ -264,6 +294,14 @@ function handleMessage(ws, msg) {
       } else if (god?.exists) {
         // Session already exists, just notify this client
         ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
+      }
+      break
+    }
+
+    case 'terminal:spawn': {
+      const terminal = createTerminalSession()
+      if (terminal) {
+        broadcast('god:spawned', terminal)
       }
       break
     }
