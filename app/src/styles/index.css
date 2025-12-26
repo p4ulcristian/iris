@@ -1,15 +1,18 @@
 @import "tailwindcss";
 @import "@xterm/xterm/css/xterm.css";
 @import "../themes/generated/colors.css";
+@import "../themes/generated/themes.css";
 
+/* Register theme variables with Tailwind so it generates utility classes */
 @theme {
-  --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #141414;
-  --color-bg-tertiary: #1a1a1a;
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #888888;
-  --color-border: #2a2a2a;
-  --color-accent: #646cff;
+  --color-bg-primary: var(--color-bg-primary);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-bg-tertiary: var(--color-bg-tertiary);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-border: var(--color-border);
+  --color-accent: var(--color-accent);
 }
 
 /* Frameless window resize handles */
@@ -96,4 +99,24 @@ body {
 
 .animate-glow {
   animation: glow 0.5s ease 3;
+}
+
+/* View Transitions */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.25s;
+}
+
+/* God card transitions - smooth position and size morphing */
+/* Note: view-transition pseudo-elements don't support wildcards, use * for all */
+::view-transition-group(*) {
+  animation-duration: 0.25s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* No fade - just morph position/size with content visible */
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 0.25s;
+  mix-blend-mode: normal;
 }

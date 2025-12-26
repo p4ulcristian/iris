@@ -1,321 +1,144 @@
 // Auto-generated from config/gods.yaml
 // Do not edit directly - run: node scripts/generate-themes.js
 
-export const GOD_PALETTES = {
-  "zeus": {
-    "background": "#12110d",
-    "foreground": "#e3e3dd",
-    "cursor": "#ffd700",
-    "cursorAccent": "#12110d",
-    "selectionBackground": "#ffd70044",
-    "selectionForeground": "#ffffff",
-    "black": "#22211c",
-    "red": "#d75542",
-    "green": "#5ab946",
-    "yellow": "#d1b147",
-    "blue": "#53bac6",
-    "magenta": "#ba5ea1",
-    "cyan": "#46b994",
-    "white": "#cbcac2",
-    "brightBlack": "#494631",
-    "brightRed": "#ea7c6c",
-    "brightGreen": "#7bd369",
-    "brightYellow": "#e6ca70",
-    "brightBlue": "#78d3dd",
-    "brightMagenta": "#d581be",
-    "brightCyan": "#69d3b1",
-    "brightWhite": "#eae9e1"
-  },
-  "apollo": {
-    "background": "#12110d",
-    "foreground": "#e3e3dd",
-    "cursor": "#ffeb3b",
-    "cursorAccent": "#12110d",
-    "selectionBackground": "#ffeb3b44",
-    "selectionForeground": "#ffffff",
-    "black": "#22211c",
-    "red": "#d75642",
-    "green": "#59b946",
-    "yellow": "#d1b247",
-    "blue": "#53b9c6",
-    "magenta": "#ba5ea0",
-    "cyan": "#46b995",
-    "white": "#cbcac2",
-    "brightBlack": "#494731",
-    "brightRed": "#ea7d6c",
-    "brightGreen": "#7ad369",
-    "brightYellow": "#e6cb70",
-    "brightBlue": "#78d2dd",
-    "brightMagenta": "#d581bd",
-    "brightCyan": "#69d3b2",
-    "brightWhite": "#eae9e1"
-  },
-  "artemis": {
-    "background": "#0d1211",
-    "foreground": "#dde3e3",
-    "cursor": "#009688",
-    "cursorAccent": "#0d1211",
-    "selectionBackground": "#00968844",
-    "selectionForeground": "#ffffff",
-    "black": "#1c2221",
-    "red": "#d78342",
-    "green": "#46b956",
-    "yellow": "#c7d147",
-    "blue": "#5396c6",
-    "magenta": "#9d5eba",
-    "cyan": "#46b9b7",
-    "white": "#c2cbcb",
-    "brightBlack": "#314947",
-    "brightRed": "#eaa36c",
-    "brightGreen": "#69d377",
-    "brightYellow": "#dde670",
-    "brightBlue": "#78b4dd",
-    "brightMagenta": "#bb81d5",
-    "brightCyan": "#69d3d2",
-    "brightWhite": "#e1eae9"
-  },
-  "athena": {
-    "background": "#0d1012",
-    "foreground": "#dde1e3",
-    "cursor": "#2196f3",
-    "cursorAccent": "#0d1012",
-    "selectionBackground": "#2196f344",
-    "selectionForeground": "#ffffff",
-    "black": "#1c1f22",
-    "red": "#d7427b",
-    "green": "#46b95f",
-    "yellow": "#bcd147",
-    "blue": "#538dc6",
-    "magenta": "#a55eba",
-    "cyan": "#46b1b9",
-    "white": "#c2c7cb",
-    "brightBlack": "#313f49",
-    "brightRed": "#ea6c9c",
-    "brightGreen": "#69d380",
-    "brightYellow": "#d4e670",
-    "brightBlue": "#78acdd",
-    "brightMagenta": "#c181d5",
-    "brightCyan": "#69ccd3",
-    "brightWhite": "#e1e6ea"
-  },
-  "hermes": {
-    "background": "#12100d",
-    "foreground": "#e3e1dd",
-    "cursor": "#ff9800",
-    "cursorAccent": "#12100d",
-    "selectionBackground": "#ff980044",
-    "selectionForeground": "#ffffff",
-    "black": "#221f1c",
-    "red": "#d74f42",
-    "green": "#5eb946",
-    "yellow": "#d1ab47",
-    "blue": "#53bec6",
-    "magenta": "#ba5ea4",
-    "cyan": "#46b98f",
-    "white": "#cbc8c2",
-    "brightBlack": "#494031",
-    "brightRed": "#ea776c",
-    "brightGreen": "#7fd369",
-    "brightYellow": "#e6c670",
-    "brightBlue": "#78d7dd",
-    "brightMagenta": "#d581c1",
-    "brightCyan": "#69d3ad",
-    "brightWhite": "#eae6e1"
-  },
-  "hades": {
-    "background": "#110d12",
-    "foreground": "#e2dde3",
-    "cursor": "#9c27b0",
-    "cursorAccent": "#110d12",
-    "selectionBackground": "#9c27b044",
-    "selectionForeground": "#ffffff",
-    "black": "#211c22",
-    "red": "#d7425b",
-    "green": "#46b977",
-    "yellow": "#d18847",
-    "blue": "#5375c6",
-    "magenta": "#b85eba",
-    "cyan": "#4699b9",
-    "white": "#cac2cb",
-    "brightBlack": "#463149",
-    "brightRed": "#ea6c81",
-    "brightGreen": "#69d396",
-    "brightYellow": "#e6a770",
-    "brightBlue": "#7896dd",
-    "brightMagenta": "#d381d5",
-    "brightCyan": "#69b6d3",
-    "brightWhite": "#e9e1ea"
-  },
-  "poseidon": {
-    "background": "#0d1112",
-    "foreground": "#dde3e3",
-    "cursor": "#00bcd4",
-    "cursorAccent": "#0d1112",
-    "selectionBackground": "#00bcd444",
-    "selectionForeground": "#ffffff",
-    "black": "#1c2122",
-    "red": "#d74282",
-    "green": "#46b959",
-    "yellow": "#c3d147",
-    "blue": "#5393c6",
-    "magenta": "#a05eba",
-    "cyan": "#46b7b9",
-    "white": "#c2cacb",
-    "brightBlack": "#314749",
-    "brightRed": "#ea6ca2",
-    "brightGreen": "#69d37b",
-    "brightYellow": "#d9e670",
-    "brightBlue": "#78b1dd",
-    "brightMagenta": "#bd81d5",
-    "brightCyan": "#69d2d3",
-    "brightWhite": "#e1e9ea"
-  },
-  "hera": {
-    "background": "#120d0f",
-    "foreground": "#e3dddf",
-    "cursor": "#e91e63",
-    "cursorAccent": "#120d0f",
-    "selectionBackground": "#e91e6344",
-    "selectionForeground": "#ffffff",
-    "black": "#221c1e",
-    "red": "#d74249",
-    "green": "#6eb946",
-    "yellow": "#d19847",
-    "blue": "#5367c6",
-    "magenta": "#ba5eb1",
-    "cyan": "#468bb9",
-    "white": "#cbc2c5",
-    "brightBlack": "#493139",
-    "brightRed": "#ea6c72",
-    "brightGreen": "#8ed369",
-    "brightYellow": "#e6b570",
-    "brightBlue": "#788add",
-    "brightMagenta": "#d581cd",
-    "brightCyan": "#69a9d3",
-    "brightWhite": "#eae1e4"
-  },
-  "ares": {
-    "background": "#120d0d",
-    "foreground": "#e3dedd",
-    "cursor": "#f44336",
-    "cursorAccent": "#120d0d",
-    "selectionBackground": "#f4433644",
-    "selectionForeground": "#ffffff",
-    "black": "#221c1c",
-    "red": "#d74342",
-    "green": "#67b946",
-    "yellow": "#d1a147",
-    "blue": "#5360c6",
-    "magenta": "#ba5eab",
-    "cyan": "#46b986",
-    "white": "#cbc3c2",
-    "brightBlack": "#493331",
-    "brightRed": "#ea6d6c",
-    "brightGreen": "#88d369",
-    "brightYellow": "#e6bc70",
-    "brightBlue": "#7884dd",
-    "brightMagenta": "#d581c7",
-    "brightCyan": "#69d3a5",
-    "brightWhite": "#eae2e1"
-  },
-  "hephaestus": {
-    "background": "#120f0d",
-    "foreground": "#e3e0de",
-    "cursor": "#cd7f32",
-    "cursorAccent": "#120f0d",
-    "selectionBackground": "#cd7f3244",
-    "selectionForeground": "#ffffff",
-    "black": "#221f1c",
-    "red": "#d74d42",
-    "green": "#60b946",
-    "yellow": "#d1a947",
-    "blue": "#5359c6",
-    "magenta": "#ba5ea6",
-    "cyan": "#46b98e",
-    "white": "#cbc7c2",
-    "brightBlack": "#493d31",
-    "brightRed": "#ea756c",
-    "brightGreen": "#81d369",
-    "brightYellow": "#e6c470",
-    "brightBlue": "#787ddd",
-    "brightMagenta": "#d581c2",
-    "brightCyan": "#69d3ab",
-    "brightWhite": "#eae5e1"
-  },
-  "aphrodite": {
-    "background": "#120d0f",
-    "foreground": "#e3dddf",
-    "cursor": "#ff6b9d",
-    "cursorAccent": "#120d0f",
-    "selectionBackground": "#ff6b9d44",
-    "selectionForeground": "#ffffff",
-    "black": "#221c1e",
-    "red": "#d74249",
-    "green": "#6eb946",
-    "yellow": "#d19847",
-    "blue": "#5367c6",
-    "magenta": "#ba5eb1",
-    "cyan": "#468bb9",
-    "white": "#cbc2c5",
-    "brightBlack": "#493139",
-    "brightRed": "#ea6c72",
-    "brightGreen": "#8ed369",
-    "brightYellow": "#e6b570",
-    "brightBlue": "#788add",
-    "brightMagenta": "#d581cd",
-    "brightCyan": "#69a9d3",
-    "brightWhite": "#eae1e4"
-  },
-  "dionysus": {
-    "background": "#0e0d12",
-    "foreground": "#dfdde3",
-    "cursor": "#7c4dff",
-    "cursorAccent": "#0e0d12",
-    "selectionBackground": "#7c4dff44",
-    "selectionForeground": "#ffffff",
-    "black": "#1d1c22",
-    "red": "#d74269",
-    "green": "#46b96d",
-    "yellow": "#d17b47",
-    "blue": "#537fc6",
-    "magenta": "#b05eba",
-    "cyan": "#46a3b9",
-    "white": "#c5c2cb",
-    "brightBlack": "#373149",
-    "brightRed": "#ea6c8d",
-    "brightGreen": "#69d38d",
-    "brightYellow": "#e69c70",
-    "brightBlue": "#789fdd",
-    "brightMagenta": "#cc81d5",
-    "brightCyan": "#69bfd3",
-    "brightWhite": "#e3e1ea"
-  },
-  "demeter": {
-    "background": "#0d110e",
-    "foreground": "#dfe2df",
-    "cursor": "#4caf50",
-    "cursorAccent": "#0d110e",
-    "selectionBackground": "#4caf5044",
-    "selectionForeground": "#ffffff",
-    "black": "#1c221c",
-    "red": "#d76f42",
-    "green": "#46b947",
-    "yellow": "#d1c947",
-    "blue": "#53a5c6",
-    "magenta": "#915eba",
-    "cyan": "#46b9a8",
-    "white": "#c2cbc3",
-    "brightBlack": "#314932",
-    "brightRed": "#ea926c",
-    "brightGreen": "#69d369",
-    "brightYellow": "#e6df70",
-    "brightBlue": "#78c1dd",
-    "brightMagenta": "#b081d5",
-    "brightCyan": "#69d3c4",
-    "brightWhite": "#e1eae1"
+// God primary colors
+export const GOD_COLORS = {
+  "zeus": "#ffd700",
+  "apollo": "#ffeb3b",
+  "artemis": "#009688",
+  "athena": "#2196f3",
+  "hermes": "#ff9800",
+  "hades": "#9c27b0",
+  "poseidon": "#00bcd4",
+  "hera": "#e91e63",
+  "ares": "#f44336",
+  "hephaestus": "#cd7f32",
+  "aphrodite": "#ff6b9d",
+  "dionysus": "#7c4dff",
+  "demeter": "#4caf50"
+}
+
+// Color utilities for runtime palette generation
+function hexToHsl(hex) {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  let h, s, l = (max + min) / 2
+
+  if (max === min) {
+    h = s = 0
+  } else {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break
+      case g: h = ((b - r) / d + 2) / 6; break
+      case b: h = ((r - g) / d + 4) / 6; break
+    }
+  }
+
+  return { h: h * 360, s: s * 100, l: l * 100 }
+}
+
+function hslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360
+  s = Math.max(0, Math.min(100, s)) / 100
+  l = Math.max(0, Math.min(100, l)) / 100
+
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const m = l - c / 2
+
+  let r, g, b
+  if (h < 60) { r = c; g = x; b = 0 }
+  else if (h < 120) { r = x; g = c; b = 0 }
+  else if (h < 180) { r = 0; g = c; b = x }
+  else if (h < 240) { r = 0; g = x; b = c }
+  else if (h < 300) { r = x; g = 0; b = c }
+  else { r = c; g = 0; b = x }
+
+  const toHex = (n) => Math.round((n + m) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+function blendHue(baseHue, targetHue, amount) {
+  let diff = targetHue - baseHue
+  if (diff > 180) diff -= 360
+  if (diff < -180) diff += 360
+  return baseHue + diff * amount
+}
+
+// Generate a full terminal palette from a god's primary color and theme settings
+export function generatePalette(primaryHex, themeTerminal = {}) {
+  const primary = hexToHsl(primaryHex)
+
+  const bgLightness = themeTerminal['bg-lightness'] ?? 6
+  const fgLightness = themeTerminal['fg-lightness'] ?? 88
+  const satFactor = themeTerminal['saturation'] ?? 0.3
+
+  const bg = hslToHex(primary.h, Math.min(primary.s * satFactor, 15), bgLightness)
+  const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
+
+  const ansiBase = {
+    black: { h: primary.h, s: 10, l: 12 },
+    red: { h: 0, s: 65, l: 55 },
+    green: { h: 120, s: 45, l: 50 },
+    yellow: { h: 45, s: 60, l: 55 },
+    blue: { h: 210, s: 50, l: 55 },
+    magenta: { h: 300, s: 40, l: 55 },
+    cyan: { h: 180, s: 45, l: 50 },
+    white: { h: primary.h, s: 8, l: 78 },
+  }
+
+  const hueBlend = 0.15
+
+  const colors = {}
+  for (const [name, base] of Object.entries(ansiBase)) {
+    const h = name === 'black' || name === 'white'
+      ? base.h
+      : blendHue(base.h, primary.h, hueBlend)
+    colors[name] = hslToHex(h, base.s, base.l)
+  }
+
+  const brightColors = {}
+  for (const [name, base] of Object.entries(ansiBase)) {
+    const h = name === 'black' || name === 'white'
+      ? base.h
+      : blendHue(base.h, primary.h, hueBlend)
+    const brightName = 'bright' + name.charAt(0).toUpperCase() + name.slice(1)
+    brightColors[brightName] = hslToHex(h, Math.min(base.s + 10, 80), base.l + 12)
+  }
+
+  return {
+    background: bg,
+    foreground: fg,
+    cursor: primaryHex,
+    cursorAccent: bg,
+    selectionBackground: primaryHex + '44',
+    selectionForeground: '#ffffff',
+    ...colors,
+    ...brightColors,
   }
 }
 
-export function getGodPalette(godName) {
-  return GOD_PALETTES[godName.toLowerCase()] || GOD_PALETTES.zeus
+// Get palette for a god with optional theme settings
+export function getGodPalette(godName, themeTerminal = {}) {
+  const color = GOD_COLORS[godName.toLowerCase()] || GOD_COLORS.zeus
+  return generatePalette(color, themeTerminal)
+}
+
+// Get theme-adjusted god color for headers/borders
+export function getGodColor(godName, themeTerminal = {}) {
+  const baseColor = GOD_COLORS[godName.toLowerCase()] || GOD_COLORS.zeus
+  const hsl = hexToHsl(baseColor)
+
+  // Apply theme saturation factor (default 1.0 = no change for UI elements)
+  const satFactor = themeTerminal['ui-saturation'] ?? themeTerminal['saturation'] ?? 1.0
+  // Normalize: terminal saturation is 0.3-0.4, UI should be higher
+  const adjustedSat = satFactor < 1 ? hsl.s * Math.min(satFactor * 2.5, 1) : hsl.s * satFactor
+
+  return hslToHex(hsl.h, adjustedSat, hsl.l)
 }

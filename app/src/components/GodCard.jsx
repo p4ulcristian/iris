@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { getGodPalette } from '../themes/generated/palettes'
+import { getGodPalette, getGodColor } from '../themes/generated/palettes'
+import { getThemeTerminalSettings } from '../themes/generated/themes'
+import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faExpand, faCompress, faXmark } from '@fortawesome/free-solid-svg-icons'
 
-export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose, onToggleFullscreen, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
+// Convert hex color to RGB for ANSI escape codes
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return '255;255;255'
+  return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
+}
+
+export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubleClick, onClose, onToggleFullscreen, tabs, activeTabId, onMoveToTab, onMoveToNewTab, compact }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
@@ -15,7 +24,21 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
 
   const { name, color } = god
   const godName = name
-  const palette = getGodPalette(name)
+
+  // Get current theme and generate theme-aware palette + color
+  const theme = useStore(s => s.theme)
+  const themeTerminalSettings = useMemo(() => getThemeTerminalSettings(theme), [theme])
+  const palette = useMemo(() => getGodPalette(name, themeTerminalSettings), [name, themeTerminalSettings])
+  const godColor = useMemo(() => getGodColor(name, themeTerminalSettings), [name, themeTerminalSettings])
+
+  // Update terminal theme when palette changes (theme switch)
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = palette
+      // Force xterm to redraw with new colors
+      termRef.current.refresh(0, termRef.current.rows - 1)
+    }
+  }, [palette])
 
   // Close move menu when clicking outside
   useEffect(() => {
@@ -148,17 +171,18 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
     wsRef.current = ws
 
     ws.onopen = () => {
-      setTimeout(() => {
-        try { fitAddon.fit() } catch {}
-        ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
-      }, 100)
+      try { fitAddon.fit() } catch {}
+      ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
     }
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
         if (msg.event === 'pty:output' && msg.godName === godName) {
-          term.write(msg.data)
+          // Ensure data is a string before writing to terminal
+          if (typeof msg.data === 'string') {
+            term.write(msg.data)
+          }
         }
       } catch {}
     }
@@ -168,6 +192,9 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         ws.send(JSON.stringify(data))
       }
     }
+
+    // Show loading state immediately
+    term.write(`\x1b[38;2;${hexToRgb(color)}m⟡ Summoning ${name}...\x1b[0m\r\n\r\n`)
 
     term.focus()
 
@@ -183,15 +210,17 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
       term.dispose()
       ws.close()
     }
-  }, [godName, color, palette])
+  }, [godName, color]) // Note: palette is handled by separate useEffect to avoid terminal recreation
 
   return (
     <div
       onClick={onFocus}
+      onDoubleClick={onDoubleClick}
       className="relative flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-all"
       style={{
         borderColor: isFocused ? color : '#333',
-        boxShadow: isFocused ? `0 0 30px ${color}44` : 'none'
+        boxShadow: isFocused ? `0 0 30px ${color}44` : 'none',
+        viewTransitionName: `god-${name.toLowerCase()}`
       }}
     >
       {/* Passive overlay for unfocused panes */}

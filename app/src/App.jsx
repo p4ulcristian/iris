@@ -3,9 +3,11 @@ import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
 import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
+import SummonModal from './components/SummonModal'
 import DevPanel from './components/DevPanel'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore, GOD_COLORS } from './store'
+import { withViewTransition } from './hooks/useViewTransition'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket('ws://localhost:9999')
@@ -17,11 +19,12 @@ export default function App() {
   const focusedGod = useStore(s => s.focusedGod)
   const fullscreenGod = useStore(s => s.fullscreenGod)
   const layoutMode = useStore(s => s.layoutMode)
+  const viewMode = useStore(s => s.viewMode)
   const initialLoadDone = useStore(s => s.initialLoadDone)
+  const theme = useStore(s => s.theme)
 
-  // Actions (local UI state only)
+  // Actions (local UI state only - fullscreen and layoutMode are still client-only)
   const updateGodStatus = useStore(s => s.updateGodStatus)
-  const setFocusedGod = useStore(s => s.setFocusedGod)
   const toggleFullscreen = useStore(s => s.toggleFullscreen)
   const rotateLayout = useStore(s => s.rotateLayout)
   const setConnected = useStore(s => s.setConnected)
@@ -34,6 +37,7 @@ export default function App() {
   const syncState = useStore(s => s.syncState)
 
   const [confirmModal, setConfirmModal] = useState(null)
+  const [summonModalOpen, setSummonModalOpen] = useState(false)
 
   // Update connection status in store
   useEffect(() => {
@@ -47,14 +51,25 @@ export default function App() {
     const { event, ...data } = lastMessage
 
     switch (event) {
-      case 'state:sync':
-        // Sync full state from server (source of truth)
-        syncState(data)
-        if (data.services) {
-          setServices(data.services)
+      case 'state:sync': {
+        // Check if viewMode or focusedGod is changing - trigger view transition
+        const viewModeChanging = data.viewMode !== viewMode || data.focusedGod !== focusedGod
+
+        const doSync = () => {
+          syncState(data)
+          if (data.services) {
+            setServices(data.services)
+          }
+          setInitialLoadDone(true)
         }
-        setInitialLoadDone(true)
+
+        if (viewModeChanging && initialLoadDone) {
+          withViewTransition(doSync)
+        } else {
+          doSync()
+        }
         break
+      }
 
       case 'services:status':
         if (data.services) {
@@ -66,7 +81,7 @@ export default function App() {
         updateGodStatus(data.godName || data.name, data.status)
         break
     }
-  }, [lastMessage, syncState, updateGodStatus, setInitialLoadDone, setServices])
+  }, [lastMessage, syncState, updateGodStatus, setInitialLoadDone, setServices, viewMode, focusedGod, initialLoadDone])
 
   // Get gods for active tab
   const activeGods = getActiveGods()
@@ -97,19 +112,14 @@ export default function App() {
   }, [])
 
   // Summon a new god
-  const handleSummon = useCallback(() => {
-    const names = Object.keys(GOD_COLORS)
-    const usedNames = getAllGodNames().map(n => n.toLowerCase())
-    const available = names.filter(n => !usedNames.includes(n))
-    const name = available[0] || names[Math.floor(Math.random() * names.length)]
-    const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1)
-
+  const handleSummon = useCallback((name, task = '') => {
     send({
       event: 'god:spawn',
-      name: capitalizedName,
-      task: ''
+      name,
+      task
     })
-  }, [send, getAllGodNames])
+    setSummonModalOpen(false)
+  }, [send])
 
   // Spawn a raw terminal (no Claude)
   const handleSpawnTerminal = useCallback(() => {
@@ -131,6 +141,27 @@ export default function App() {
       }
     })
   }, [send])
+
+  // Enter focus mode for a god
+  const handleEnterFocus = useCallback((godName) => {
+    if (activeGods.length < 2) return  // No point in focus mode with 1 god
+    send({ event: 'viewMode:set', mode: 'focus', focusedGod: godName })
+  }, [activeGods.length, send])
+
+  // Exit focus mode
+  const handleExitFocus = useCallback(() => {
+    send({ event: 'viewMode:set', mode: 'grid' })
+  }, [send])
+
+  // Set focused god (server event)
+  const handleSetFocus = useCallback((godName) => {
+    send({ event: 'focus:set', godName })
+  }, [send])
+
+  // Toggle fullscreen with view transition
+  const handleToggleFullscreen = useCallback((godName) => {
+    withViewTransition(() => toggleFullscreen(godName))
+  }, [toggleFullscreen])
 
   // Kill current tab (with confirmation)
   const handleKillTab = useCallback((tabId = activeTabId) => {
@@ -193,11 +224,11 @@ export default function App() {
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Ctrl+N: Summon god
+      // Ctrl+N: Open summon modal
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        handleSummon()
+        setSummonModalOpen(true)
         return
       }
 
@@ -249,7 +280,7 @@ export default function App() {
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault()
         e.stopPropagation()
-        toggleFullscreen()
+        handleToggleFullscreen()
         return
       }
 
@@ -290,15 +321,20 @@ export default function App() {
         return
       }
 
-      // Escape: Exit fullscreen or clear focus
+      // Escape: Exit fullscreen, then focus mode, then clear focus
       if (e.key === 'Escape') {
         if (fullscreenGod) {
           e.preventDefault()
           e.stopPropagation()
-          toggleFullscreen()
+          handleToggleFullscreen()
+          return
+        } else if (viewMode === 'focus') {
+          e.preventDefault()
+          e.stopPropagation()
+          handleExitFocus()
           return
         } else if (focusedGod) {
-          setFocusedGod(null)
+          handleSetFocus(null)
         }
       }
     }
@@ -306,9 +342,9 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSummon, handleSpawnTerminal, handleKillGod, handleKillTab, toggleFullscreen,
-    rotateLayout, focusedGod, fullscreenGod, activeGods, setFocusedGod, toggleDevPanel,
-    send, tabs, activeTabId
+    handleSpawnTerminal, handleKillGod, handleKillTab, handleToggleFullscreen,
+    rotateLayout, focusedGod, fullscreenGod, viewMode, activeGods,
+    toggleDevPanel, handleExitFocus, handleSetFocus, send, tabs, activeTabId
   ])
 
   // Get gods to display (all or just fullscreen)
@@ -317,7 +353,7 @@ export default function App() {
     : activeGods
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary">
+    <div className={`flex flex-col h-screen bg-bg-primary theme-${theme}`}>
       {/* Tab bar */}
       <TabBar
         tabs={tabs}
@@ -325,13 +361,13 @@ export default function App() {
         onSelect={(tabId) => send({ event: 'tab:select', tabId })}
         onClose={handleKillTab}
         onNew={() => send({ event: 'tab:add' })}
-        onSummon={handleSummon}
+        onSummon={() => setSummonModalOpen(true)}
         connected={connected}
         godCount={activeGods.length}
         getGodsForTab={getGodsForTab}
       />
 
-      {/* Grid of gods */}
+      {/* Gods area */}
       <main className="flex-1 min-h-0 overflow-hidden p-4">
         {activeGods.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
@@ -340,7 +376,65 @@ export default function App() {
               Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to summon
             </p>
           </div>
+        ) : viewMode === 'focus' && focusedGod && activeGods.length > 1 ? (
+          /* Focus mode: main god + sidebar */
+          <div className="flex gap-4 h-full">
+            {/* Main focused god - 2:1 ratio with sidebar */}
+            <div className="flex-[2] min-w-0">
+              {activeGods.filter(g => g.name === focusedGod).map(god => (
+                <GodCard
+                  key={god.name}
+                  god={god}
+                  isFocused={true}
+                  isFullscreen={false}
+                  onFocus={() => {}}
+                  onDoubleClick={() => {}}
+                  onClose={() => handleKillGod(god.name)}
+                  onToggleFullscreen={() => handleToggleFullscreen(god.name)}
+                  tabs={tabs}
+                  activeTabId={activeTabId}
+                  onMoveToTab={(godName, tabId) => {
+                    send({ event: 'god:move', godName, tabId })
+                    send({ event: 'tab:select', tabId })
+                  }}
+                  onMoveToNewTab={(godName) => {
+                    send({ event: 'god:move-to-new-tab', godName })
+                  }}
+                />
+              ))}
+            </div>
+            {/* Sidebar with other gods */}
+            <div className="flex-1 min-w-[240px] max-w-[360px] flex flex-col gap-2 overflow-y-auto">
+              {activeGods.filter(g => g.name !== focusedGod).map(god => (
+                <div
+                  key={god.name}
+                  className="h-32 flex-shrink-0"
+                >
+                  <GodCard
+                    god={god}
+                    isFocused={false}
+                    isFullscreen={false}
+                    onFocus={() => handleEnterFocus(god.name)}
+                    onDoubleClick={() => {}}
+                    onClose={() => handleKillGod(god.name)}
+                    onToggleFullscreen={() => handleToggleFullscreen(god.name)}
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    compact={true}
+                    onMoveToTab={(godName, tabId) => {
+                      send({ event: 'god:move', godName, tabId })
+                      send({ event: 'tab:select', tabId })
+                    }}
+                    onMoveToNewTab={(godName) => {
+                      send({ event: 'god:move-to-new-tab', godName })
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
+          /* Grid mode */
           <div className={`grid ${getGridClass(displayGods.length)} gap-4 h-full auto-rows-fr`}>
             {displayGods.map(god => (
               <GodCard
@@ -348,9 +442,10 @@ export default function App() {
                 god={god}
                 isFocused={focusedGod === god.name}
                 isFullscreen={fullscreenGod === god.name}
-                onFocus={() => setFocusedGod(god.name)}
+                onFocus={() => handleSetFocus(god.name)}
+                onDoubleClick={() => handleEnterFocus(god.name)}
                 onClose={() => handleKillGod(god.name)}
-                onToggleFullscreen={() => toggleFullscreen(god.name)}
+                onToggleFullscreen={() => handleToggleFullscreen(god.name)}
                 tabs={tabs}
                 activeTabId={activeTabId}
                 onMoveToTab={(godName, tabId) => {
@@ -358,7 +453,6 @@ export default function App() {
                   send({ event: 'tab:select', tabId })
                 }}
                 onMoveToNewTab={(godName) => {
-                  // Send combined event - server creates tab and moves god
                   send({ event: 'god:move-to-new-tab', godName })
                 }}
               />
@@ -378,8 +472,16 @@ export default function App() {
         onCancel={() => setConfirmModal(null)}
       />
 
+      {/* Summon modal */}
+      <SummonModal
+        isOpen={summonModalOpen}
+        usedGodNames={getAllGodNames()}
+        onSummon={handleSummon}
+        onCancel={() => setSummonModalOpen(false)}
+      />
+
       {/* Status bar */}
-      <StatusBar godCount={activeGods.length} connected={connected} send={send} />
+      <StatusBar connected={connected} send={send} />
 
       {/* Dev panel */}
       <DevPanel />

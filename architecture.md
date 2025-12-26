@@ -137,6 +137,70 @@ fs.readdirSync('~/.local/share/iris/sockets/')
   .filter(f => f.endsWith('.sock'))
 ```
 
+## State Management: Server as Single Source of Truth
+
+**Critical Pattern**: The Electron main process is the single source of truth for all application state. The React frontend is a view layer only.
+
+### Why
+
+- Multiple windows can connect to the same server
+- State persists across page reloads
+- No sync conflicts between client and server
+- Simpler mental model: server owns state, clients render it
+
+### How It Works
+
+```
+┌─────────────┐     state:sync      ┌─────────────┐
+│   Server    │ ──────────────────→ │   Client    │
+│  (Electron) │                     │   (React)   │
+│             │ ←────────────────── │             │
+│  Owns all   │    user actions     │  Renders    │
+│   state     │   (events only)     │   state     │
+└─────────────┘                     └─────────────┘
+```
+
+### Rules
+
+1. **Server owns state**: tabs, gods, theme, services, settings
+2. **Client sends events**: `god:spawn`, `tab:add`, `theme:set` - never state
+3. **Server broadcasts state**: After any change, server sends `state:sync` to all clients
+4. **Client replaces state**: On `state:sync`, client replaces its entire state (no merging)
+5. **No localStorage for synced state**: If it needs to persist or sync, it lives on the server
+
+### State Categories
+
+| Category | Owner | Persisted | Examples |
+|----------|-------|-----------|----------|
+| **App State** | Server | Yes (JSON file) | tabs, gods, theme, settings |
+| **Service State** | Server | No (runtime) | service health, connections |
+| **View State** | Client | No | focusedGod, fullscreenGod, modals |
+
+### Adding New State
+
+When adding new persistent/synced state:
+
+1. Add to server state (in `main/index.js`)
+2. Include in `state:sync` broadcast
+3. Add event handler for mutations (e.g., `theme:set`)
+4. Client store receives via `syncState()` - no local mutations
+5. Persist to disk if needed (server-side)
+
+### Anti-Patterns
+
+```javascript
+// BAD: Client mutates synced state directly
+const setTheme = (theme) => set((state) => {
+  state.theme = theme
+  localStorage.setItem('theme', theme)  // NO!
+})
+
+// GOOD: Client sends event, server mutates and syncs
+const setTheme = (theme) => {
+  send({ event: 'theme:set', theme })  // Server will broadcast state:sync
+}
+```
+
 ## WebSocket Protocol
 
 Port 9999, JSON messages:

@@ -43,11 +43,15 @@ const initialState = {
     wake: false
   },
 
-  // UI state
+  // UI state (client-only)
   focusedGod: null,
   fullscreenGod: null,
   layoutMode: 'auto',
+  viewMode: 'grid',  // 'grid' | 'focus' - controls main layout style
   devPanelOpen: false,
+
+  // Synced from server
+  theme: 'divine-void',  // Will be overwritten by state:sync
 
   // Connection
   connected: false,
@@ -156,6 +160,8 @@ export const useStore = create(
           // Auto-select another god from the same tab
           const remainingGods = Object.values(state.gods).filter(g => g.tabId === tabId)
           state.focusedGod = remainingGods.length > 0 ? remainingGods[0].name : null
+          // Exit focus mode if the focused god was removed and no replacement
+          if (!state.focusedGod) state.viewMode = 'grid'
         }
       }),
 
@@ -195,6 +201,19 @@ export const useStore = create(
 
       toggleDevPanel: () => set((state) => {
         state.devPanelOpen = !state.devPanelOpen
+      }),
+
+      setViewMode: (mode) => set((state) => {
+        state.viewMode = mode
+      }),
+
+      enterFocusMode: (godName) => set((state) => {
+        state.viewMode = 'focus'
+        state.focusedGod = godName
+      }),
+
+      exitFocusMode: () => set((state) => {
+        state.viewMode = 'grid'
       }),
 
       // ============ CONNECTION ============
@@ -270,13 +289,22 @@ export const useStore = create(
         })
         state.gods = newGods
 
-        // Clear fullscreen if god no longer exists
+        // Sync theme
+        if (serverState.theme) {
+          state.theme = serverState.theme
+        }
+
+        // Sync viewMode and focusedGod from server
+        if (serverState.viewMode !== undefined) {
+          state.viewMode = serverState.viewMode
+        }
+        if (serverState.focusedGod !== undefined) {
+          state.focusedGod = serverState.focusedGod
+        }
+
+        // Clear fullscreen if god no longer exists (fullscreen is still client-only)
         if (state.fullscreenGod && !newGods[state.fullscreenGod]) {
           state.fullscreenGod = null
-        }
-        // Clear focused if god no longer exists
-        if (state.focusedGod && !newGods[state.focusedGod]) {
-          state.focusedGod = null
         }
       }),
     })),

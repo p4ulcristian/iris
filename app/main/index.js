@@ -26,7 +26,10 @@ let appState = {
   tabs: [{ id: 1, name: 'Main' }],
   activeTabId: 1,
   tabCounter: 1,
-  gods: {}  // { godName: { tabId, order } }
+  gods: {},  // { godName: { tabId, order } }
+  theme: 'divine-void',  // Current theme ID
+  viewMode: 'grid',  // 'grid' | 'focus'
+  focusedGod: null   // Which god is focused (used in focus mode)
 }
 
 function loadState() {
@@ -81,7 +84,10 @@ function getStateForBroadcast() {
     tabs: appState.tabs,
     activeTabId: appState.activeTabId,
     tabCounter: appState.tabCounter,
-    gods
+    gods,
+    theme: appState.theme,
+    viewMode: appState.viewMode,
+    focusedGod: appState.focusedGod
   }
 }
 
@@ -341,9 +347,6 @@ function createGodSession(name, task = '') {
       }
     })
 
-    // Give it a moment to start
-    execSync('sleep 0.3')
-
     return {
       name,
       socketPath,
@@ -595,6 +598,14 @@ function handleMessage(ws, msg) {
       killGodSession(godName)
       // Remove from appState
       delete appState.gods[godName]
+      // Clear focus if this was the focused god
+      if (appState.focusedGod === godName) {
+        appState.focusedGod = null
+        // Exit focus mode if no focused god
+        if (appState.viewMode === 'focus') {
+          appState.viewMode = 'grid'
+        }
+      }
       saveState()
       broadcastState()
       break
@@ -717,6 +728,33 @@ function handleMessage(ws, msg) {
         appState.gods[data.godName].order = 0
       }
 
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'theme:set': {
+      appState.theme = data.theme
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'viewMode:set': {
+      appState.viewMode = data.mode || 'grid'
+      appState.focusedGod = data.focusedGod || null
+      // Clear focusedGod if switching to grid mode
+      if (appState.viewMode === 'grid') {
+        appState.focusedGod = null
+      }
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'focus:set': {
+      // Just update focused god without changing view mode
+      appState.focusedGod = data.godName || null
       saveState()
       broadcastState()
       break

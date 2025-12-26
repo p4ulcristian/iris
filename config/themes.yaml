@@ -1,0 +1,66 @@
+# Iris Themes
+# Run: node scripts/generate-themes.js after editing
+
+divine-void:
+  label: "Divine Void"
+  colors:
+    bg-primary: "#070708"
+    bg-secondary: "#0f0f10"
+    bg-tertiary: "#161617"
+    text-primary: "#d4d0c8"
+    text-secondary: "#888580"
+    text-tertiary: "#555550"
+    border: "#1a1918"
+    accent: "#c9a227"
+  terminal:
+    bg-lightness: 5
+    fg-lightness: 88
+    saturation: 0.3
+
+olympus:
+  label: "Olympus"
+  colors:
+    bg-primary: "#0f0e0c"
+    bg-secondary: "#1a1815"
+    bg-tertiary: "#242118"
+    text-primary: "#e8e4dc"
+    text-secondary: "#a09a8c"
+    text-tertiary: "#6a6458"
+    border: "#2a2520"
+    accent: "#d4af37"
+  terminal:
+    bg-lightness: 6
+    fg-lightness: 90
+    saturation: 0.35
+
+aether:
+  label: "Aether"
+  colors:
+    bg-primary: "#0a0a0f"
+    bg-secondary: "#12121a"
+    bg-tertiary: "#1a1a24"
+    text-primary: "#e0e0f0"
+    text-secondary: "#8888a0"
+    text-tertiary: "#555568"
+    border: "#252530"
+    accent: "#7c4dff"
+  terminal:
+    bg-lightness: 5
+    fg-lightness: 88
+    saturation: 0.4
+
+essence:
+  label: "Essence"
+  colors:
+    bg-primary: "#0e0e0e"
+    bg-secondary: "#161616"
+    bg-tertiary: "#1e1e1e"
+    text-primary: "#aaaaaa"
+    text-secondary: "#666666"
+    text-tertiary: "#444444"
+    border: "#222222"
+    accent: "#888888"
+  terminal:
+    bg-lightness: 6
+    fg-lightness: 75
+    saturation: 0.15

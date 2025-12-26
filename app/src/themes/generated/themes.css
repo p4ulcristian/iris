@@ -1,0 +1,48 @@
+/* Auto-generated from config/themes.yaml */
+/* Do not edit directly - run: node scripts/generate-themes.js */
+
+:root,
+.theme-divine-void {
+  --color-bg-primary: #070708;
+  --color-bg-secondary: #0f0f10;
+  --color-bg-tertiary: #161617;
+  --color-text-primary: #d4d0c8;
+  --color-text-secondary: #888580;
+  --color-text-tertiary: #555550;
+  --color-border: #1a1918;
+  --color-accent: #c9a227;
+}
+
+.theme-olympus {
+  --color-bg-primary: #0f0e0c;
+  --color-bg-secondary: #1a1815;
+  --color-bg-tertiary: #242118;
+  --color-text-primary: #e8e4dc;
+  --color-text-secondary: #a09a8c;
+  --color-text-tertiary: #6a6458;
+  --color-border: #2a2520;
+  --color-accent: #d4af37;
+}
+
+.theme-aether {
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-bg-tertiary: #1a1a24;
+  --color-text-primary: #e0e0f0;
+  --color-text-secondary: #8888a0;
+  --color-text-tertiary: #555568;
+  --color-border: #252530;
+  --color-accent: #7c4dff;
+}
+
+.theme-essence {
+  --color-bg-primary: #0e0e0e;
+  --color-bg-secondary: #161616;
+  --color-bg-tertiary: #1e1e1e;
+  --color-text-primary: #aaaaaa;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #444444;
+  --color-border: #222222;
+  --color-accent: #888888;
+}
+

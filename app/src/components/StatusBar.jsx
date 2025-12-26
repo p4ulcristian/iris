@@ -1,4 +1,6 @@
+import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store'
+import { THEMES } from '../themes/generated/themes'
 
 function Spinner() {
   return (
@@ -36,7 +38,150 @@ function ServiceIndicator({ name, serviceKey, active, loading, icon, onToggle })
   )
 }
 
-export default function StatusBar({ godCount, connected, send }) {
+const VIEW_MODES = [
+  { id: 'grid', label: 'Grid', icon: '▦' },
+  { id: 'focus', label: 'Focus', icon: '◰' }
+]
+
+function ModePicker({ send }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+  const viewMode = useStore(s => s.viewMode)
+  const focusedGod = useStore(s => s.focusedGod)
+  const getActiveGods = useStore(s => s.getActiveGods)
+  const activeGods = getActiveGods()
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const currentMode = VIEW_MODES.find(m => m.id === viewMode) || VIEW_MODES[0]
+
+  const handleSelect = (modeId) => {
+    if (modeId === 'focus' && activeGods.length > 1) {
+      // Enter focus mode with first god if none focused
+      send({ event: 'viewMode:set', mode: 'focus', focusedGod: focusedGod || activeGods[0]?.name })
+    } else {
+      send({ event: 'viewMode:set', mode: modeId })
+    }
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs hover:bg-bg-tertiary transition-colors"
+        title="Change layout mode"
+      >
+        <span>{currentMode.icon}</span>
+        <span>{currentMode.label}</span>
+        <span className="text-text-tertiary">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full right-0 mb-1 min-w-[100px] bg-bg-secondary border border-border rounded shadow-lg py-1 z-50">
+          {VIEW_MODES.map((m) => {
+            const disabled = m.id === 'focus' && activeGods.length < 2
+            return (
+              <button
+                key={m.id}
+                onClick={() => !disabled && handleSelect(m.id)}
+                disabled={disabled}
+                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${
+                  disabled
+                    ? 'text-text-tertiary cursor-not-allowed'
+                    : m.id === viewMode
+                      ? 'bg-bg-tertiary text-text-primary'
+                      : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                }`}
+              >
+                <span>{m.icon}</span>
+                <span>{m.label}</span>
+                {m.id === viewMode && <span className="ml-auto">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ThemePicker({ send }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+  const theme = useStore(s => s.theme)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const currentTheme = THEMES.find(t => t.id === theme) || THEMES[0]
+
+  const handleSelect = (themeId) => {
+    send({ event: 'theme:set', theme: themeId })
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs hover:bg-bg-tertiary transition-colors"
+        title="Change theme"
+      >
+        <span
+          className="w-3 h-3 rounded-full border border-white/20"
+          style={{ backgroundColor: currentTheme.accent }}
+        />
+        <span>{currentTheme.label}</span>
+        <span className="text-text-tertiary">▾</span>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full right-0 mb-1 min-w-[140px] bg-bg-secondary border border-border rounded shadow-lg py-1 z-50">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => handleSelect(t.id)}
+              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${
+                t.id === theme
+                  ? 'bg-bg-tertiary text-text-primary'
+                  : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+              }`}
+            >
+              <span
+                className="w-3 h-3 rounded-full border border-white/20"
+                style={{ backgroundColor: t.accent }}
+              />
+              <span>{t.label}</span>
+              {t.id === theme && <span className="ml-auto">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function StatusBar({ connected, send }) {
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
@@ -106,17 +251,17 @@ export default function StatusBar({ godCount, connected, send }) {
         />
       </div>
 
-      {/* God count */}
-      <div className="ml-auto mr-4">
-        {godCount} god{godCount !== 1 ? 's' : ''}
-      </div>
+      {/* Spacer */}
+      <div className="flex-1" />
 
-      {/* Settings */}
-      <div className="flex gap-2">
-        <button className="w-6 h-6 flex items-center justify-center hover:bg-bg-tertiary rounded transition-colors">
-          ⚙
-        </button>
-      </div>
+      {/* Mode picker */}
+      <ModePicker send={send} />
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-border mx-2" />
+
+      {/* Theme picker */}
+      <ThemePicker send={send} />
     </footer>
   )
 }
