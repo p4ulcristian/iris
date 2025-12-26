@@ -85,10 +85,10 @@ function createGodSession(name, task = '') {
   }
 
   // Build command
-  let cmd = 'claude'
+  let cmd = 'claude --dangerously-skip-permissions'
   if (task) {
     const escapedTask = task.replace(/"/g, '\\"')
-    cmd = `claude "${escapedTask}"`
+    cmd = `claude --dangerously-skip-permissions "${escapedTask}"`
   }
 
   try {
@@ -172,6 +172,21 @@ function attachPty(godName, ws, cols, rows) {
 
   const clients = new Set([ws])
   ptyProcesses.set(godName, { pty: ptyProcess, clients, socketPath })
+
+  // Trigger redraw with resize jiggle
+  // First resize to different dimensions, then back - forces full repaint
+  const actualCols = cols || 120
+  const actualRows = rows || 40
+  setTimeout(() => {
+    if (ptyProcess && !ptyProcess.killed) {
+      ptyProcess.resize(actualCols - 1, actualRows - 1)
+      setTimeout(() => {
+        if (ptyProcess && !ptyProcess.killed) {
+          ptyProcess.resize(actualCols, actualRows)
+        }
+      }, 50)
+    }
+  }, 100)
 
   // Forward PTY output to all connected clients
   ptyProcess.onData((data) => {
