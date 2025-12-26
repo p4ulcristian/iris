@@ -14,13 +14,10 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Get container dimensions before creating terminal
+    // Pre-calculate dimensions from container before creating terminal
     const rect = containerRef.current.getBoundingClientRect()
-    // Estimate rows based on container height and approximate line height (17px for 14px font)
     const estimatedRows = Math.floor(rect.height / 17) || 24
     const estimatedCols = Math.floor(rect.width / 8.4) || 80
-
-    console.log(`[${godName}] Container: ${rect.width}x${rect.height}, estimated: ${estimatedCols}x${estimatedRows}`)
 
     const term = new XTerm({
       cursorBlink: true,
@@ -43,6 +40,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
 
     const textarea = term.textarea
 
+    // Intercept keyboard shortcuts before xterm handles them
     const handleShortcut = (e) => {
       const key = e.key.toLowerCase()
       const isCtrlShortcut = e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
@@ -75,41 +73,32 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Wait for first render, then fit
+    // Fit after first render
     const onFirstRender = term.onRender(() => {
       onFirstRender.dispose()
-      try {
-        fitAddon.fit()
-        console.log(`[${godName}] Fit on render: cols=${term.cols}, rows=${term.rows}`)
-      } catch (e) {
-        console.log(`[${godName}] Fit on render error:`, e.message)
-      }
+      try { fitAddon.fit() } catch {}
     })
 
-    // Also try fitting after a delay as backup
+    // Backup fit after delay
     const fitTimeout = setTimeout(() => {
-      try {
-        fitAddon.fit()
-        console.log(`[${godName}] Delayed fit: cols=${term.cols}, rows=${term.rows}`)
-      } catch (e) {
-        console.log(`[${godName}] Delayed fit error:`, e.message)
-      }
+      try { fitAddon.fit() } catch {}
     }, 500)
 
+    // Send input to PTY
     term.onData((data) => {
       sendWs({ event: 'pty:input', godName, data })
     })
 
+    // Refit on container resize
     const resizeObserver = new ResizeObserver(() => {
       try {
         fitAddon.fit()
         sendWs({ event: 'pty:resize', godName, cols: term.cols, rows: term.rows })
-      } catch (e) {
-        // Not ready yet
-      }
+      } catch {}
     })
     resizeObserver.observe(containerRef.current)
 
+    // WebSocket connection
     const ws = new WebSocket('ws://localhost:9999')
     wsRef.current = ws
 
@@ -126,7 +115,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         if (msg.event === 'pty:output' && msg.godName === godName) {
           term.write(msg.data)
         }
-      } catch (e) {}
+      } catch {}
     }
 
     function sendWs(data) {
@@ -159,6 +148,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         boxShadow: isFocused ? `0 0 30px ${color}44` : `0 0 20px ${color}22`
       }}
     >
+      {/* Header */}
       <div
         className="flex-shrink-0 flex items-center h-8 px-3 bg-bg-secondary"
         style={{ borderBottom: `1px solid ${color}44` }}
@@ -189,7 +179,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         </button>
       </div>
 
-      {/* Terminal wrapper with relative positioning */}
+      {/* Terminal - absolute positioning gives explicit dimensions */}
       <div className="flex-1 relative min-h-0">
         <div
           ref={containerRef}
