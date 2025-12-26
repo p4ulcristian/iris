@@ -39,7 +39,6 @@ def detect_module(file_paths: list[str]) -> str:
         r"features/": lambda m: m.group(0).split("/")[1].title(),
         r"brain/": "Brain",
         r"brain/skills/": lambda m: m.group(0).split("/")[2].title() + " Skill",
-        r"brain/cli/": "CLI",
         r"brain/hear/": "Hear",
         r"brain/speak/": "Speak",
         r"brain/wake/": "Wake",

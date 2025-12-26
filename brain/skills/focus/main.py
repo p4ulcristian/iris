@@ -1,13 +1,78 @@
-"""Focus - update god's pane title with current activity."""
+"""Focus - update god's status in the Iris v2 Electron app."""
 
 import os
 import sys
+import json
+import socket
 
-from brain.cli import config, tmux
+
+def send_ws_message(message: dict, host: str = "127.0.0.1", port: int = 9999) -> bool:
+    """Send a WebSocket message to the Iris server.
+
+    Uses raw socket with WebSocket handshake for simplicity (no dependencies).
+    """
+    import struct
+    import hashlib
+    import base64
+
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2.0)
+        sock.connect((host, port))
+
+        # WebSocket handshake
+        key = base64.b64encode(os.urandom(16)).decode()
+        handshake = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n"
+            f"\r\n"
+        )
+        sock.send(handshake.encode())
+
+        # Read response (we don't validate, just consume it)
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = sock.recv(1024)
+            if not chunk:
+                break
+            response += chunk
+
+        # Send WebSocket frame
+        payload = json.dumps(message).encode()
+        frame = bytearray()
+        frame.append(0x81)  # Text frame, FIN bit set
+
+        length = len(payload)
+        if length <= 125:
+            frame.append(0x80 | length)  # Masked
+        elif length <= 65535:
+            frame.append(0x80 | 126)
+            frame.extend(struct.pack(">H", length))
+        else:
+            frame.append(0x80 | 127)
+            frame.extend(struct.pack(">Q", length))
+
+        # Masking key and masked payload
+        mask = os.urandom(4)
+        frame.extend(mask)
+        for i, byte in enumerate(payload):
+            frame.append(byte ^ mask[i % 4])
+
+        sock.send(bytes(frame))
+        sock.close()
+        return True
+
+    except Exception as e:
+        print(f"WebSocket error: {e}", file=sys.stderr)
+        return False
 
 
 def update_focus(status: str) -> bool:
-    """Update pane title with current status.
+    """Update god's status in the Iris app.
 
     Args:
         status: Short description of current activity
@@ -15,30 +80,18 @@ def update_focus(status: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    uuid = os.environ.get("GOD_UUID")
     name = os.environ.get("GOD_NAME")
 
-    if not uuid or not name:
-        print("\033[31mNot running as a god\033[0m")
+    if not name:
+        print("\033[31mNot running as a god (GOD_NAME not set)\033[0m")
         return False
 
-    shadow_dir = config.SHADOWS_DIR / uuid
-    if not shadow_dir.exists():
-        print(f"\033[31mShadow folder not found: {uuid}\033[0m")
-        return False
-
-    # Save to shadow folder
-    (shadow_dir / "current_task.txt").write_text(status)
-
-    # Update tmux title
-    pane_file = shadow_dir / "pane_id.txt"
-    if pane_file.exists():
-        pane_id = pane_file.read_text().strip()
-        display = status[:40] + "..." if len(status) > 40 else status
-        tmux.set_pane_title(pane_id, f"{name}: {display}")
-        return True
-
-    return False
+    # Send status update to Electron app
+    return send_ws_message({
+        "event": "god:status",
+        "godName": name,
+        "status": status
+    })
 
 
 def main():
