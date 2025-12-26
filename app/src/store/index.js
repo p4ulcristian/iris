@@ -119,9 +119,11 @@ export const useStore = create(
         // Don't add if already exists
         if (state.gods[name]) return
 
+        const godKey = name.toLowerCase()
         state.gods[name] = {
           name,
-          color: god.color || GOD_COLORS[name.toLowerCase()] || '#888',
+          color: god.color || GOD_COLORS[godKey] || '#888',
+          voice: god.voice || godKey,
           status: god.status || 'laboring',
           tabId: state.activeTabId,  // Assign to current tab
         }

@@ -24,20 +24,20 @@ const wsClients = new Set()
 const ptyProcesses = new Map() // godName -> { pty, clients: Set<ws> }
 let terminalCounter = 0
 
-const GOD_COLORS = {
-  zeus: '#ffd700',
-  apollo: '#ffeb3b',
-  artemis: '#009688',
-  athena: '#2196f3',
-  hermes: '#ff9800',
-  hades: '#9c27b0',
-  poseidon: '#00bcd4',
-  hera: '#e91e63',
-  ares: '#f44336',
-  hephaestus: '#cd7f32',
-  aphrodite: '#ff6b9d',
-  dionysus: '#7c4dff',
-  demeter: '#4caf50'
+const PANTHEON = {
+  zeus:       { color: '#ffd700', voice: 'zeus' },
+  apollo:     { color: '#ffeb3b', voice: 'apollo' },
+  artemis:    { color: '#009688', voice: 'artemis' },
+  athena:     { color: '#2196f3', voice: 'athena' },
+  hermes:     { color: '#ff9800', voice: 'hermes' },
+  hades:      { color: '#9c27b0', voice: 'hades' },
+  poseidon:   { color: '#00bcd4', voice: 'poseidon' },
+  hera:       { color: '#e91e63', voice: 'hera' },
+  ares:       { color: '#f44336', voice: 'ares' },
+  hephaestus: { color: '#cd7f32', voice: 'hephaestus' },
+  aphrodite:  { color: '#ff6b9d', voice: 'aphrodite' },
+  dionysus:   { color: '#7c4dff', voice: 'dionysus' },
+  demeter:    { color: '#4caf50', voice: 'demeter' }
 }
 
 // --- DTACH HELPERS ---
@@ -59,10 +59,12 @@ function listGodSockets() {
       .map(f => {
         const name = f.replace('.sock', '')
         const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
+        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
         return {
           name: capitalName,
           socketPath: path.join(SOCKET_DIR, f),
-          color: GOD_COLORS[name.toLowerCase()] || '#888',
+          color: god.color,
+          voice: god.voice,
           status: 'laboring'
         }
       })
@@ -72,32 +74,42 @@ function listGodSockets() {
 }
 
 function createGodSession(name, task = '') {
-  const godName = name.toLowerCase()
-  const socketPath = getSocketPath(godName)
+  const godKey = name.toLowerCase()
+  const socketPath = getSocketPath(godKey)
+  const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
 
-  if (socketExists(godName)) {
+  if (socketExists(godKey)) {
     return {
       name,
       socketPath,
-      color: GOD_COLORS[godName] || '#888',
+      color: god.color,
+      voice: god.voice,
       status: 'laboring',
       exists: true
     }
   }
 
+  // Build init prompt with god identity
+  const initPrompt = task
+    ? `${task}
+
+You are ${name}. Voice: ${god.voice}. Color: ${god.color}.
+
+Announce yourself, then begin.`
+    : ''
+
   // Build command
-  let cmd = 'claude --dangerously-skip-permissions'
-  if (task) {
-    const escapedTask = task.replace(/"/g, '\\"')
-    cmd = `claude --dangerously-skip-permissions "${escapedTask}"`
-  }
+  const escapedPrompt = initPrompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')
+  const cmd = initPrompt
+    ? `claude --dangerously-skip-permissions "${escapedPrompt}"`
+    : 'claude --dangerously-skip-permissions'
 
   try {
     // Create detached dtach session
     // -n = create new socket, run detached
     // -E = disable detach character (we manage lifecycle)
     const projectRoot = path.join(__dirname, '../..')
-    execSync(`dtach -n "${socketPath}" -E ${cmd}`, {
+    execSync(`GOD_NAME="${name}" dtach -n "${socketPath}" -E ${cmd}`, {
       stdio: 'ignore',
       detached: true,
       cwd: projectRoot
@@ -109,7 +121,8 @@ function createGodSession(name, task = '') {
     return {
       name,
       socketPath,
-      color: GOD_COLORS[godName] || '#888',
+      color: god.color,
+      voice: god.voice,
       status: 'laboring'
     }
   } catch (e) {
