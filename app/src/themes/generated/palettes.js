@@ -129,16 +129,3 @@ export function getGodPalette(godName, themeTerminal = {}) {
   const color = GOD_COLORS[godName.toLowerCase()] || GOD_COLORS.zeus
   return generatePalette(color, themeTerminal)
 }
-
-// Get theme-adjusted god color for headers/borders
-export function getGodColor(godName, themeTerminal = {}) {
-  const baseColor = GOD_COLORS[godName.toLowerCase()] || GOD_COLORS.zeus
-  const hsl = hexToHsl(baseColor)
-
-  // Apply theme saturation factor (default 1.0 = no change for UI elements)
-  const satFactor = themeTerminal['ui-saturation'] ?? themeTerminal['saturation'] ?? 1.0
-  // Normalize: terminal saturation is 0.3-0.4, UI should be higher
-  const adjustedSat = satFactor < 1 ? hsl.s * Math.min(satFactor * 2.5, 1) : hsl.s * satFactor
-
-  return hslToHex(hsl.h, adjustedSat, hsl.l)
-}

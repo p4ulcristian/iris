@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { getGodPalette, getGodColor } from '../themes/generated/palettes'
+import { generatePalette } from '../themes/generated/palettes'
 import { getThemeTerminalSettings } from '../themes/generated/themes'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -14,7 +14,7 @@ function hexToRgb(hex) {
   return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
 }
 
-export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubleClick, onClose, onToggleFullscreen, tabs, activeTabId, onMoveToTab, onMoveToNewTab, compact }) {
+export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocus, onDoubleClick, onClose, onToggleFullscreen, tabs, activeTabId, onMoveToTab, onMoveToNewTab, compact }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
@@ -25,11 +25,14 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubl
   const { name, color } = god
   const godName = name
 
-  // Get current theme and generate theme-aware palette + color
+  // Get god color from server (single source of truth)
+  const godColors = useStore(s => s.godColors)
+  const godColor = godColors[name.toLowerCase()] || color  // fallback to prop color
+
+  // Get theme terminal settings and generate palette using theme-specific god color
   const theme = useStore(s => s.theme)
   const themeTerminalSettings = useMemo(() => getThemeTerminalSettings(theme), [theme])
-  const palette = useMemo(() => getGodPalette(name, themeTerminalSettings), [name, themeTerminalSettings])
-  const godColor = useMemo(() => getGodColor(name, themeTerminalSettings), [name, themeTerminalSettings])
+  const palette = useMemo(() => generatePalette(godColor, themeTerminalSettings), [godColor, themeTerminalSettings])
 
   // Update terminal theme when palette changes (theme switch)
   useEffect(() => {
@@ -54,6 +57,33 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubl
 
   // Get other tabs (tabs we can move to)
   const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
+
+  // Track previous hidden state to trigger refit when becoming visible
+  const wasHiddenRef = useRef(isHidden)
+
+  // Refit terminal when becoming visible (switching back to tab)
+  useEffect(() => {
+    if (wasHiddenRef.current && !isHidden && termRef.current && fitAddonRef.current) {
+      // Delay to let layout settle after becoming visible
+      const timeout = setTimeout(() => {
+        try {
+          fitAddonRef.current.fit()
+          // Also notify server of new size
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              event: 'pty:resize',
+              godName,
+              cols: termRef.current.cols,
+              rows: termRef.current.rows
+            }))
+          }
+        } catch {}
+      }, 50)
+      wasHiddenRef.current = isHidden
+      return () => clearTimeout(timeout)
+    }
+    wasHiddenRef.current = isHidden
+  }, [isHidden, godName])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -218,8 +248,8 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubl
       onDoubleClick={onDoubleClick}
       className="relative flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-all"
       style={{
-        borderColor: isFocused ? color : '#333',
-        boxShadow: isFocused ? `0 0 30px ${color}44` : 'none',
+        borderColor: isFocused ? godColor : '#333',
+        boxShadow: isFocused ? `0 0 30px ${godColor}44` : 'none',
         viewTransitionName: `god-${name.toLowerCase()}`
       }}
     >
@@ -230,7 +260,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onDoubl
       {/* Header */}
       <div
         className="flex-shrink-0 flex items-center h-8 px-3"
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: godColor }}
       >
         <span className="text-sm font-medium text-black">{name}</span>
         <div className="flex-1" />

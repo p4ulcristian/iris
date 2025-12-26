@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
 import { execSync, spawn } from 'child_process'
 import pty from 'node-pty'
+import { THEMES, getThemeGodColors } from '../src/themes/generated/themes.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -80,12 +81,14 @@ function getStateForBroadcast() {
   // Sort gods by order within each tab
   gods.sort((a, b) => a.order - b.order)
 
+  const godColors = getThemeGodColors(appState.theme)
   return {
     tabs: appState.tabs,
     activeTabId: appState.activeTabId,
     tabCounter: appState.tabCounter,
     gods,
     theme: appState.theme,
+    godColors,
     viewMode: appState.viewMode,
     focusedGod: appState.focusedGod
   }

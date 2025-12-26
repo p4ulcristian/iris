@@ -56,7 +56,7 @@ function parseThemesYaml(content) {
       themes[currentTheme] = { colors: {}, terminal: {} }
       currentSection = null
     }
-    // Section (2 spaces): colors, terminal, label
+    // Section (2 spaces): colors, terminal, label, gods
     else if (indent === 2 && currentTheme) {
       const match = trimmed.match(/^(\w+):\s*(.*)/)
       if (match) {
@@ -67,8 +67,11 @@ function parseThemesYaml(content) {
           themes[currentTheme][key] = value
           currentSection = null
         } else {
-          // Section start like colors:
+          // Section start like colors: or gods:
           currentSection = key
+          if (key === 'gods') {
+            themes[currentTheme].gods = {}
+          }
         }
       }
     }
@@ -384,7 +387,8 @@ export const THEMES = ${JSON.stringify(
     id,
     label: config.label || id,
     accent: config.colors.accent,
-    terminal: config.terminal || {}
+    terminal: config.terminal || {},
+    gods: config.gods || {}
   })),
   null,
   2
@@ -396,6 +400,12 @@ export const DEFAULT_THEME = '${defaultThemeName}'
 export function getThemeTerminalSettings(themeId) {
   const theme = THEMES.find(t => t.id === themeId)
   return theme?.terminal || THEMES[0]?.terminal || {}
+}
+
+// Get god colors for a theme
+export function getThemeGodColors(themeId) {
+  const theme = THEMES.find(t => t.id === themeId)
+  return theme?.gods || THEMES[0]?.gods || {}
 }
 `
 writeFileSync(join(outDir, 'themes.js'), themesJs)

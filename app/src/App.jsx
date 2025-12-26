@@ -6,7 +6,7 @@ import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import DevPanel from './components/DevPanel'
 import { useWebSocket } from './hooks/useWebSocket'
-import { useStore, GOD_COLORS } from './store'
+import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 
 export default function App() {
@@ -34,6 +34,7 @@ export default function App() {
   const getActiveGods = useStore(s => s.getActiveGods)
   const getGodsForTab = useStore(s => s.getGodsForTab)
   const getAllGodNames = useStore(s => s.getAllGodNames)
+  const getAllGods = useStore(s => s.getAllGods)
   const syncState = useStore(s => s.syncState)
 
   const [confirmModal, setConfirmModal] = useState(null)
@@ -347,10 +348,16 @@ export default function App() {
     toggleDevPanel, handleExitFocus, handleSetFocus, send, tabs, activeTabId
   ])
 
-  // Get gods to display (all or just fullscreen)
+  // Get ALL gods for persistent rendering
+  const allGods = getAllGods()
+
+  // Get gods to display in the visible grid (active tab or fullscreen)
   const displayGods = fullscreenGod
     ? activeGods.filter(g => g.name === fullscreenGod)
     : activeGods
+
+  // Get hidden gods (on other tabs) - these stay mounted but invisible
+  const hiddenGods = allGods.filter(g => g.tabId !== activeTabId)
 
   return (
     <div className={`flex flex-col h-screen bg-bg-primary theme-${theme}`}>
@@ -460,6 +467,28 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Hidden gods container - keeps terminals alive when on other tabs */}
+      <div className="fixed -left-[9999px] -top-[9999px] w-[800px] h-[600px] overflow-hidden pointer-events-none" aria-hidden="true">
+        {hiddenGods.map(god => (
+          <div key={god.name} className="w-full h-full">
+            <GodCard
+              god={god}
+              isFocused={false}
+              isFullscreen={false}
+              isHidden={true}
+              onFocus={() => {}}
+              onDoubleClick={() => {}}
+              onClose={() => handleKillGod(god.name)}
+              onToggleFullscreen={() => {}}
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onMoveToTab={() => {}}
+              onMoveToNewTab={() => {}}
+            />
+          </div>
+        ))}
+      </div>
 
       {/* Confirm modal */}
       <ConfirmModal

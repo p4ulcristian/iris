@@ -2,23 +2,6 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { devtools } from 'zustand/middleware'
 
-// God colors
-const GOD_COLORS = {
-  zeus: '#ffd700',
-  apollo: '#ffeb3b',
-  artemis: '#009688',
-  athena: '#2196f3',
-  hermes: '#ff9800',
-  hades: '#9c27b0',
-  poseidon: '#00bcd4',
-  hera: '#e91e63',
-  ares: '#f44336',
-  hephaestus: '#cd7f32',
-  aphrodite: '#ff6b9d',
-  dionysus: '#7c4dff',
-  demeter: '#4caf50'
-}
-
 // Initial state
 const initialState = {
   // Tabs
@@ -52,6 +35,7 @@ const initialState = {
 
   // Synced from server
   theme: 'divine-void',  // Will be overwritten by state:sync
+  godColors: {},  // { godName: color } - from server based on current theme
 
   // Connection
   connected: false,
@@ -140,7 +124,7 @@ export const useStore = create(
         const godKey = name.toLowerCase()
         state.gods[name] = {
           name,
-          color: god.color || GOD_COLORS[godKey] || '#888',
+          color: god.color || '#888',
           voice: god.voice || godKey,
           status: god.status || 'laboring',
           tabId: state.activeTabId,  // Assign to current tab
@@ -267,6 +251,13 @@ export const useStore = create(
         return Object.keys(get().gods)
       },
 
+      // Get ALL gods across all tabs (for persistent rendering)
+      getAllGods: () => {
+        const state = get()
+        return Object.values(state.gods)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
       // ============ SYNC FROM SERVER ============
 
       syncState: (serverState) => set((state) => {
@@ -289,9 +280,12 @@ export const useStore = create(
         })
         state.gods = newGods
 
-        // Sync theme
+        // Sync theme and godColors
         if (serverState.theme) {
           state.theme = serverState.theme
+        }
+        if (serverState.godColors) {
+          state.godColors = serverState.godColors
         }
 
         // Sync viewMode and focusedGod from server
@@ -311,6 +305,3 @@ export const useStore = create(
     { name: 'iris-store' }
   )
 )
-
-// Export GOD_COLORS for use elsewhere
-export { GOD_COLORS }

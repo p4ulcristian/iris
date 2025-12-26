@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { GOD_COLORS } from '../store'
+import { useStore } from '../store'
 
 export default function SummonModal({
   isOpen,
@@ -10,9 +10,10 @@ export default function SummonModal({
   const [selectedGod, setSelectedGod] = useState('')
   const [task, setTask] = useState('')
   const inputRef = useRef(null)
+  const godColors = useStore(s => s.godColors)
 
-  // Get available gods
-  const allGods = Object.keys(GOD_COLORS)
+  // Get available gods from server-provided godColors
+  const allGods = Object.keys(godColors)
   const usedLower = usedGodNames.map(n => n.toLowerCase())
   const availableGods = allGods.filter(g => !usedLower.includes(g))
   const godPool = availableGods.length > 0 ? availableGods : allGods
@@ -76,7 +77,7 @@ export default function SummonModal({
               className="w-full bg-bg-tertiary border border-border rounded px-3 py-2 text-text-primary appearance-none cursor-pointer focus:outline-none focus:border-accent"
               style={{
                 borderLeftWidth: '3px',
-                borderLeftColor: GOD_COLORS[selectedGod] || '#888'
+                borderLeftColor: godColors[selectedGod] || '#888'
               }}
             >
               {godPool.map(god => (
@@ -103,8 +104,12 @@ export default function SummonModal({
             value={task}
             onChange={(e) => setTask(e.target.value)}
             onKeyDown={(e) => {
-              // Ctrl+Enter or Cmd+Enter to submit
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              if (e.key === 'Enter') {
+                if (e.ctrlKey || e.metaKey) {
+                  // Ctrl+Enter: insert newline (let default happen)
+                  return
+                }
+                // Plain Enter: summon
                 e.preventDefault()
                 handleSubmit()
               }
@@ -114,7 +119,7 @@ export default function SummonModal({
             className="w-full bg-bg-tertiary border border-border rounded px-3 py-2 text-text-primary placeholder-text-secondary/50 resize-none focus:outline-none focus:border-accent"
           />
           <p className="text-text-secondary/50 text-xs mt-1">
-            Ctrl+Enter to summon
+            Enter to summon · Ctrl+Enter for newline
           </p>
         </div>
 
@@ -131,10 +136,10 @@ export default function SummonModal({
             type="submit"
             className="px-4 py-1.5 text-sm font-medium rounded transition-all"
             style={{
-              backgroundColor: GOD_COLORS[selectedGod] + '33',
-              color: GOD_COLORS[selectedGod],
+              backgroundColor: (godColors[selectedGod] || '#888') + '33',
+              color: godColors[selectedGod] || '#888',
               borderWidth: '1px',
-              borderColor: GOD_COLORS[selectedGod] + '66'
+              borderColor: (godColors[selectedGod] || '#888') + '66'
             }}
           >
             Summon
