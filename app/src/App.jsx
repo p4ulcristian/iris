@@ -401,12 +401,18 @@ export default function App() {
               Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to summon
             </p>
           </div>
-        ) : viewMode === 'focus' && focusedGod ? (
+        ) : viewMode === 'focus' && activeGods.length > 0 ? (
           /* Focus mode: main god + sidebar */
+          (() => {
+            // Auto-select first god if focusedGod is not set or not in active tab
+            const effectiveFocusedGod = (focusedGod && activeGods.some(g => g.name === focusedGod))
+              ? focusedGod
+              : activeGods[0].name
+            return (
           <div className="flex gap-4 h-full">
             {/* Main focused god - 2:1 ratio with sidebar */}
             <div className="flex-[2] min-w-0">
-              {activeGods.filter(g => g.name === focusedGod).map(god => (
+              {activeGods.filter(g => g.name === effectiveFocusedGod).map(god => (
                 <GodCard
                   key={god.name}
                   god={god}
@@ -440,7 +446,7 @@ export default function App() {
                   <GodTaskCard
                     key={god.name}
                     god={god}
-                    isActive={god.name === focusedGod}
+                    isActive={god.name === effectiveFocusedGod}
                     onClick={() => handleEnterFocus(god.name)}
                     onClose={() => handleKillGod(god.name)}
                   />
@@ -472,6 +478,8 @@ export default function App() {
               </div>
             </div>
           </div>
+            )
+          })()
         ) : (
           /* Grid mode */
           <div className={`grid ${getGridClass(displayGods.length)} gap-4 h-full auto-rows-fr`}>
