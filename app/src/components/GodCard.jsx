@@ -22,7 +22,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const moveMenuRef = useRef(null)
 
-  const { name, color } = god
+  const { name, color, status } = god
   const godName = name
 
   // Get god color from server (single source of truth)
@@ -262,7 +262,9 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
         className="flex-shrink-0 flex items-center h-8 px-3"
         style={{ backgroundColor: godColor }}
       >
-        <span className="text-sm font-medium text-black">{name}</span>
+        <span className="text-sm font-medium text-black truncate">
+          {name}{status && <span className="opacity-70"> — {status}</span>}
+        </span>
         <div className="flex-1" />
 
         {/* Move to tab button */}

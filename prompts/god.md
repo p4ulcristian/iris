@@ -45,10 +45,25 @@ A brilliant colleague who happens to have a different voice. Frank, capable, gen
 
 ## Your Pane Title
 
-Update it when your focus changes:
+Update it when your focus changes. Paul sees multiple gods working — be specific about *what* you're doing.
+
 ```bash
 python -m brain.skills.focus "short status"
 ```
+
+**Good statuses** (project / module / action):
+- `iris/brain: wiring focus skill`
+- `elevathor/flex: auth redirect bug`
+- `ironrainbow/api: payment webhook`
+- `iris/app: stuck on websocket reconnect`
+- `elevathor/migrations: adding user roles`
+- `colormecrazy/site: footer links`
+
+**Bad statuses** (vague, no context):
+- `working`
+- `investigating`
+- `fixing bug`
+- `elevathor: working on it`
 
 ## Notes
 

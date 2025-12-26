@@ -27,7 +27,7 @@ let appState = {
   tabs: [{ id: 1, name: 'Main' }],
   activeTabId: 1,
   tabCounter: 1,
-  gods: {},  // { godName: { tabId, order } }
+  gods: {},  // { godName: { tabId, order, status } }
   theme: 'divine-void',  // Current theme ID
   viewMode: 'grid',  // 'grid' | 'focus'
   focusedGod: null   // Which god is focused (used in focus mode)
@@ -75,7 +75,8 @@ function getStateForBroadcast() {
   const gods = listGodSockets().map(sock => ({
     ...sock,
     tabId: appState.gods[sock.name]?.tabId || 1,
-    order: appState.gods[sock.name]?.order || 0
+    order: appState.gods[sock.name]?.order || 0,
+    status: appState.gods[sock.name]?.status || null
   }))
 
   // Sort gods by order within each tab
@@ -222,7 +223,7 @@ function startService(name) {
 
   console.log(`Starting ${name} service...`)
 
-  const proc = spawn('uv', ['run', scriptPath], {
+  const proc = spawn('uv', ['run', '--script', scriptPath], {
     cwd: projectRoot,
     detached: true,
     stdio: 'ignore',
@@ -322,15 +323,15 @@ function createGodSession(name, task = '') {
     }
   }
 
-  // Build init prompt with god identity (always include identity)
+  // Build init prompt with god identity
   const identity = `You are ${name}. Voice: ${god.voice}.`
   const initPrompt = task
-    ? `${task}\n\n${identity}\n\nAnnounce yourself, then begin.`
-    : `${identity}\n\nAnnounce yourself and ask what Paul needs.`
+    ? `${task}\n\n${identity}`
+    : identity
 
-  // Build command
-  const escapedPrompt = initPrompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')
-  const cmd = `claude --dangerously-skip-permissions "${escapedPrompt}"`
+  // Build command - use $'...' syntax for real newlines
+  const escapedPrompt = initPrompt.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  const cmd = `claude --dangerously-skip-permissions $'${escapedPrompt}'`
 
   try {
     // Create detached dtach session
@@ -617,6 +618,17 @@ function handleMessage(ws, msg) {
     case 'god:list': {
       const gods = listGodSockets()
       ws.send(JSON.stringify({ event: 'god:list', gods }))
+      break
+    }
+
+    case 'god:status': {
+      const godName = data.godName
+      const status = data.status
+      if (godName && appState.gods[godName]) {
+        appState.gods[godName].status = status
+        saveState()
+        broadcastState()
+      }
       break
     }
 
