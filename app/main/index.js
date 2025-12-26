@@ -126,18 +126,35 @@ function createGodSession(name, task = '') {
   }
 }
 
-function createTerminalSession() {
+function createTerminalSession(options = {}) {
+  const { command, name: customName, color, cwd } = options
+
   terminalCounter++
-  const name = `Terminal${terminalCounter}`
-  const socketPath = getSocketPath(name.toLowerCase())
+  const name = customName || `Terminal${terminalCounter}`
+  const socketPath = getSocketPath(name.toLowerCase().replace(/[^a-z0-9]/g, '-'))
+
+  // If socket already exists, return existing session
+  if (fs.existsSync(socketPath)) {
+    return {
+      name,
+      socketPath,
+      color: color || '#888888',
+      status: 'laboring',
+      exists: true
+    }
+  }
 
   try {
-    // Create detached dtach session with bash
-    const projectRoot = path.join(__dirname, '../..')
-    execSync(`dtach -n "${socketPath}" -E bash`, {
+    // Build command - either custom command or bash
+    const shellCmd = command || 'bash'
+    const workDir = cwd || path.join(__dirname, '../..')
+
+    // Create detached dtach session
+    execSync(`dtach -n "${socketPath}" -E ${shellCmd}`, {
       stdio: 'ignore',
       detached: true,
-      cwd: projectRoot
+      cwd: workDir,
+      shell: true
     })
 
     // Give it a moment to start
@@ -146,7 +163,7 @@ function createTerminalSession() {
     return {
       name,
       socketPath,
-      color: '#888888',  // Gray for raw terminals
+      color: color || '#888888',
       status: 'laboring'
     }
   } catch (e) {
@@ -307,9 +324,16 @@ function handleMessage(ws, msg) {
     }
 
     case 'terminal:spawn': {
-      const terminal = createTerminalSession()
-      if (terminal) {
+      const terminal = createTerminalSession({
+        command: data.command,
+        name: data.name,
+        color: data.color,
+        cwd: data.cwd
+      })
+      if (terminal && !terminal.exists) {
         broadcast('god:spawned', terminal)
+      } else if (terminal?.exists) {
+        ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
       }
       break
     }
