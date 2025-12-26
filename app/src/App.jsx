@@ -87,6 +87,22 @@ export default function App() {
     return () => clearTimeout(timeout)
   }, [activeGods.length])
 
+  // Dispatch refit on window resize
+  useEffect(() => {
+    let timeout
+    const handleResize = () => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => {
+        window.dispatchEvent(new Event('iris:refit'))
+      }, 100)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => {
+      clearTimeout(timeout)
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [])
+
   // Summon a new god
   const handleSummon = useCallback(() => {
     const names = Object.keys(GOD_COLORS)
@@ -150,23 +166,23 @@ export default function App() {
     })
   }, [tabs, activeTabId, closeTab, send, getGodsForTab])
 
-  // Calculate grid classes based on layout mode and god count
+  // Calculate grid classes based on layout mode, god count, and screen width
   const getGridClass = (count) => {
     if (layoutMode === 'auto') {
       if (count === 1) return 'grid-cols-1'
-      if (count === 2) return 'grid-cols-2'
-      if (count <= 4) return 'grid-cols-2'
-      if (count <= 6) return 'grid-cols-3'
-      return 'grid-cols-4'
+      if (count === 2) return 'grid-cols-1 md:grid-cols-2'
+      if (count <= 4) return 'grid-cols-1 md:grid-cols-2'
+      if (count <= 6) return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+      return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
     }
     const layouts = {
       '1x1': 'grid-cols-1',
-      '2x1': 'grid-cols-2',
-      '2x2': 'grid-cols-2',
-      '3x2': 'grid-cols-3',
-      '3x3': 'grid-cols-3'
+      '2x1': 'grid-cols-1 md:grid-cols-2',
+      '2x2': 'grid-cols-1 md:grid-cols-2',
+      '3x2': 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3',
+      '3x3': 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
     }
-    return layouts[layoutMode] || 'grid-cols-2'
+    return layouts[layoutMode] || 'grid-cols-1 md:grid-cols-2'
   }
 
   // Keyboard shortcuts
