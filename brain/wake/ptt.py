@@ -4,11 +4,8 @@ Listens for CapsLock press/release without grabbing the device,
 so normal keyboard input continues to work.
 
 Modes:
-- "paste": CapsLock alone -> paste at cursor
-- "iris": Shift+CapsLock -> send to master Iris tmux pane
-
-Combos:
-- CapsLock+Enter -> push Enter in master Iris pane
+- "paste": CapsLock alone -> paste at cursor via wtype
+- "iris": Shift+CapsLock -> paste at cursor (same behavior)
 
 Tap vs Hold:
 - Quick tap (< 300ms) -> triggers on_tap callback (skip TTS)
@@ -96,8 +93,7 @@ class PTTListener:
 
         print(f"PTT listening on {len(self._devices)} device(s) for CapsLock")
         print("  CapsLock = paste at cursor")
-        print("  Shift+CapsLock = send to Iris")
-        print("  CapsLock+Enter = submit to Iris")
+        print("  Shift+CapsLock = paste at cursor (alternate mode)")
 
         for dev in self._devices:
             t = threading.Thread(target=self._listen, args=(dev,), daemon=True)
@@ -178,15 +174,11 @@ if __name__ == "__main__":
     def on_tap():
         print("CapsLock TAP - skip TTS!")
 
-    def on_enter():
-        print("CapsLock+Enter - submit to Iris!")
-
     print("Testing PTT listener (Ctrl+C to exit)")
     print(f"Quick tap (<{TAP_THRESHOLD}s) = skip TTS")
     print(f"Hold (>{TAP_THRESHOLD}s) = PTT recording")
-    print("CapsLock+Enter = submit to Iris")
 
-    listener = PTTListener(on_press=on_press, on_release=on_release, on_tap=on_tap, on_enter=on_enter)
+    listener = PTTListener(on_press=on_press, on_release=on_release, on_tap=on_tap)
     listener.start()
 
     try:

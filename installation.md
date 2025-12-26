@@ -1,13 +1,13 @@
 # Installation
 
-## CLI Only (Minimal)
+## Quick Start (App Only)
 
-Just the tmux orchestration - spawn and manage gods without voice.
+Run the Electron app to spawn and manage gods.
 
 ### Requirements
 
 ```bash
-sudo pacman -S uv tmux
+sudo pacman -S bun dtach
 ```
 
 ### Claude CLI
@@ -21,26 +21,15 @@ claude login
 
 ```bash
 git clone https://github.com/yourusername/iris.git ~/Work/iris
-
-# Add to PATH
-mkdir -p ~/.local/bin
-ln -s ~/Work/iris/iris ~/.local/bin/iris
+cd ~/Work/iris/app
+bun install
 ```
 
-### Usage
+### Run
 
 ```bash
-# Start tmux session (no servers)
-iris --no-servers
-
-# Spawn a god
-iris spawn "fix the login bug"
-
-# List gods
-iris list
-
-# Kill a god
-iris kill apollo
+cd app
+bun run dev
 ```
 
 ---
@@ -52,13 +41,14 @@ Complete setup with speech-to-text, text-to-speech, and push-to-talk.
 ### Requirements
 
 ```bash
-sudo pacman -S uv tmux wtype gtk4-layer-shell
+sudo pacman -S bun dtach uv wtype gtk4-layer-shell
 ```
 
 | Package | Purpose |
 |---------|---------|
+| `bun` | JS package manager / runtime |
+| `dtach` | Persistent terminal sessions |
 | `uv` | Python package manager |
-| `tmux` | Session management |
 | `wtype` | Wayland keyboard input (PTT) |
 | `gtk4-layer-shell` | Speech bubble overlay |
 
@@ -77,16 +67,6 @@ For faster TTS/STT:
 sudo pacman -S cuda cudnn
 ```
 
-### Setup
-
-```bash
-git clone https://github.com/yourusername/iris.git ~/Work/iris
-
-# Add to PATH
-mkdir -p ~/.local/bin
-ln -s ~/Work/iris/iris ~/.local/bin/iris
-```
-
 ### Input Group
 
 CapsLock detection needs `/dev/input/` access:
@@ -99,11 +79,14 @@ sudo usermod -aG input $USER
 
 ### Audio Device
 
-Edit `config/settings.yaml`:
+Edit `config/settings.json`:
 
-```yaml
-audio:
-  input_device: "Your Microphone Name"
+```json
+{
+  "audio": {
+    "input_device": "Your Microphone Name"
+  }
+}
 ```
 
 Find your device:
@@ -115,61 +98,36 @@ python -c "import sounddevice; print(sounddevice.query_devices())"
 ### First Run
 
 ```bash
-iris
+cd app
+bun run dev
 ```
 
-This starts all servers and the tmux session.
+Services can be started from the status bar (click the service icons).
 
-### Verify
+### Verify Services
 
-```bash
-iris status
-```
-
-You should see:
-- `speak` on port 8765
-- `hear` on port 8766
-- `express` on port 8767
-- `wake` running
+When running, you should see in the status bar:
+- `speak` (port 8765) - green when running
+- `hear` (port 8766) - green when running
+- `express` (port 8767) - green when running
+- `wake` - green when running
 
 ---
 
-## CLI Commands
-
-### Session
-
-| Command | Description |
-|---------|-------------|
-| `iris` | Start Iris (servers + tmux) |
-| `iris --no-servers` | Start tmux only |
-| `iris stop` | Stop servers |
-| `iris stop all` | Stop everything |
-| `iris status` | Show server status |
-| `iris logs` | Tail server logs |
-
-### Gods
-
-| Command | Description |
-|---------|-------------|
-| `iris spawn "<task>"` | Summon a god |
-| `iris spawn --god zeus "<task>"` | Summon specific god |
-| `iris spawn --project ir "<task>"` | God with project context |
-| `iris list` | List active gods |
-| `iris peek <name>` | View god's output |
-| `iris send <name> "<msg>"` | Message a god |
-| `iris kill <name>` | Banish a god |
-| `iris kill all` | Banish all gods |
-
-### Hotkeys (inside tmux)
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+n` | Summon new god |
-| `Ctrl+k` | Kill current pane |
-| `Ctrl+t` | Change theme |
-| `Ctrl+h` | Show hotkeys |
-| `Alt+l` | List gods |
-| `Alt+k` | Banish by name |
+| `Ctrl+N` | Summon new god |
+| `Ctrl+K` | Banish focused god |
+| `Ctrl+R` | Spawn raw terminal |
+| `Ctrl+F` | Toggle fullscreen |
+| `Ctrl+L` | Rotate grid layout |
+| `Ctrl+D` | Toggle dev panel |
+| `Alt+N` | New tab |
+| `Alt+K` | Close tab |
+| `Alt+,/.` | Previous/next tab |
+| `Alt+1-9` | Go to tab N |
 
 ---
 
@@ -182,17 +140,13 @@ sudo usermod -aG input $USER
 # Log out and back in
 ```
 
-### Servers won't start
+### Services won't start
 
-```bash
-iris logs
-# Or specific server:
-tail -f ~/.local/state/iris/logs/speak.log
-```
+Click the service icon in the status bar to start it. Check terminal for errors.
 
 ### No audio input
 
-1. Check device name in `config/settings.yaml`
+1. Check device name in `config/settings.json`
 2. Run `python -c "import sounddevice; print(sounddevice.query_devices())"`
 
 ### CUDA errors
@@ -201,12 +155,18 @@ tail -f ~/.local/state/iris/logs/speak.log
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
+### Gods don't persist after restart
+
+Make sure `dtach` is installed. Gods are stored as socket files in `~/.local/share/iris/sockets/`.
+
 ---
 
 ## Uninstall
 
 ```bash
-iris stop all
-rm ~/.local/bin/iris
+# Kill any running gods
+rm -rf ~/.local/share/iris/sockets/*.sock
+
+# Remove the project
 rm -rf ~/Work/iris
 ```

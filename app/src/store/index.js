@@ -227,22 +227,58 @@ export const useStore = create(
         return state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0]
       },
 
-      // Get gods for active tab
+      // Get gods for active tab (sorted by order)
       getActiveGods: () => {
         const state = get()
-        return Object.values(state.gods).filter(g => g.tabId === state.activeTabId)
+        return Object.values(state.gods)
+          .filter(g => g.tabId === state.activeTabId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
       },
 
-      // Get gods for a specific tab
+      // Get gods for a specific tab (sorted by order)
       getGodsForTab: (tabId) => {
         const state = get()
-        return Object.values(state.gods).filter(g => g.tabId === tabId)
+        return Object.values(state.gods)
+          .filter(g => g.tabId === tabId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
       },
 
       // Get all god names (for checking availability)
       getAllGodNames: () => {
         return Object.keys(get().gods)
       },
+
+      // ============ SYNC FROM SERVER ============
+
+      syncState: (serverState) => set((state) => {
+        // Replace tabs
+        state.tabs = serverState.tabs
+        state.activeTabId = serverState.activeTabId
+        state.tabCounter = serverState.tabCounter
+
+        // Replace gods - merge with server data
+        const newGods = {}
+        serverState.gods.forEach(god => {
+          newGods[god.name] = {
+            name: god.name,
+            color: god.color,
+            voice: god.voice,
+            status: god.status || 'laboring',
+            tabId: god.tabId,
+            order: god.order
+          }
+        })
+        state.gods = newGods
+
+        // Clear fullscreen if god no longer exists
+        if (state.fullscreenGod && !newGods[state.fullscreenGod]) {
+          state.fullscreenGod = null
+        }
+        // Clear focused if god no longer exists
+        if (state.focusedGod && !newGods[state.focusedGod]) {
+          state.focusedGod = null
+        }
+      }),
     })),
     { name: 'iris-store' }
   )

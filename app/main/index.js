@@ -12,10 +12,81 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const WS_PORT = 9999
 const SOCKET_DIR = path.join(os.homedir(), '.local/share/iris/sockets')
+const STATE_FILE = path.join(os.homedir(), '.local/share/iris/state.json')
 
 // Ensure socket directory exists
 if (!fs.existsSync(SOCKET_DIR)) {
   fs.mkdirSync(SOCKET_DIR, { recursive: true })
+}
+
+// --- APP STATE (source of truth) ---
+
+let appState = {
+  version: 1,
+  tabs: [{ id: 1, name: 'Main' }],
+  activeTabId: 1,
+  tabCounter: 1,
+  gods: {}  // { godName: { tabId, order } }
+}
+
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'))
+      appState = { ...appState, ...data }
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e)
+  }
+
+  // Merge with discovered sockets
+  const sockets = listGodSockets()
+  const socketNames = new Set(sockets.map(s => s.name))
+
+  // Remove gods without sockets
+  Object.keys(appState.gods).forEach(name => {
+    if (!socketNames.has(name)) delete appState.gods[name]
+  })
+
+  // Add new sockets to Main tab
+  sockets.forEach(sock => {
+    if (!appState.gods[sock.name]) {
+      const godsInMain = Object.values(appState.gods).filter(g => g.tabId === 1)
+      appState.gods[sock.name] = { tabId: 1, order: godsInMain.length }
+    }
+  })
+
+  saveState()
+}
+
+function saveState() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(appState, null, 2))
+  } catch (e) {
+    console.error('Failed to save state:', e)
+  }
+}
+
+function getStateForBroadcast() {
+  const gods = listGodSockets().map(sock => ({
+    ...sock,
+    tabId: appState.gods[sock.name]?.tabId || 1,
+    order: appState.gods[sock.name]?.order || 0
+  }))
+
+  // Sort gods by order within each tab
+  gods.sort((a, b) => a.order - b.order)
+
+  return {
+    tabs: appState.tabs,
+    activeTabId: appState.activeTabId,
+    tabCounter: appState.tabCounter,
+    gods
+  }
+}
+
+function broadcastState() {
+  broadcast('state:sync', getStateForBroadcast())
 }
 
 // State
@@ -481,7 +552,11 @@ function handleMessage(ws, msg) {
     case 'god:spawn': {
       const god = createGodSession(data.name, data.task)
       if (god && !god.exists) {
-        broadcast('god:spawned', god)
+        // Add to appState
+        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
+        appState.gods[god.name] = { tabId: appState.activeTabId, order: godsInTab.length }
+        saveState()
+        broadcastState()
       } else if (god?.exists) {
         // Session already exists, just notify this client
         ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
@@ -497,7 +572,11 @@ function handleMessage(ws, msg) {
         cwd: data.cwd
       })
       if (terminal && !terminal.exists) {
-        broadcast('god:spawned', terminal)
+        // Add to appState
+        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
+        appState.gods[terminal.name] = { tabId: appState.activeTabId, order: godsInTab.length }
+        saveState()
+        broadcastState()
       } else if (terminal?.exists) {
         ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
       }
@@ -514,7 +593,10 @@ function handleMessage(ws, msg) {
       }
       // Kill dtach session
       killGodSession(godName)
-      broadcast('god:killed', { godName })
+      // Remove from appState
+      delete appState.gods[godName]
+      saveState()
+      broadcastState()
       break
     }
 
@@ -561,6 +643,85 @@ function handleMessage(ws, msg) {
       break
     }
 
+    // Tab management
+    case 'tab:add': {
+      appState.tabCounter++
+      const newTab = { id: appState.tabCounter, name: data.name || `Tab ${appState.tabCounter}` }
+      appState.tabs.push(newTab)
+      appState.activeTabId = newTab.id
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'tab:remove': {
+      const tabId = data.tabId
+      // Remove gods in this tab from state (they'll be killed separately by client)
+      Object.keys(appState.gods).forEach(name => {
+        if (appState.gods[name].tabId === tabId) delete appState.gods[name]
+      })
+      appState.tabs = appState.tabs.filter(t => t.id !== tabId)
+      if (appState.tabs.length === 0) {
+        appState.tabs = [{ id: 1, name: 'Main' }]
+        appState.tabCounter = 1
+        appState.activeTabId = 1
+      } else if (appState.activeTabId === tabId) {
+        appState.activeTabId = appState.tabs[0].id
+      }
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'tab:select': {
+      appState.activeTabId = data.tabId
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'tab:rename': {
+      const tab = appState.tabs.find(t => t.id === data.tabId)
+      if (tab) tab.name = data.name
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'god:move': {
+      if (appState.gods[data.godName]) {
+        appState.gods[data.godName].tabId = data.tabId
+        // Recalculate order in target tab
+        const godsInTab = Object.entries(appState.gods)
+          .filter(([_, g]) => g.tabId === data.tabId)
+          .sort((a, b) => a[1].order - b[1].order)
+        godsInTab.forEach(([name, _], idx) => {
+          appState.gods[name].order = idx
+        })
+      }
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'god:move-to-new-tab': {
+      // Create new tab
+      appState.tabCounter++
+      const newTab = { id: appState.tabCounter, name: `Tab ${appState.tabCounter}` }
+      appState.tabs.push(newTab)
+      appState.activeTabId = newTab.id
+
+      // Move god to new tab
+      if (appState.gods[data.godName]) {
+        appState.gods[data.godName].tabId = newTab.id
+        appState.gods[data.godName].order = 0
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
     // Forward voice/other events to all clients
     default:
       broadcast(event, data)
@@ -574,11 +735,11 @@ function createWSServer() {
     wsClients.add(ws)
     console.log(`Client connected (${wsClients.size} total)`)
 
-    // Send initial state - discover existing god sessions
-    const gods = listGodSockets()
+    // Send initial state
+    const stateData = getStateForBroadcast()
     ws.send(JSON.stringify({
-      event: 'connected',
-      gods,
+      event: 'state:sync',
+      ...stateData,
       services: serviceStatus
     }))
 
@@ -681,6 +842,7 @@ function createWindow() {
 // --- APP LIFECYCLE ---
 
 app.whenReady().then(() => {
+  loadState()  // Load persisted state before starting WebSocket server
   createWSServer()
   startHealthChecks()
   createWindow()

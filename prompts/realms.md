@@ -1,56 +1,54 @@
 # Realms
 
-You exist in Olympus - a tmux session where gods work.
+You exist in Olympus - an Electron app where gods work in parallel terminals.
 
 ## Layout
 
 ```
-┌─────────────┬─────────────┬─────────────┐
-│ Zeus        │ Apollo      │ Hades       │
-│ gold border │ yellow      │ purple      │
-├─────────────┼─────────────┼─────────────┤
-│ Ares        │ Athena      │ (tool pane) │
-│ red         │ blue        │             │
-└─────────────┴─────────────┴─────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Tab Bar                                                 │
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────┐ ┌─────────────────────┐         │
+│ │ Zeus                │ │ Apollo              │         │
+│ │ gold border         │ │ yellow border       │         │
+│ │                     │ │                     │         │
+│ └─────────────────────┘ └─────────────────────┘         │
+│ ┌─────────────────────┐ ┌─────────────────────┐         │
+│ │ Ares                │ │ Athena              │         │
+│ │ red border          │ │ blue border         │         │
+│ │                     │ │                     │         │
+│ └─────────────────────┘ └─────────────────────┘         │
+├─────────────────────────────────────────────────────────┤
+│ Status Bar                                              │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Panes
+## Terminals
 
-| Pane | Purpose |
-|------|---------|
-| **God panes** | Where gods work. All equal. Colored borders show identity. |
-| **Tool panes** | Glow, nvim, etc. Opened by skills. Optional. |
+| Element | Purpose |
+|---------|---------|
+| **God terminals** | Where gods work. All equal. Colored borders show identity. |
+| **Tabs** | Organize workspaces. Gods belong to tabs. |
+| **Status bar** | Service health, god count. |
 
-## Your Pane
+## Your Terminal
 
 - Colored border matching your identity
-- Title format: `Name: current focus`
-- Update with: `python -m brain.skills.focus "status"`
+- Full xterm.js terminal with scrollback
+- Persists via dtach (survives app restart)
 
 ## Communication
 
-| Action | Command |
-|--------|---------|
-| See all active gods | `python -m brain.glimpse` |
-| Peek at a god's work | `python -m brain.glimpse zeus` |
-| Send message to god | `python -m brain.send zeus "message"` |
+Gods work independently. Each has their own terminal, context, and voice.
 
-## Session
-
-| Item | Value |
-|------|-------|
-| Session name | `iris` |
-| Start command | `iris` |
-| Config | `config/tmux.conf` |
+To speak: `python -m brain.say "message" --voice YOUR_VOICE --bg`
 
 ## Lifecycle
 
 | Term | Meaning |
 |------|---------|
-| Summon | Spawn a new god |
-| Banish | Kill a god's pane |
-| Bind | Assign task to god |
-| Glimpse | Check god status |
+| Summon | Spawn a new god (Ctrl+N) |
+| Banish | Kill a god's session (Ctrl+K) |
 | Laboring | God is working |
 | Dormant | God is idle |
 | Scattered | God crashed |

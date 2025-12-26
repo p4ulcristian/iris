@@ -5,13 +5,17 @@
   "main": "main/index.js",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite\" \"node -e 'setTimeout(()=>{},2000)' && electron . --dev\"",
+    "generate:themes": "node ../scripts/generate-themes.js",
+    "dev": "npm run generate:themes && concurrently -k \"vite\" \"node -e 'setTimeout(()=>{},2000)' && electron . --dev\"",
     "dev:vite": "vite",
     "dev:electron": "electron . --dev",
-    "build": "vite build && electron-builder",
+    "build": "npm run generate:themes && vite build && electron-builder",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.1.0",
+    "@fortawesome/free-solid-svg-icons": "^7.1.0",
+    "@fortawesome/react-fontawesome": "^3.1.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^6.0.0",
     "immer": "^11.1.0",

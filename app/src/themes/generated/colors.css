@@ -1,0 +1,18 @@
+/* Auto-generated from config/gods.yaml */
+/* Do not edit directly - run: node scripts/generate-themes.js */
+
+@theme {
+  --color-god-zeus: #ffd700;
+  --color-god-apollo: #ffeb3b;
+  --color-god-artemis: #009688;
+  --color-god-athena: #2196f3;
+  --color-god-hermes: #ff9800;
+  --color-god-hades: #9c27b0;
+  --color-god-poseidon: #00bcd4;
+  --color-god-hera: #e91e63;
+  --color-god-ares: #f44336;
+  --color-god-hephaestus: #cd7f32;
+  --color-god-aphrodite: #ff6b9d;
+  --color-god-dionysus: #7c4dff;
+  --color-god-demeter: #4caf50;
+}

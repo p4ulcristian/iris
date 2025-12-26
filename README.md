@@ -8,7 +8,7 @@ Iris is a voice assistant that summons the Greek pantheon to do your bidding. Sh
 
 In Greek mythology, Iris is the goddess of the rainbow and messenger of the gods. She travels between Olympus and the mortal world, carrying divine commands across realms.
 
-Here, Iris serves a similar role. She listens for your voice, interprets your commands, and summons gods from her pantheon to fulfill them. Each god is an autonomous worker with their own pane, their own context, and their own purpose.
+Here, Iris serves a similar role. She listens for your voice, interprets your commands, and summons gods from her pantheon to fulfill them. Each god is an autonomous Claude instance with their own terminal, context, and purpose.
 
 ## The Pantheon
 
@@ -28,27 +28,25 @@ Here, Iris serves a similar role. She listens for your voice, interprets your co
 | **Dionysus** | Creative chaos |
 | **Demeter** | Growth and nurturing |
 
-## Commands
+## Quick Start
 
 ```bash
-iris                  # Awaken Iris
-iris spawn "task"     # Summon a god
-iris list             # Survey the pantheon
-iris kill <name>      # Banish a god
-iris send <name> msg  # Message a god
-iris peek <name>      # Observe a god's work
+cd app
+bun install
+bun run dev
 ```
 
-## Hotkeys
+## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `Ctrl+n` | Summon a new god |
-| `Ctrl+k` | Kill current pane |
-| `Ctrl+t` | Change theme |
-| `Ctrl+h` | Show hotkeys |
-| `Alt+l` | List gods |
-| `Alt+k` | Banish by name |
+| `Ctrl+N` | Summon a new god |
+| `Ctrl+K` | Banish focused god |
+| `Ctrl+F` | Toggle fullscreen |
+| `Ctrl+L` | Rotate grid layout |
+| `Alt+N` | New tab |
+| `Alt+K` | Close tab |
+| `Alt+,/.` | Previous/next tab |
 
 ## Requirements
 
@@ -56,10 +54,10 @@ iris peek <name>      # Observe a god's work
 
 | Tool | Package (Arch) | Purpose |
 |------|----------------|---------|
-| `uv` | `uv` | Python package manager |
-| `tmux` | `tmux` | Session management |
+| `bun` | `bun` | Package manager / runtime |
+| `dtach` | `dtach` | Session persistence |
 | `wtype` | `wtype` | Wayland text input (PTT) |
-| `gtk4-layer-shell` | `gtk4-layer-shell` | Wayland overlay (bubble) |
+| `gtk4-layer-shell` | `gtk4-layer-shell` | Speech bubble overlay |
 
 ### Optional
 
@@ -74,6 +72,6 @@ Python dependencies are handled automatically via `uv` inline script metadata. E
 
 ## Architecture
 
-Iris is the invisible orchestrator - the CLI and servers that manage everything. Gods are summoned into tmux panes, all equal, arranged in a grid. Each god runs Claude with full autonomy.
+Iris runs as an Electron app with an embedded WebSocket server. Gods are spawned as dtach sessions (persistent terminal sessions) and rendered via xterm.js. The app discovers existing sessions on startup, so gods survive restarts.
 
 For details, see `architecture.md`.

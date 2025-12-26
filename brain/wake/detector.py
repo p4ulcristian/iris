@@ -264,33 +264,22 @@ def transcribe_audio(audio_int16):
         Path(temp_path).unlink(missing_ok=True)
 
 
-def send_to_iris(text: str):
-    """Send text to master Iris pane via tmux."""
+def paste_text(text: str):
+    """Paste text at cursor using wtype."""
     if not text or not text.strip():
         return False
 
     try:
-        # Send text literally (handles special chars)
-        subprocess.run(
-            ['tmux', 'send-keys', '-t', 'iris:0.0', '-l', text.strip()],
-            check=True,
-            capture_output=True
-        )
-        # Send Enter separately
-        subprocess.run(
-            ['tmux', 'send-keys', '-t', 'iris:0.0', 'Enter'],
-            check=True,
-            capture_output=True
-        )
-        print(f'Sent to Iris: {text.strip()}', flush=True)
+        subprocess.run(['wtype', text.strip()], check=True)
+        print(f'Pasted: {text.strip()}', flush=True)
         return True
     except subprocess.CalledProcessError as e:
-        print(f'Failed to send to Iris: {e}', flush=True)
+        print(f'Failed to paste: {e}', flush=True)
         return False
 
 
 def handle_wake(vad_model, device, native_rate):
-    """Handle wake word detection: record, transcribe, send to Iris."""
+    """Handle wake word detection: record, transcribe, paste text."""
     # Visual feedback - bubble animation starts with recording
     set_state('listening')
 
@@ -308,8 +297,8 @@ def handle_wake(vad_model, device, native_rate):
     text = transcribe_audio(audio)
 
     if text:
-        # Send to Iris
-        send_to_iris(text)
+        # Paste at cursor
+        paste_text(text)
     else:
         print('No transcription returned', flush=True)
 

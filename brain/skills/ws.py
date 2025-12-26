@@ -102,6 +102,23 @@ def spawn_terminal(command: str = None, name: str = None, color: str = None, cwd
     return send_message(msg)
 
 
+def spawn_god(name: str, task: str = "") -> bool:
+    """Spawn a god in Iris v2.
+
+    Args:
+        name: God name (e.g., 'hermes', 'athena')
+        task: Optional task description
+
+    Returns:
+        True if successful, False otherwise
+    """
+    return send_message({
+        "event": "god:spawn",
+        "name": name.capitalize(),
+        "task": task
+    })
+
+
 def update_status(status: str) -> bool:
     """Update the current god's status.
 

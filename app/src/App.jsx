@@ -19,15 +19,7 @@ export default function App() {
   const layoutMode = useStore(s => s.layoutMode)
   const initialLoadDone = useStore(s => s.initialLoadDone)
 
-  // Actions
-  const createTab = useStore(s => s.createTab)
-  const closeTab = useStore(s => s.closeTab)
-  const switchTab = useStore(s => s.switchTab)
-  const nextTab = useStore(s => s.nextTab)
-  const prevTab = useStore(s => s.prevTab)
-  const goToTab = useStore(s => s.goToTab)
-  const addGod = useStore(s => s.addGod)
-  const removeGod = useStore(s => s.removeGod)
+  // Actions (local UI state only)
   const updateGodStatus = useStore(s => s.updateGodStatus)
   const setFocusedGod = useStore(s => s.setFocusedGod)
   const toggleFullscreen = useStore(s => s.toggleFullscreen)
@@ -39,6 +31,7 @@ export default function App() {
   const getActiveGods = useStore(s => s.getActiveGods)
   const getGodsForTab = useStore(s => s.getGodsForTab)
   const getAllGodNames = useStore(s => s.getAllGodNames)
+  const syncState = useStore(s => s.syncState)
 
   const [confirmModal, setConfirmModal] = useState(null)
 
@@ -54,16 +47,13 @@ export default function App() {
     const { event, ...data } = lastMessage
 
     switch (event) {
-      case 'connected':
-        // Only add gods on first connect, not reconnects
-        if (!initialLoadDone && data.gods) {
-          data.gods.forEach(god => addGod(god))
-          setInitialLoadDone(true)
-        }
-        // Always update services status
+      case 'state:sync':
+        // Sync full state from server (source of truth)
+        syncState(data)
         if (data.services) {
           setServices(data.services)
         }
+        setInitialLoadDone(true)
         break
 
       case 'services:status':
@@ -72,20 +62,11 @@ export default function App() {
         }
         break
 
-      case 'god:spawned':
-        addGod(data)
-        break
-
       case 'god:status':
         updateGodStatus(data.godName || data.name, data.status)
         break
-
-      case 'god:killed':
-      case 'god:exited':
-        removeGod(data.godName || data.name)
-        break
     }
-  }, [lastMessage, addGod, removeGod, updateGodStatus, initialLoadDone, setInitialLoadDone, setServices])
+  }, [lastMessage, syncState, updateGodStatus, setInitialLoadDone, setServices])
 
   // Get gods for active tab
   const activeGods = getActiveGods()
@@ -172,11 +153,12 @@ export default function App() {
       onConfirm: () => {
         // Kill all gods in this tab
         tabGods.forEach(g => send({ event: 'god:kill', godName: g.name }))
-        closeTab(tabId)
+        // Tell server to remove tab (server will broadcast state:sync)
+        send({ event: 'tab:remove', tabId })
         setConfirmModal(null)
       }
     })
-  }, [tabs, activeTabId, closeTab, send, getGodsForTab])
+  }, [tabs, activeTabId, send, getGodsForTab])
 
   // Calculate grid classes based on layout mode, god count, and screen width
   const getGridClass = (count) => {
@@ -223,7 +205,7 @@ export default function App() {
       if (e.altKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        createTab()
+        send({ event: 'tab:add' })
         return
       }
 
@@ -283,13 +265,17 @@ export default function App() {
       if (e.altKey && e.key === ',') {
         e.preventDefault()
         e.stopPropagation()
-        prevTab()
+        const idx = tabs.findIndex(t => t.id === activeTabId)
+        const prevIdx = (idx - 1 + tabs.length) % tabs.length
+        send({ event: 'tab:select', tabId: tabs[prevIdx].id })
         return
       }
       if (e.altKey && e.key === '.') {
         e.preventDefault()
         e.stopPropagation()
-        nextTab()
+        const idx = tabs.findIndex(t => t.id === activeTabId)
+        const nextIdx = (idx + 1) % tabs.length
+        send({ event: 'tab:select', tabId: tabs[nextIdx].id })
         return
       }
 
@@ -297,7 +283,10 @@ export default function App() {
       if (e.altKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
         e.stopPropagation()
-        goToTab(parseInt(e.key))
+        const num = parseInt(e.key)
+        if (num >= 1 && num <= tabs.length) {
+          send({ event: 'tab:select', tabId: tabs[num - 1].id })
+        }
         return
       }
 
@@ -317,9 +306,9 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSummon, handleSpawnTerminal, createTab, handleKillGod, handleKillTab, toggleFullscreen,
-    rotateLayout, prevTab, nextTab, goToTab, focusedGod, fullscreenGod,
-    activeGods, setFocusedGod, toggleDevPanel
+    handleSummon, handleSpawnTerminal, handleKillGod, handleKillTab, toggleFullscreen,
+    rotateLayout, focusedGod, fullscreenGod, activeGods, setFocusedGod, toggleDevPanel,
+    send, tabs, activeTabId
   ])
 
   // Get gods to display (all or just fullscreen)
@@ -333,9 +322,9 @@ export default function App() {
       <TabBar
         tabs={tabs}
         activeTabId={activeTabId}
-        onSelect={switchTab}
+        onSelect={(tabId) => send({ event: 'tab:select', tabId })}
         onClose={handleKillTab}
-        onNew={createTab}
+        onNew={() => send({ event: 'tab:add' })}
         onSummon={handleSummon}
         connected={connected}
         godCount={activeGods.length}
@@ -362,6 +351,16 @@ export default function App() {
                 onFocus={() => setFocusedGod(god.name)}
                 onClose={() => handleKillGod(god.name)}
                 onToggleFullscreen={() => toggleFullscreen(god.name)}
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onMoveToTab={(godName, tabId) => {
+                  send({ event: 'god:move', godName, tabId })
+                  send({ event: 'tab:select', tabId })
+                }}
+                onMoveToNewTab={(godName) => {
+                  // Send combined event - server creates tab and moves god
+                  send({ event: 'god:move-to-new-tab', godName })
+                }}
               />
             ))}
           </div>

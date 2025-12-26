@@ -1,6 +1,6 @@
 # Skills
 
-Skills are pane utilities. They handle tmux layout automatically.
+Skills are utility commands available to gods.
 
 ## Usage
 
@@ -12,10 +12,10 @@ python -m brain.skills.<skill> <args>
 
 | Skill | Usage | Description |
 |-------|-------|-------------|
-| `focus` | `python -m brain.skills.focus "status"` | Update your pane title |
-| `glow` | `python -m brain.skills.glow file.md` | Open markdown in glow pane |
-| `nvim` | `python -m brain.skills.nvim file` | Open file in neovim pane |
-| `run` | `python -m brain.skills.run "cmd"` | Run command in new pane |
+| `focus` | `python -m brain.skills.focus "status"` | Update your status in the app |
+| `glow` | `python -m brain.skills.glow file.md` | Open markdown in glow terminal |
+| `nvim` | `python -m brain.skills.nvim file` | Open file in neovim terminal |
+| `run` | `python -m brain.skills.run "cmd"` | Run command in new terminal |
 | `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
 
 ## nvim-highlight
@@ -33,5 +33,5 @@ Colors: yellow, green, red, blue, orange, purple, cyan
 ## When to Use
 
 When Paul says "open in [tool]":
-- "Open in glow" → `python -m brain.skills.glow /path/to/file.md`
-- "Edit in nvim" → `python -m brain.skills.nvim /path/to/file`
+- "Open in glow" -> `python -m brain.skills.glow /path/to/file.md`
+- "Edit in nvim" -> `python -m brain.skills.nvim /path/to/file`

@@ -5,164 +5,177 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 ## Core Concepts
 
 ```
-[User] → [brain/ (STT/TTS)] → [Iris] → [Gods via tmux]
-              ↑                            ↓
-              └──────── responses ─────────┘
+[User] → [brain/ (STT/TTS)] → [Electron App] → [Gods via dtach]
+              ↑                                      ↓
+              └────────────── responses ─────────────┘
 ```
 
-**brain/** is the voice and orchestration system - modular servers for speech-to-text (Parakeet) and text-to-speech (VibeVoice), plus the Python CLI.
+**brain/** is the voice system - modular servers for speech-to-text (Parakeet) and text-to-speech (VibeVoice).
 
-**Iris** is the invisible orchestrator - the CLI, the servers, the system itself. She has no pane. She spawns, manages, and banishes gods.
+**Electron App** is the orchestrator - spawns gods, manages sessions, renders terminals. WebSocket server on port 9999.
 
-**Gods** are Claude instances in tmux panes. All gods are equal. Each is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter).
+**Gods** are Claude instances in dtach sessions, rendered via xterm.js. All gods are equal. Each is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter).
 
-## tmux Session Structure
+## App Structure
 
 ```
-iris (session)
-└── Gods in grid layout
-    ├── Zeus (gold border)
-    ├── Apollo (yellow border)
-    ├── Hades (purple border)
-    └── ...
+┌─────────────────────────────────────────────────────────┐
+│ Tab Bar                                     [+] [Ctrl+N]│
+├─────────────────────────────────────────────────────────┤
+│ ┌─────────────────────┐ ┌─────────────────────┐         │
+│ │ Zeus                │ │ Apollo              │         │
+│ │ gold border         │ │ yellow border       │         │
+│ │                     │ │                     │         │
+│ │   xterm terminal    │ │   xterm terminal    │         │
+│ │                     │ │                     │         │
+│ └─────────────────────┘ └─────────────────────┘         │
+├─────────────────────────────────────────────────────────┤
+│ Status Bar                          🔊 👂 💬 ⌨️  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-- All panes are gods - no special "master" pane
-- Grid layout distributes panes evenly
-- Each pane has a colored border matching the god's identity
+- Responsive grid layout (auto-adjusts to god count)
+- Each god card has colored border matching identity
+- Tabs for workspace organization
+- Status bar shows service health
 
 ## File Structure
 
 ```
 iris/
-├── brain/                 # Modular voice and orchestration system
-│   ├── tmux/              # STANDALONE: Generic tmux operations
-│   │   └── __init__.py    # session, pane, layout (portable, reusable)
-│   │
-│   ├── cli/               # Iris-specific CLI (uses brain.tmux)
-│   │   ├── __init__.py    # Main CLI entry point
-│   │   ├── config.py      # Configuration loading
-│   │   ├── gods.py        # God management
-│   │   ├── tmux.py        # Iris tmux wrapper (god-aware)
-│   │   └── servers.py     # Server start/stop
-│   │
-│   ├── hear/              # STANDALONE: STT server (port 8766)
-│   │   ├── __init__.py    # HearClient API
+├── app/                   # Electron + React app
+│   ├── main/
+│   │   ├── index.js       # Electron main process, WebSocket server
+│   │   └── preload.js     # Context bridge
+│   ├── src/
+│   │   ├── App.jsx        # Main React component
+│   │   ├── components/
+│   │   │   ├── Terminal.jsx    # xterm.js wrapper
+│   │   │   ├── GodCard.jsx     # God container with terminal
+│   │   │   ├── TabBar.jsx      # Workspace tabs
+│   │   │   └── StatusBar.jsx   # Service status
+│   │   ├── hooks/
+│   │   │   └── useWebSocket.js # WS connection
+│   │   └── store/
+│   │       └── index.js        # Zustand state
+│   └── package.json
+│
+├── brain/                 # Voice and utility modules
+│   ├── hear/              # STT server (port 8766)
 │   │   ├── server.py      # Flask HTTP server
-│   │   ├── stt.py         # Parakeet transcription
-│   │   └── audio.py       # Microphone capture
+│   │   └── stt.py         # Parakeet transcription
 │   │
-│   ├── speak/             # STANDALONE: TTS server (port 8765)
-│   │   ├── __init__.py    # SpeakClient API
+│   ├── speak/             # TTS server (port 8765)
 │   │   ├── server.py      # Flask HTTP server
-│   │   ├── tts.py         # Speech synthesis
-│   │   └── audio.py       # Audio playback
+│   │   └── tts.py         # Speech synthesis
 │   │
-│   ├── wake/              # STANDALONE: Input listener (Linux evdev)
-│   │   ├── __init__.py    # PTTListener (platform-aware)
+│   ├── wake/              # Input listener (Linux evdev)
 │   │   ├── listener.py    # Main coordinator
-│   │   └── ptt.py         # Push-to-talk (Linux)
+│   │   ├── ptt.py         # Push-to-talk (CapsLock)
+│   │   └── detector.py    # Wake word detection
 │   │
-│   ├── express/           # STANDALONE: Visual UI (port 8767)
-│   │   ├── __init__.py    # ExpressClient API
+│   ├── express/           # Visual UI (port 8767)
 │   │   ├── server.py      # Flask HTTP server
 │   │   └── bubble.py      # GTK4 overlay
 │   │
-│   ├── skills/            # Pane utilities
-│   │   ├── glow/          # Markdown viewer pane
-│   │   ├── nvim/          # Neovim editor pane
-│   │   └── focus/         # Pane title updates
+│   ├── skills/            # Utility commands
+│   │   ├── focus/         # Pane title updates
+│   │   ├── glow/          # Markdown viewer
+│   │   └── nvim/          # Neovim integration
 │   │
 │   └── say.py             # Quick TTS utility
-├── shadows/               # State for each god
-│   ├── <uuid>/            # Per-god folder
-│   │   ├── name.txt       # God name (e.g., "Apollo")
-│   │   ├── task.txt       # Original assigned task
-│   │   ├── status.txt     # laboring|dormant|fulfilled|scattered
-│   │   ├── spawned.txt    # Timestamp
-│   │   ├── project.txt    # Associated project (if any)
-│   │   └── output.log     # Full pane output (via tmux pipe-pane)
-│   └── notes/             # Session notes for knowledge transfer
+│
+├── prompts/               # God instructions
+│   ├── god.md             # Core god identity
+│   ├── realms.md          # Pane/environment info
+│   ├── voice.md           # Speech guidelines
+│   ├── skills.md          # Available skills
+│   └── pantheon.yaml      # God definitions
+│
 ├── config/
-│   └── settings.json      # Prompts, colors, project paths
-├── iris                   # CLI entry point (Python script)
-├── IRIS.md                # Instructions for Iris
-├── GODS.md                # Instructions for gods
-└── CLAUDE.md              # Role detection and shared context
+│   └── settings.json      # Audio config, etc.
+│
+├── memory/                # Paul's notes
+│   ├── daily/
+│   ├── recipes/
+│   └── 3d-printer/
+│
+└── CLAUDE.md              # Project instructions
 ```
 
 ## God Lifecycle
 
-1. **Summon**: `iris spawn [--project <name>] "<task>"`
-   - Generates UUID: `<name>-YYYYMMDD-HHMMSS-<hex>`
-   - Creates `shadows/<uuid>/` with initial state
-   - Creates tmux pane with Claude instance
-   - Sets pane title: `Name|uuid|project`
-   - Starts output logging via `tmux pipe-pane`
+1. **Summon**: User presses Ctrl+N or clicks [+]
+   - Electron spawns dtach session: `dtach -n <socket> -E claude "<prompt>"`
+   - Socket stored at `~/.local/share/iris/sockets/<name>.sock`
+   - React adds god card to grid
 
-2. **Working**: God executes task
-   - Status: `laboring`
+2. **Attach**: When god card renders
+   - node-pty spawns: `dtach -a <socket>`
+   - PTY output streams to xterm.js via WebSocket
 
-3. **Completion**: God finishes or encounters issues
-   - Status changes to `fulfilled`, `dormant`, or `scattered`
-   - May save notes to `shadows/notes/` for future reference
+3. **Working**: God executes task
+   - Full terminal interaction via xterm
+   - God speaks via `python -m brain.say`
 
-4. **Banish**: `iris kill <name>` terminates the pane
+4. **Banish**: User presses Ctrl+K or clicks X
+   - PTY detached (session persists)
+   - `god:kill` event terminates dtach session
+   - Socket file removed
 
-## Status Icons
+## Session Persistence
 
-| Status | Icon | Meaning |
-|--------|------|---------|
-| laboring | `▶` | Working on task |
-| dormant | `◉` | Idle, waiting |
-| fulfilled | `✦` | Task complete |
-| scattered | `⚡` | Crashed/error |
+Gods use **dtach** for persistence:
+- Sessions survive app restarts
+- Multiple windows can attach to same god
+- Closing app detaches but doesn't kill gods
 
-## Key Commands
-
-| Command | Description |
-|---------|-------------|
-| `iris` | Start Iris session + all servers |
-| `iris spawn "<task>"` | Summon new god |
-| `iris spawn --project ir "<task>"` | God with project context |
-| `iris list` | List active gods |
-| `iris peek <name>` | View god output |
-| `iris send <name> "<msg>"` | Send instruction to god |
-| `iris kill <name>` | Banish god |
-| `iris kill all` | Banish all gods |
-| `iris stop` | Stop servers |
-| `iris stop all` | Stop everything |
-
-## Skills
-
-Specialized pane utilities that open in the worker grid alongside gods.
-
-### Glow (Markdown Viewer)
-
-Opens markdown files in a pane using [glow](https://github.com/charmbracelet/glow).
-
-```bash
-python -m brain.skills.glow <file>
-python -m brain.skills.glow IRIS.md
-python -m brain.skills.glow /path/to/README.md
+Socket discovery on startup:
+```javascript
+// List existing sessions
+fs.readdirSync('~/.local/share/iris/sockets/')
+  .filter(f => f.endsWith('.sock'))
 ```
 
-The pane opens with glow in pager mode (scrollable) and integrates into the grid layout.
+## WebSocket Protocol
 
-### Nvim (Neovim Editor)
+Port 9999, JSON messages:
 
-Opens files in a pane using neovim. Multiple files open as tabs within a single nvim instance.
+| Event | Direction | Data |
+|-------|-----------|------|
+| `connected` | server→client | `{ gods: [...], services: {...} }` |
+| `god:spawn` | client→server | `{ name, task }` |
+| `god:spawned` | server→client | `{ name, socketPath, color }` |
+| `god:kill` | client→server | `{ godName }` |
+| `god:killed` | server→client | `{ godName }` |
+| `pty:attach` | client→server | `{ godName, cols, rows }` |
+| `pty:input` | client→server | `{ godName, data }` |
+| `pty:output` | server→client | `{ godName, data }` |
+| `pty:resize` | client→server | `{ godName, cols, rows }` |
+| `service:start` | client→server | `{ service }` |
+| `service:stop` | client→server | `{ service }` |
+| `services:status` | server→client | `{ services: {...} }` |
 
-```bash
-python -m brain.skills.nvim <file> [file2] [file3] ...
-python -m brain.skills.nvim IRIS.md
-python -m brain.skills.nvim src/main.py src/utils.py src/config.py
-```
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+N` | Summon new god |
+| `Ctrl+K` | Kill focused god |
+| `Ctrl+R` | Spawn raw terminal |
+| `Ctrl+F` | Toggle fullscreen |
+| `Ctrl+L` | Rotate grid layout |
+| `Ctrl+D` | Toggle dev panel |
+| `Alt+N` | New tab |
+| `Alt+K` | Kill current tab |
+| `Alt+,/.` | Previous/next tab |
+| `Alt+1-9` | Go to tab N |
+| `Escape` | Exit fullscreen |
 
 ## Voice Pipeline
 
 ```
-[CapsLock press]
+[CapsLock hold]
     ↓
 wake/ (evdev listener)
     ├── POST speak:8765/stop    → TTS shuts up
@@ -171,49 +184,33 @@ wake/ (evdev listener)
 [CapsLock release]
     ↓
 wake/
-    └── POST hear:8766/stop     → STT stops, transcribes, returns text
+    └── POST hear:8766/stop     → STT stops, transcribes
         ↓
-    paste text at cursor (or send to Iris tmux)
+    wtype pastes text at cursor
 ```
 
-## Standalone Modules
+## Services
 
-Each brain module can be used independently:
+Started/stopped via status bar or automatically:
 
-```python
-# tmux - Generic tmux operations
-from brain import tmux
-tmux.create_session("my-app", window_name="main", command="htop")
-tmux.create_pane("my-app", "tail -f log.txt")
-tmux.apply_grid_layout("my-app")
+| Service | Port | Script |
+|---------|------|--------|
+| speak | 8765 | `brain/speak/server.py` |
+| hear | 8766 | `brain/hear/server.py` |
+| express | 8767 | `brain/express/server.py` |
+| wake | - | `brain/wake/listener.py` |
 
-# hear - Speech-to-text client
-from brain.hear import HearClient
-client = HearClient()
-client.start()
-text = client.stop()
+Health checks every 3 seconds via HTTP `/health` endpoint.
 
-# speak - Text-to-speech client
-from brain.speak import SpeakClient, say
-say("Hello world", voice="emma")
+## Development
 
-# wake - Push-to-talk (Linux only)
-from brain.wake import PTTListener, is_supported
-if is_supported():
-    listener = PTTListener(on_press=..., on_release=...)
-    listener.start()
-
-# express - Visual UI state
-from brain.express import ExpressClient
-client = ExpressClient()
-client.set_state("listening")
+```bash
+cd app
+bun install
+bun run dev        # Vite + Electron
 ```
 
-## Configuration
-
-`config/settings.json` contains:
-- **prompts.iris**: System prompt for Iris
-- **prompts.shade**: Template for god prompts (with `{{COLOR_NAME}}`, `{{WORKER_UUID}}`, `{{VOICE}}`, `{{TASK}}` placeholders)
-- **colors.themes**: Theme palettes with colors for god panes
-- **colors.iris/border/glow**: UI color definitions
-- **projects**: Project name to directory mappings
+Production:
+```bash
+bun run build      # Vite build + electron-builder
+```
