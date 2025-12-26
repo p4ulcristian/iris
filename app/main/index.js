@@ -131,7 +131,11 @@ function startService(name) {
   const proc = spawn('uv', ['run', scriptPath], {
     cwd: projectRoot,
     detached: true,
-    stdio: 'ignore'
+    stdio: 'ignore',
+    env: {
+      ...process.env,
+      CUDA_VISIBLE_DEVICES: '0'  // Use GPU 0 (RTX 3080)
+    }
   })
 
   proc.unref()
@@ -142,6 +146,12 @@ function startService(name) {
 }
 
 function stopService(name) {
+  const scripts = {
+    speak: 'brain/speak/server.py',
+    hear: 'brain/hear/server.py',
+    express: 'brain/express/server.py'
+  }
+
   const pid = serviceProcesses[name]
   if (pid) {
     try {
@@ -159,6 +169,16 @@ function stopService(name) {
       execSync(`lsof -ti:${port} | xargs -r kill`, { stdio: 'ignore' })
     } catch (e) {
       // No process on port
+    }
+  }
+
+  // Also kill by script name (catches zombies not listening on port)
+  const script = scripts[name]
+  if (script) {
+    try {
+      execSync(`pkill -f "${script}"`, { stdio: 'ignore' })
+    } catch (e) {
+      // No matching process
     }
   }
 
