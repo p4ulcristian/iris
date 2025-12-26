@@ -37,6 +37,8 @@ export function useWebSocket(url) {
     }
 
     wsRef.current = ws
+    // Expose for components that need direct access
+    window.__irisWs = ws
   }, [url])
 
   const send = useCallback((data) => {

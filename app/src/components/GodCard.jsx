@@ -23,12 +23,12 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const moveMenuRef = useRef(null)
 
-  const { name, color, status } = god
+  const { name, displayName, color, status, readyState } = god
   const godName = name
 
-  // Get god color from server (single source of truth)
+  // Get god color from server - use custom color for terminals, theme color for gods
   const godColors = useStore(s => s.godColors)
-  const godColor = godColors[name.toLowerCase()] || color  // fallback to prop color
+  const godColor = displayName ? color : (godColors[name.toLowerCase()] || color)
 
   // Get theme terminal settings and generate palette using theme-specific god color
   const theme = useStore(s => s.theme)
@@ -225,7 +225,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
     }
 
     // Show loading state immediately
-    term.write(`\x1b[38;2;${hexToRgb(color)}m⟡ Summoning ${name}...\x1b[0m\r\n\r\n`)
+    term.write(`\x1b[38;2;${hexToRgb(color)}m⟡ ${god.displayName ? 'Starting' : 'Summoning'} ${god.displayName || name}...\x1b[0m\r\n\r\n`)
 
     term.focus()
 
@@ -243,12 +243,15 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
     }
   }, [godName, color]) // Note: palette is handled by separate useEffect to avoid terminal recreation
 
+
   return (
     <div
       onClick={onFocus}
       onDoubleClick={onDoubleClick}
-      className="relative flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-all"
+      className="relative flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-colors"
       style={{
+        '--god-color': godColor,
+        '--god-color-alpha': `${godColor}66`,
         borderColor: isFocused ? godColor : '#333',
         boxShadow: isFocused ? `0 0 30px ${godColor}44` : 'none',
         viewTransitionName: `god-${name.toLowerCase()}`
@@ -264,7 +267,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
         style={{ backgroundColor: godColor }}
       >
         <span className="text-sm font-medium text-black truncate">
-          {name}{status && <span className="opacity-70"> — {status}</span>}
+          {displayName || name}{status && <span className="opacity-70"> — {status}</span>}
         </span>
         <div className="flex-1" />
 

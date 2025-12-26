@@ -10,7 +10,7 @@ export default function TabBar({
   getGodsForTab
 }) {
   return (
-    <nav className="flex items-center h-10 bg-bg-secondary border-b border-border">
+    <nav className="flex items-center h-10 bg-black/40 backdrop-blur-md border-b border-white/10">
       {/* Tabs */}
       <div className="flex items-center gap-1 px-2 overflow-x-auto">
         {tabs.map((tab, idx) => {

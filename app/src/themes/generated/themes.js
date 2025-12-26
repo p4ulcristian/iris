@@ -3,108 +3,154 @@
 
 export const THEMES = [
   {
-    "id": "divine-void",
-    "label": "Divine Void",
-    "accent": "#c9a227",
+    "id": "erebus",
+    "label": "Erebus",
+    "accent": "#6b4c9a",
     "terminal": {
-      "bg-lightness": 5,
-      "fg-lightness": 88,
-      "saturation": 0.3
+      "bg-lightness": 6,
+      "bg-saturation": 0.8,
+      "fg-lightness": 70,
+      "saturation": 0.25,
+      "ansi-saturation": 0.6,
+      "ansi-warmth": -10,
+      "hue-blend": 0.2
     },
     "gods": {
-      "zeus": "#ffd700",
-      "apollo": "#ffeb3b",
-      "artemis": "#009688",
-      "athena": "#2196f3",
-      "hermes": "#ff9800",
-      "hades": "#9c27b0",
-      "poseidon": "#00bcd4",
-      "hera": "#e91e63",
-      "ares": "#f44336",
-      "hephaestus": "#cd7f32",
-      "aphrodite": "#ff6b9d",
-      "dionysus": "#7c4dff",
-      "demeter": "#4caf50"
+      "zeus": "#b8a038",
+      "apollo": "#c4a030",
+      "artemis": "#4a7c74",
+      "athena": "#5878a8",
+      "hermes": "#b87830",
+      "hades": "#7848a0",
+      "poseidon": "#487888",
+      "hera": "#a04878",
+      "ares": "#a83838",
+      "hephaestus": "#986040",
+      "aphrodite": "#b85878",
+      "dionysus": "#6838a0",
+      "demeter": "#488048"
     }
   },
   {
-    "id": "olympus",
-    "label": "Olympus",
-    "accent": "#d4af37",
+    "id": "ichor",
+    "label": "Ichor",
+    "accent": "#d4a020",
     "terminal": {
-      "bg-lightness": 6,
-      "fg-lightness": 90,
-      "saturation": 0.35
+      "bg-lightness": 7,
+      "bg-saturation": 0.9,
+      "fg-lightness": 88,
+      "saturation": 0.4,
+      "ansi-saturation": 1.1,
+      "ansi-warmth": 15,
+      "hue-blend": 0.25
     },
     "gods": {
-      "zeus": "#ffc107",
-      "apollo": "#ffab00",
-      "artemis": "#26a69a",
-      "athena": "#42a5f5",
-      "hermes": "#ff6d00",
-      "hades": "#6a1b9a",
-      "poseidon": "#0097a7",
-      "hera": "#ad1457",
-      "ares": "#c62828",
-      "hephaestus": "#d84315",
-      "aphrodite": "#c2185b",
-      "dionysus": "#6a1b9a",
-      "demeter": "#2e7d32"
+      "zeus": "#ffd040",
+      "apollo": "#ffb830",
+      "artemis": "#40b090",
+      "athena": "#50a0e0",
+      "hermes": "#ff9020",
+      "hades": "#a050d0",
+      "poseidon": "#40b8d0",
+      "hera": "#e050a0",
+      "ares": "#e04040",
+      "hephaestus": "#d08040",
+      "aphrodite": "#ff70a0",
+      "dionysus": "#9040e0",
+      "demeter": "#50c050"
     }
   },
   {
     "id": "aether",
     "label": "Aether",
-    "accent": "#7c4dff",
+    "accent": "#4080b0",
     "terminal": {
-      "bg-lightness": 5,
-      "fg-lightness": 88,
-      "saturation": 0.4
+      "bg-lightness": 6,
+      "bg-saturation": 0.85,
+      "fg-lightness": 84,
+      "saturation": 0.35,
+      "ansi-saturation": 0.9,
+      "ansi-warmth": -20,
+      "hue-blend": 0.2
     },
     "gods": {
-      "zeus": "#e040fb",
-      "apollo": "#ea80fc",
-      "artemis": "#00e5ff",
-      "athena": "#536dfe",
-      "hermes": "#ff4081",
-      "hades": "#7c4dff",
-      "poseidon": "#40c4ff",
-      "hera": "#f50057",
-      "ares": "#ff1744",
-      "hephaestus": "#b388ff",
-      "aphrodite": "#ff80ab",
-      "dionysus": "#d500f9",
-      "demeter": "#69f0ae"
+      "zeus": "#c0a840",
+      "apollo": "#d0b850",
+      "artemis": "#30a898",
+      "athena": "#4898d0",
+      "hermes": "#d89030",
+      "hades": "#8050b0",
+      "poseidon": "#38c8e0",
+      "hera": "#c04888",
+      "ares": "#c83838",
+      "hephaestus": "#a87048",
+      "aphrodite": "#d86090",
+      "dionysus": "#7040c0",
+      "demeter": "#48a848"
     }
   },
   {
-    "id": "essence",
-    "label": "Essence",
-    "accent": "#888888",
+    "id": "morpheus",
+    "label": "Morpheus",
+    "accent": "#9060c0",
     "terminal": {
       "bg-lightness": 6,
-      "fg-lightness": 75,
-      "saturation": 0.15
+      "bg-saturation": 0.9,
+      "fg-lightness": 85,
+      "saturation": 0.45,
+      "ansi-saturation": 0.85,
+      "ansi-warmth": 0,
+      "hue-blend": 0.3,
+      "hue-target": 280
     },
     "gods": {
-      "zeus": "#e0e0e0",
-      "apollo": "#d0d0d0",
-      "artemis": "#707070",
-      "athena": "#909090",
-      "hermes": "#b0b0b0",
-      "hades": "#505050",
-      "poseidon": "#808080",
-      "hera": "#a0a0a0",
-      "ares": "#606060",
-      "hephaestus": "#858585",
-      "aphrodite": "#c0c0c0",
-      "dionysus": "#757575",
-      "demeter": "#959595"
+      "zeus": "#e0c040",
+      "apollo": "#f0d050",
+      "artemis": "#40c0b0",
+      "athena": "#6090e0",
+      "hermes": "#f09830",
+      "hades": "#a060e0",
+      "poseidon": "#50c0e0",
+      "hera": "#e060b0",
+      "ares": "#e04848",
+      "hephaestus": "#c08050",
+      "aphrodite": "#f080b0",
+      "dionysus": "#b050f0",
+      "demeter": "#60c060"
+    }
+  },
+  {
+    "id": "adamant",
+    "label": "Adamant",
+    "accent": "#7080a0",
+    "terminal": {
+      "bg-lightness": 6,
+      "bg-saturation": 0.5,
+      "fg-lightness": 75,
+      "saturation": 0.15,
+      "ansi-saturation": 0.4,
+      "ansi-warmth": -5,
+      "hue-blend": 0.15
+    },
+    "gods": {
+      "zeus": "#c0b090",
+      "apollo": "#b8a880",
+      "artemis": "#608880",
+      "athena": "#7088a0",
+      "hermes": "#a89070",
+      "hades": "#706088",
+      "poseidon": "#608898",
+      "hera": "#987080",
+      "ares": "#906060",
+      "hephaestus": "#907868",
+      "aphrodite": "#a07888",
+      "dionysus": "#685880",
+      "demeter": "#688068"
     }
   }
 ]
 
-export const DEFAULT_THEME = 'divine-void'
+export const DEFAULT_THEME = 'erebus'
 
 // Get terminal settings for a theme
 export function getThemeTerminalSettings(themeId) {

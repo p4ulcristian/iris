@@ -2,47 +2,58 @@
 /* Do not edit directly - run: node scripts/generate-themes.js */
 
 :root,
-.theme-divine-void {
-  --color-bg-primary: #070708;
-  --color-bg-secondary: #0f0f10;
-  --color-bg-tertiary: #161617;
-  --color-text-primary: #d4d0c8;
-  --color-text-secondary: #888580;
-  --color-text-tertiary: #555550;
-  --color-border: #1a1918;
-  --color-accent: #c9a227;
+.theme-erebus {
+  --color-bg-primary: #050506;
+  --color-bg-secondary: #0a0a0c;
+  --color-bg-tertiary: #101014;
+  --color-text-primary: #9090a0;
+  --color-text-secondary: #606070;
+  --color-text-tertiary: #404048;
+  --color-border: #18181f;
+  --color-accent: #6b4c9a;
 }
 
-.theme-olympus {
-  --color-bg-primary: #0f0e0c;
-  --color-bg-secondary: #1a1815;
-  --color-bg-tertiary: #242118;
-  --color-text-primary: #e8e4dc;
-  --color-text-secondary: #a09a8c;
-  --color-text-tertiary: #6a6458;
-  --color-border: #2a2520;
-  --color-accent: #d4af37;
+.theme-ichor {
+  --color-bg-primary: #0c0a08;
+  --color-bg-secondary: #14120e;
+  --color-bg-tertiary: #1c1914;
+  --color-text-primary: #e8dcc8;
+  --color-text-secondary: #a89878;
+  --color-text-tertiary: #685840;
+  --color-border: #28231a;
+  --color-accent: #d4a020;
 }
 
 .theme-aether {
-  --color-bg-primary: #0a0a0f;
-  --color-bg-secondary: #12121a;
-  --color-bg-tertiary: #1a1a24;
-  --color-text-primary: #e0e0f0;
-  --color-text-secondary: #8888a0;
-  --color-text-tertiary: #555568;
-  --color-border: #252530;
-  --color-accent: #7c4dff;
+  --color-bg-primary: #06080a;
+  --color-bg-secondary: #0c1014;
+  --color-bg-tertiary: #12181e;
+  --color-text-primary: #b8c8d8;
+  --color-text-secondary: #708090;
+  --color-text-tertiary: #405060;
+  --color-border: #1a2028;
+  --color-accent: #4080b0;
 }
 
-.theme-essence {
-  --color-bg-primary: #0e0e0e;
-  --color-bg-secondary: #161616;
-  --color-bg-tertiary: #1e1e1e;
-  --color-text-primary: #aaaaaa;
-  --color-text-secondary: #666666;
-  --color-text-tertiary: #444444;
-  --color-border: #222222;
-  --color-accent: #888888;
+.theme-morpheus {
+  --color-bg-primary: #08060c;
+  --color-bg-secondary: #100e16;
+  --color-bg-tertiary: #181620;
+  --color-text-primary: #d0c8e0;
+  --color-text-secondary: #8880a0;
+  --color-text-tertiary: #504868;
+  --color-border: #201830;
+  --color-accent: #9060c0;
+}
+
+.theme-adamant {
+  --color-bg-primary: #08080a;
+  --color-bg-secondary: #101012;
+  --color-bg-tertiary: #18181c;
+  --color-text-primary: #a8a8b0;
+  --color-text-secondary: #686870;
+  --color-text-tertiary: #484850;
+  --color-border: #202028;
+  --color-accent: #7080a0;
 }
 

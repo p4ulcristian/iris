@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Reorder } from 'framer-motion'
 import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
+import GodTaskCard from './components/GodTaskCard'
 import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
@@ -9,6 +11,8 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faUserPlus, faTerminal, faCode } from '@fortawesome/free-solid-svg-icons'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -146,9 +150,8 @@ export default function App() {
 
   // Enter focus mode for a god
   const handleEnterFocus = useCallback((godName) => {
-    if (activeGods.length < 2) return  // No point in focus mode with 1 god
     send({ event: 'viewMode:set', mode: 'focus', focusedGod: godName })
-  }, [activeGods.length, send])
+  }, [send])
 
   // Exit focus mode
   const handleExitFocus = useCallback(() => {
@@ -158,6 +161,13 @@ export default function App() {
   // Set focused god (server event)
   const handleSetFocus = useCallback((godName) => {
     send({ event: 'focus:set', godName })
+  }, [send])
+
+  // Reorder gods via drag and drop
+  const handleGodReorder = useCallback((newOrder) => {
+    // newOrder is array of god objects, extract names in new order
+    const orderedNames = newOrder.map(g => g.name)
+    send({ event: 'gods:reorder', order: orderedNames })
   }, [send])
 
   // Toggle fullscreen with view transition
@@ -361,7 +371,14 @@ export default function App() {
   const hiddenGods = allGods.filter(g => g.tabId !== activeTabId)
 
   return (
-    <div className={`flex flex-col h-screen bg-bg-primary theme-${theme}`}>
+    <div className={`flex flex-col h-screen theme-${theme}`}>
+      {/* Animated wallpaper */}
+      <div className="wallpaper">
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+      </div>
+
       {/* Tab bar */}
       <TabBar
         tabs={tabs}
@@ -384,7 +401,7 @@ export default function App() {
               Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to summon
             </p>
           </div>
-        ) : viewMode === 'focus' && focusedGod && activeGods.length > 1 ? (
+        ) : viewMode === 'focus' && focusedGod ? (
           /* Focus mode: main god + sidebar */
           <div className="flex gap-4 h-full">
             {/* Main focused god - 2:1 ratio with sidebar */}
@@ -411,34 +428,48 @@ export default function App() {
                 />
               ))}
             </div>
-            {/* Sidebar with other gods */}
-            <div className="flex-1 min-w-[240px] max-w-[360px] flex flex-col gap-2 overflow-y-auto">
-              {activeGods.filter(g => g.name !== focusedGod).map(god => (
-                <div
-                  key={god.name}
-                  className="h-32 flex-shrink-0"
-                >
-                  <GodCard
+            {/* Sidebar with all gods as task cards */}
+            <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible p-4">
+              <Reorder.Group
+                axis="y"
+                values={activeGods}
+                onReorder={handleGodReorder}
+                className="flex flex-col gap-4"
+              >
+                {activeGods.map(god => (
+                  <GodTaskCard
+                    key={god.name}
                     god={god}
-                    isFocused={false}
-                    isFullscreen={false}
-                    onFocus={() => handleEnterFocus(god.name)}
-                    onDoubleClick={() => {}}
+                    isActive={god.name === focusedGod}
+                    onClick={() => handleEnterFocus(god.name)}
                     onClose={() => handleKillGod(god.name)}
-                    onToggleFullscreen={() => handleToggleFullscreen(god.name)}
-                    tabs={tabs}
-                    activeTabId={activeTabId}
-                    compact={true}
-                    onMoveToTab={(godName, tabId) => {
-                      send({ event: 'god:move', godName, tabId })
-                      send({ event: 'tab:select', tabId })
-                    }}
-                    onMoveToNewTab={(godName) => {
-                      send({ event: 'god:move-to-new-tab', godName })
-                    }}
                   />
-                </div>
-              ))}
+                ))}
+              </Reorder.Group>
+              {/* Action buttons */}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setSummonModalOpen(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Summon god (Ctrl+N)"
+                >
+                  <FontAwesomeIcon icon={faUserPlus} />
+                </button>
+                <button
+                  onClick={handleSpawnTerminal}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="New terminal (Ctrl+R)"
+                >
+                  <FontAwesomeIcon icon={faTerminal} />
+                </button>
+                <button
+                  onClick={() => send({ event: 'nvim:spawn' })}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="New nvim"
+                >
+                  <FontAwesomeIcon icon={faCode} />
+                </button>
+              </div>
             </div>
           </div>
         ) : (

@@ -107,7 +107,7 @@ def create_shadow(uuid: str, god_name: str, task: str, project: str | None = Non
 
     (shadow_dir / "name.txt").write_text(god_name.capitalize())
     (shadow_dir / "task.txt").write_text(task)
-    (shadow_dir / "status.txt").write_text("laboring")
+    (shadow_dir / "status.txt").write_text("working")
     (shadow_dir / "spawned.txt").write_text(datetime.now().isoformat())
 
     if project:

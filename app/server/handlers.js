@@ -3,6 +3,7 @@ import { appState, saveState, broadcastState, broadcast } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses } from './pty.js'
+import { listSessions } from './history.js'
 
 function getRandomRealmName() {
   const usedNames = new Set(appState.tabs.map(t => t.name))
@@ -30,7 +31,12 @@ export function handleMessage(ws, msg, projectRoot) {
       const god = createGodSession(data.name, data.task, projectRoot)
       if (god && !god.exists) {
         const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[god.name] = { tabId: appState.activeTabId, order: godsInTab.length }
+        appState.gods[god.name] = {
+          tabId: appState.activeTabId,
+          order: godsInTab.length,
+          mission: god.mission || null,
+          spawnedAt: Date.now()
+        }
         saveState()
         broadcastState()
       } else if (god?.exists) {
@@ -48,7 +54,13 @@ export function handleMessage(ws, msg, projectRoot) {
       }, projectRoot)
       if (terminal && !terminal.exists) {
         const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[terminal.name] = { tabId: appState.activeTabId, order: godsInTab.length }
+        appState.gods[terminal.name] = {
+          tabId: appState.activeTabId,
+          order: godsInTab.length,
+          spawnedAt: Date.now(),
+          displayName: terminal.displayName,
+          color: terminal.color
+        }
         saveState()
         broadcastState()
       } else if (terminal?.exists) {
@@ -67,8 +79,14 @@ export function handleMessage(ws, msg, projectRoot) {
       killGodSession(godName)
       delete appState.gods[godName]
       if (appState.focusedGod === godName) {
-        appState.focusedGod = null
-        if (appState.viewMode === 'focus') {
+        // Find another god in the same tab to focus
+        const remainingGods = Object.entries(appState.gods)
+          .filter(([_, g]) => g.tabId === appState.activeTabId)
+          .sort((a, b) => a[1].order - b[1].order)
+        appState.focusedGod = remainingGods.length > 0 ? remainingGods[0][0] : null
+
+        // Exit focus mode if no gods left
+        if (!appState.focusedGod && appState.viewMode === 'focus') {
           appState.viewMode = 'grid'
         }
       }
@@ -88,6 +106,17 @@ export function handleMessage(ws, msg, projectRoot) {
       const status = data.status
       if (godName && appState.gods[godName]) {
         appState.gods[godName].status = status
+        saveState()
+        broadcastState()
+      }
+      break
+    }
+
+    case 'god:ready': {
+      const godName = data.godName
+      const readyState = data.readyState
+      if (godName && appState.gods[godName]) {
+        appState.gods[godName].readyState = readyState
         saveState()
         broadcastState()
       }
@@ -162,6 +191,22 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'tab:select': {
       appState.activeTabId = data.tabId
+
+      // If in focus mode, ensure focusedGod is in new tab
+      if (appState.viewMode === 'focus') {
+        const godsInTab = Object.keys(appState.gods)
+          .filter(name => appState.gods[name].tabId === data.tabId)
+          .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
+
+        if (!godsInTab.includes(appState.focusedGod)) {
+          appState.focusedGod = godsInTab[0] || null
+        }
+
+        if (!appState.focusedGod) {
+          appState.viewMode = 'grid'
+        }
+      }
+
       saveState()
       broadcastState()
       break
@@ -213,10 +258,25 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'viewMode:set': {
       appState.viewMode = data.mode || 'grid'
-      appState.focusedGod = data.focusedGod || null
-      if (appState.viewMode === 'grid') {
+
+      if (appState.viewMode === 'focus') {
+        // Auto-focus: use provided god, or first god in active tab
+        const godsInTab = Object.keys(appState.gods)
+          .filter(name => appState.gods[name].tabId === appState.activeTabId)
+          .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
+
+        appState.focusedGod = data.focusedGod && godsInTab.includes(data.focusedGod)
+          ? data.focusedGod
+          : godsInTab[0] || null
+
+        // Can't enter focus mode with no gods - fall back to grid
+        if (!appState.focusedGod) {
+          appState.viewMode = 'grid'
+        }
+      } else {
         appState.focusedGod = null
       }
+
       saveState()
       broadcastState()
       break
@@ -226,6 +286,75 @@ export function handleMessage(ws, msg, projectRoot) {
       appState.focusedGod = data.godName || null
       saveState()
       broadcastState()
+      break
+    }
+
+    case 'gods:reorder': {
+      // data.order: array of god names in new order
+      const { order } = data
+      if (!Array.isArray(order)) break
+
+      // Update order values for each god in the array
+      order.forEach((name, idx) => {
+        if (appState.gods[name]) {
+          appState.gods[name].order = idx
+        }
+      })
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'nvim:spawn': {
+      const terminal = createTerminalSession({
+        command: 'nvim',
+        name: data.name,
+        color: '#57A143'  // nvim green
+      }, projectRoot)
+      if (terminal && !terminal.exists) {
+        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
+        appState.gods[terminal.name] = {
+          tabId: appState.activeTabId,
+          order: godsInTab.length,
+          spawnedAt: Date.now(),
+          displayName: terminal.displayName,
+          color: terminal.color
+        }
+        saveState()
+        broadcastState()
+      } else if (terminal?.exists) {
+        ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
+      }
+      break
+    }
+
+    // History management
+    case 'history:list': {
+      listSessions(projectRoot, data.limit || 20).then(sessions => {
+        ws.send(JSON.stringify({ event: 'history:list', sessions }))
+      }).catch(err => {
+        console.error('Failed to list sessions:', err)
+        ws.send(JSON.stringify({ event: 'history:list', sessions: [], error: err.message }))
+      })
+      break
+    }
+
+    case 'history:resume': {
+      const god = createGodSession(data.name, '', projectRoot, { resumeSessionId: data.sessionId })
+      if (god && !god.exists) {
+        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
+        appState.gods[god.name] = {
+          tabId: appState.activeTabId,
+          order: godsInTab.length,
+          mission: data.summary || null,
+          spawnedAt: Date.now()
+        }
+        saveState()
+        broadcastState()
+      } else if (god?.exists) {
+        ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
+      }
       break
     }
 

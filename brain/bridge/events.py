@@ -8,7 +8,7 @@ from .client import emit_sync
 
 
 # Event types
-GodStatus = Literal["laboring", "dormant", "fulfilled", "scattered"]
+GodStatus = Literal["working", "done", "stuck", "scattered"]
 VoiceState = Literal["ready", "listening", "processing"]
 
 

@@ -22,7 +22,7 @@ export const appState = {
   tabCounter: 1,
   gods: {},
   theme: 'divine-void',
-  viewMode: 'grid',
+  viewMode: 'focus',
   focusedGod: null
 }
 
@@ -53,6 +53,20 @@ export function loadState() {
     }
   })
 
+  // Validate focusedGod when in focus mode
+  if (appState.viewMode === 'focus') {
+    const godsInActiveTab = Object.keys(appState.gods)
+      .filter(name => appState.gods[name].tabId === appState.activeTabId)
+
+    if (!godsInActiveTab.includes(appState.focusedGod)) {
+      appState.focusedGod = godsInActiveTab[0] || null
+    }
+
+    if (!appState.focusedGod) {
+      appState.viewMode = 'grid'
+    }
+  }
+
   saveState()
 }
 
@@ -65,12 +79,21 @@ export function saveState() {
 }
 
 export function getStateForBroadcast() {
-  const gods = listGodSockets().map(sock => ({
-    ...sock,
-    tabId: appState.gods[sock.name]?.tabId || 1,
-    order: appState.gods[sock.name]?.order || 0,
-    status: appState.gods[sock.name]?.status || null
-  }))
+  const gods = listGodSockets().map(sock => {
+    const godState = appState.gods[sock.name] || {}
+    return {
+      ...sock,
+      // Override color if stored in state (for terminals with custom colors)
+      color: godState.color || sock.color,
+      displayName: godState.displayName || null,
+      tabId: godState.tabId || 1,
+      order: godState.order || 0,
+      status: godState.status || null,
+      mission: godState.mission || null,
+      readyState: godState.readyState || 'working',
+      spawnedAt: godState.spawnedAt || null
+    }
+  })
 
   gods.sort((a, b) => a.order - b.order)
 

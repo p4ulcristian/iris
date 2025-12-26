@@ -13,10 +13,27 @@ python -m brain.skills.<skill> <args>
 | Skill | Usage | Description |
 |-------|-------|-------------|
 | `focus` | `python -m brain.skills.focus "status"` | Update your status in the app |
+| `ready` | `python -m brain.skills.ready <state>` | Update your visual state (border effects) |
 | `glow` | `python -m brain.skills.glow file.md` | Open markdown in glow terminal |
 | `nvim` | `python -m brain.skills.nvim file` | Open file in neovim terminal |
 | `run` | `python -m brain.skills.run "cmd"` | Run command in new terminal |
 | `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
+
+## ready
+
+Update your visual state in Iris. The border styling changes based on state.
+
+```bash
+python -m brain.skills.ready working  # Default state - actively working
+python -m brain.skills.ready done     # Green glow - task complete
+python -m brain.skills.ready stuck    # Red pulse - needs help
+```
+
+| State | Visual Effect |
+|-------|---------------|
+| `working` | Default god-colored border |
+| `done` | Green static glow |
+| `stuck` | Red slow pulse |
 
 ## nvim-highlight
 

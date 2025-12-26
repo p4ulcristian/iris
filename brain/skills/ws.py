@@ -138,3 +138,29 @@ def update_status(status: str) -> bool:
         "godName": name,
         "status": status
     })
+
+
+def update_ready(state: str) -> bool:
+    """Update the current god's ready state.
+
+    Args:
+        state: One of 'working', 'done', 'stuck'
+
+    Returns:
+        True if successful, False otherwise
+    """
+    valid_states = ('working', 'done', 'stuck')
+    if state not in valid_states:
+        print(f"\033[31mInvalid state: {state}. Must be one of: {', '.join(valid_states)}\033[0m", file=sys.stderr)
+        return False
+
+    name = os.environ.get("GOD_NAME")
+    if not name:
+        print("\033[31mNot running as a god (GOD_NAME not set)\033[0m", file=sys.stderr)
+        return False
+
+    return send_message({
+        "event": "god:ready",
+        "godName": name,
+        "readyState": state
+    })

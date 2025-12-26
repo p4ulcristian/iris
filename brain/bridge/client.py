@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print("Usage: python -m brain.bridge.client <event> [json_data]")
-        print("Example: python -m brain.bridge.client god:status '{\"uuid\": \"zeus-123\", \"status\": \"fulfilled\"}'")
+        print("Example: python -m brain.bridge.client god:status '{\"uuid\": \"zeus-123\", \"status\": \"done\"}'")
         sys.exit(1)
 
     event = sys.argv[1]

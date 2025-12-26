@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from 'motion/react'
 
 const STATUS_ICONS = {
-  laboring: '▶',
-  dormant: '◉',
-  fulfilled: '✦',
+  working: '▶',
+  done: '✦',
+  stuck: '⚠',
   scattered: '⚡'
 }
 
@@ -33,7 +33,7 @@ export default function GodTabs({ gods, activeGod, onSelect, onClose, onSummon, 
           >
             <span className="text-[10px]" style={{ color: god.color }}>●</span>
             <span>{god.name}</span>
-            <span className={`text-[10px] opacity-70 ${god.status === 'fulfilled' ? 'text-green-500' : god.status === 'scattered' ? 'text-red-500' : ''}`}>
+            <span className={`text-[10px] opacity-70 ${god.status === 'done' ? 'text-green-500' : god.status === 'stuck' ? 'text-red-500' : god.status === 'scattered' ? 'text-red-500' : ''}`}>
               {STATUS_ICONS[god.status] || '▶'}
             </span>
             <button

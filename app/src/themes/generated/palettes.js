@@ -75,11 +75,19 @@ function blendHue(baseHue, targetHue, amount) {
 export function generatePalette(primaryHex, themeTerminal = {}) {
   const primary = hexToHsl(primaryHex)
 
+  // Background settings
   const bgLightness = themeTerminal['bg-lightness'] ?? 6
+  const bgSaturation = themeTerminal['bg-saturation'] ?? 0.3
   const fgLightness = themeTerminal['fg-lightness'] ?? 88
-  const satFactor = themeTerminal['saturation'] ?? 0.3
 
-  const bg = hslToHex(primary.h, Math.min(primary.s * satFactor, 15), bgLightness)
+  // ANSI modifiers
+  const ansiSaturation = themeTerminal['ansi-saturation'] ?? 1.0
+  const ansiWarmth = themeTerminal['ansi-warmth'] ?? 0
+  const hueBlend = themeTerminal['hue-blend'] ?? 0.15
+  const hueTarget = themeTerminal['hue-target'] ?? primary.h
+
+  // Background with stronger god tint
+  const bg = hslToHex(primary.h, Math.min(primary.s * bgSaturation, 45), bgLightness)
   const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
 
   const ansiBase = {
@@ -93,23 +101,35 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
     white: { h: primary.h, s: 8, l: 78 },
   }
 
-  const hueBlend = 0.15
-
   const colors = {}
   for (const [name, base] of Object.entries(ansiBase)) {
-    const h = name === 'black' || name === 'white'
-      ? base.h
-      : blendHue(base.h, primary.h, hueBlend)
-    colors[name] = hslToHex(h, base.s, base.l)
+    let h = base.h
+    let s = base.s
+
+    if (name !== 'black' && name !== 'white') {
+      h = blendHue(base.h, hueTarget, hueBlend)
+      h = h + ansiWarmth
+      s = base.s * ansiSaturation
+    }
+
+    colors[name] = hslToHex(h, s, base.l)
   }
 
   const brightColors = {}
   for (const [name, base] of Object.entries(ansiBase)) {
-    const h = name === 'black' || name === 'white'
-      ? base.h
-      : blendHue(base.h, primary.h, hueBlend)
+    let h = base.h
+    let s = base.s
+
+    if (name !== 'black' && name !== 'white') {
+      h = blendHue(base.h, hueTarget, hueBlend)
+      h = h + ansiWarmth
+      s = Math.min((base.s + 10) * ansiSaturation, 80)
+    } else {
+      s = Math.min(base.s + 10, 80)
+    }
+
     const brightName = 'bright' + name.charAt(0).toUpperCase() + name.slice(1)
-    brightColors[brightName] = hslToHex(h, Math.min(base.s + 10, 80), base.l + 12)
+    brightColors[brightName] = hslToHex(h, s, base.l + 12)
   }
 
   return {

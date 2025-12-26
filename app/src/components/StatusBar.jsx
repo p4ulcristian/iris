@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store'
 import { THEMES } from '../themes/generated/themes'
+import HistoryPicker from './HistoryPicker'
 
 function Spinner() {
   return (
@@ -116,6 +117,25 @@ function ModePicker({ send }) {
   )
 }
 
+function DevToggle() {
+  const devPanelOpen = useStore(s => s.devPanelOpen)
+  const toggleDevPanel = useStore(s => s.toggleDevPanel)
+
+  return (
+    <button
+      onClick={toggleDevPanel}
+      className={`px-2 py-0.5 rounded text-xs transition-colors ${
+        devPanelOpen
+          ? 'text-accent bg-accent/10'
+          : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary'
+      }`}
+      title="Toggle Dev Panel (Ctrl+D)"
+    >
+      Dev
+    </button>
+  )
+}
+
 function ThemePicker({ send }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
@@ -206,7 +226,7 @@ export default function StatusBar({ connected, send }) {
   }
 
   return (
-    <footer className="flex items-center h-8 px-4 bg-bg-secondary border-t border-border text-xs text-text-secondary">
+    <footer className="flex items-center h-8 px-4 bg-black/40 backdrop-blur-md border-t border-white/10 text-xs text-text-secondary">
       {/* Connection status */}
       <div className="flex items-center gap-1.5">
         <span className={connected ? 'text-green-500' : 'text-red-500'}>
@@ -254,6 +274,12 @@ export default function StatusBar({ connected, send }) {
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* History picker */}
+      <HistoryPicker send={send} />
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-border mx-2" />
+
       {/* Mode picker */}
       <ModePicker send={send} />
 
@@ -262,6 +288,12 @@ export default function StatusBar({ connected, send }) {
 
       {/* Theme picker */}
       <ThemePicker send={send} />
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-border mx-2" />
+
+      {/* Dev panel toggle */}
+      <DevToggle />
     </footer>
   )
 }

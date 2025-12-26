@@ -24,10 +24,10 @@ Voice assistant for Paul.
 | **realm** | A tab/workspace (Olympus, Elysium, etc.) |
 | **summon** | Spawn a new god (`Ctrl+N`) |
 | **banish** | Kill a god's session (`Ctrl+K`) |
-| **laboring** | God is actively working |
-| **dormant** | God is idle |
+| **working** | God is actively working |
+| **done** | Task complete |
+| **stuck** | God needs help |
 | **scattered** | God crashed |
-| **fulfilled** | Task complete |
 | **speak** | TTS service (`brain/speak/`, port 8765) |
 | **hear** | STT service (`brain/hear/`, port 8766) |
 | **wake** | Input listener for push-to-talk (`brain/wake/`) |

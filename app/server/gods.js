@@ -5,8 +5,12 @@ import { SOCKET_DIR, PANTHEON } from './config.js'
 
 let terminalCounter = 0
 
+export function sanitizeName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
+}
+
 export function getSocketPath(godName) {
-  return path.join(SOCKET_DIR, `${godName.toLowerCase()}.sock`)
+  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.sock`)
 }
 
 export function socketExists(godName) {
@@ -27,7 +31,7 @@ export function listGodSockets() {
           socketPath: path.join(SOCKET_DIR, f),
           color: god.color,
           voice: god.voice,
-          status: 'laboring'
+          status: 'working'
         }
       })
   } catch {
@@ -35,10 +39,11 @@ export function listGodSockets() {
   }
 }
 
-export function createGodSession(name, task = '', projectRoot) {
+export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
   const socketPath = getSocketPath(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
+  const { resumeSessionId } = options
 
   if (socketExists(godKey)) {
     return {
@@ -46,18 +51,25 @@ export function createGodSession(name, task = '', projectRoot) {
       socketPath,
       color: god.color,
       voice: god.voice,
-      status: 'laboring',
+      status: 'working',
       exists: true
     }
   }
 
-  // Build init prompt with god identity
-  const identity = `You are ${name}. Voice: ${god.voice}.`
-  const initPrompt = task ? `${task}\n\n${identity}` : identity
+  let cmd
 
-  // Build command - use $'...' syntax for real newlines
-  const escapedPrompt = initPrompt.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-  const cmd = `claude --dangerously-skip-permissions $'${escapedPrompt}'`
+  if (resumeSessionId) {
+    // Resume existing session
+    cmd = `claude --dangerously-skip-permissions --resume "${resumeSessionId}"`
+  } else {
+    // Build init prompt with god identity
+    const identity = `You are ${name}. Voice: ${god.voice}.`
+    const initPrompt = task ? `${task}\n\n${identity}` : identity
+
+    // Build command - use $'...' syntax for real newlines
+    const escapedPrompt = initPrompt.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    cmd = `claude --dangerously-skip-permissions $'${escapedPrompt}'`
+  }
 
   try {
     execSync(`dtach -n "${socketPath}" -E ${cmd}`, {
@@ -78,7 +90,8 @@ export function createGodSession(name, task = '', projectRoot) {
       socketPath,
       color: god.color,
       voice: god.voice,
-      status: 'laboring'
+      status: 'working',
+      mission: task || null
     }
   } catch (e) {
     console.error('Failed to create dtach session:', e)
@@ -90,15 +103,19 @@ export function createTerminalSession(options = {}, projectRoot) {
   const { command, name: customName, color, cwd } = options
 
   terminalCounter++
-  const name = customName || `Terminal${terminalCounter}`
-  const socketPath = getSocketPath(name.toLowerCase().replace(/[^a-z0-9]/g, '-'))
+  const displayName = customName || `Terminal ${terminalCounter}`
+  const sanitized = sanitizeName(displayName)
+  // Use the same name derivation as listGodSockets so they match
+  const name = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
+  const socketPath = path.join(SOCKET_DIR, `${sanitized}.sock`)
 
   if (fs.existsSync(socketPath)) {
     return {
       name,
+      displayName,
       socketPath,
       color: color || '#888888',
-      status: 'laboring',
+      status: 'working',
       exists: true
     }
   }
@@ -107,7 +124,12 @@ export function createTerminalSession(options = {}, projectRoot) {
     const shellCmd = command || 'bash'
     const workDir = cwd || projectRoot
 
-    execSync(`dtach -n "${socketPath}" -E ${shellCmd}`, {
+    // Wrap command in bash -c for proper argument handling
+    const dtachCmd = command
+      ? `dtach -n "${socketPath}" -E bash -c ${JSON.stringify(shellCmd)}`
+      : `dtach -n "${socketPath}" -E bash`
+
+    execSync(dtachCmd, {
       stdio: 'ignore',
       detached: true,
       cwd: workDir,
@@ -124,9 +146,10 @@ export function createTerminalSession(options = {}, projectRoot) {
 
     return {
       name,
+      displayName,
       socketPath,
       color: color || '#888888',
-      status: 'laboring'
+      status: 'working'
     }
   } catch (e) {
     console.error('Failed to create terminal session:', e)

@@ -30,7 +30,7 @@ const initialState = {
   focusedGod: null,
   fullscreenGod: null,
   layoutMode: 'auto',
-  viewMode: 'grid',  // 'grid' | 'focus' - controls main layout style
+  viewMode: 'focus',  // 'grid' | 'focus' - controls main layout style
   devPanelOpen: false,
 
   // Synced from server
@@ -126,7 +126,7 @@ export const useStore = create(
           name,
           color: god.color || '#888',
           voice: god.voice || godKey,
-          status: god.status || 'laboring',
+          status: god.status || 'working',
           tabId: state.activeTabId,  // Assign to current tab
         }
         state.focusedGod = name
@@ -271,11 +271,15 @@ export const useStore = create(
         serverState.gods.forEach(god => {
           newGods[god.name] = {
             name: god.name,
+            displayName: god.displayName || null,
             color: god.color,
             voice: god.voice,
-            status: god.status || 'laboring',
+            status: god.status || 'working',
+            mission: god.mission || null,
+            readyState: god.readyState || 'working',
             tabId: god.tabId,
-            order: god.order
+            order: god.order,
+            spawnedAt: god.spawnedAt || null
           }
         })
         state.gods = newGods

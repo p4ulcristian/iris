@@ -101,6 +101,58 @@ body {
   animation: glow 0.5s ease 3;
 }
 
+/* Ready state animations for god cards */
+
+/* Working: default state, subtle */
+.ready-working {
+  border-color: var(--god-color) !important;
+}
+
+/* Done: green static glow */
+.ready-done {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 20px #22c55e44, 0 0 40px #22c55e22 !important;
+}
+
+/* Stuck: red slow pulse */
+@keyframes ready-stuck {
+  0%, 100% { box-shadow: 0 0 15px #ef444433; }
+  50% { box-shadow: 0 0 30px #ef444466; }
+}
+
+.ready-stuck {
+  border-color: #ef4444 !important;
+  animation: ready-stuck 3s ease-in-out infinite;
+}
+
+/* Task card ready states (sidebar) */
+
+/* Working: Subtle, no animation - just the default god color border */
+.task-working {
+  /* Default styling from component, no special animation */
+}
+
+/* Done: Green static glow */
+.task-done {
+  border-color: #22c55e !important;
+  box-shadow: 0 0 20px #22c55e44, 0 0 40px #22c55e22, inset 0 0 20px #22c55e11 !important;
+}
+
+/* Stuck: Red slow pulse - needs attention */
+.task-stuck {
+  border-color: #ef4444 !important;
+  animation: stuck-pulse 3s ease-in-out infinite;
+}
+
+@keyframes stuck-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px #ef444433, inset 0 0 15px #ef444411;
+  }
+  50% {
+    box-shadow: 0 0 25px #ef444466, inset 0 0 25px #ef444422;
+  }
+}
+
 /* View Transitions */
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -119,4 +171,115 @@ body {
 ::view-transition-new(*) {
   animation-duration: 0.25s;
   mix-blend-mode: normal;
+}
+
+/* ============================================
+   THEME WALLPAPERS - Aurora Blob Animation
+   ============================================ */
+
+/* Wallpaper container */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wallpaper::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--wallpaper-base, #050508);
+}
+
+/* Aurora blobs */
+.wallpaper .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+
+.wallpaper .blob-1 {
+  width: 60vmax;
+  height: 60vmax;
+  background: var(--blob-1, #6b4c9a);
+  animation: blob-1 25s ease-in-out infinite;
+}
+
+.wallpaper .blob-2 {
+  width: 50vmax;
+  height: 50vmax;
+  background: var(--blob-2, #4a6fa5);
+  animation: blob-2 30s ease-in-out infinite;
+}
+
+.wallpaper .blob-3 {
+  width: 45vmax;
+  height: 45vmax;
+  background: var(--blob-3, #8b5a8b);
+  animation: blob-3 20s ease-in-out infinite;
+}
+
+@keyframes blob-1 {
+  0%, 100% { top: -20%; left: -10%; transform: scale(1); }
+  33% { top: 50%; left: 60%; transform: scale(1.1); }
+  66% { top: 80%; left: 20%; transform: scale(0.9); }
+}
+
+@keyframes blob-2 {
+  0%, 100% { top: 60%; left: 70%; transform: scale(1); }
+  33% { top: 10%; left: 30%; transform: scale(0.9); }
+  66% { top: 40%; left: -10%; transform: scale(1.1); }
+}
+
+@keyframes blob-3 {
+  0%, 100% { top: 80%; left: 40%; transform: scale(1); }
+  33% { top: -10%; left: 80%; transform: scale(1.1); }
+  66% { top: 30%; left: 50%; transform: scale(0.9); }
+}
+
+/* Theme-specific blob colors */
+.theme-erebus {
+  --wallpaper-base: #050506;
+  --blob-1: #6b4c9a;
+  --blob-2: #3d2a5c;
+  --blob-3: #8b5a8b;
+}
+
+.theme-ichor {
+  --wallpaper-base: #0c0a08;
+  --blob-1: #d4a020;
+  --blob-2: #8b6914;
+  --blob-3: #c47f17;
+}
+
+.theme-aether {
+  --wallpaper-base: #06080a;
+  --blob-1: #4080b0;
+  --blob-2: #2a5a7a;
+  --blob-3: #60a0c0;
+}
+
+.theme-morpheus {
+  --wallpaper-base: #08060c;
+  --blob-1: #9060c0;
+  --blob-2: #6040a0;
+  --blob-3: #b080d0;
+}
+
+.theme-adamant {
+  --wallpaper-base: #08080a;
+  --blob-1: #5a6070;
+  --blob-2: #404550;
+  --blob-3: #6a7080;
+}
+
+.theme-divine-void {
+  --wallpaper-base: #0a0a0f;
+  --blob-1: #6050a0;
+  --blob-2: #405080;
+  --blob-3: #8060b0;
 }

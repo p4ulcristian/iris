@@ -5,7 +5,7 @@ import { getSocketPath } from './gods.js'
 export const ptyProcesses = new Map()
 
 export function attachPty(godName, ws, cols, rows) {
-  const socketPath = getSocketPath(godName.toLowerCase())
+  const socketPath = getSocketPath(godName)
 
   if (!fs.existsSync(socketPath)) {
     ws.send(JSON.stringify({ event: 'error', message: `Socket not found: ${socketPath}` }))

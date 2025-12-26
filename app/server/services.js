@@ -85,52 +85,39 @@ export function stopHealthChecks() {
 }
 
 export function startService(name, projectRoot) {
+  // Check if we think it's running, but verify PID is still alive
   if (serviceProcesses[name]) {
-    console.log(`Service ${name} already running`)
-    return
+    try {
+      process.kill(serviceProcesses[name], 0)  // Signal 0 = check if alive
+      console.log(`Service ${name} already running (pid ${serviceProcesses[name]})`)
+      return
+    } catch {
+      // Process is dead, clean up and continue
+      console.log(`Service ${name} pid ${serviceProcesses[name]} is dead, restarting`)
+      delete serviceProcesses[name]
+    }
   }
 
   const script = SERVICES[name]?.script
   if (!script) return
 
   const scriptPath = `${projectRoot}/${script}`
+  const uvPath = process.env.HOME + '/.local/bin/uv'
 
-  console.log(`Starting ${name} service: uv run --script ${scriptPath}`)
+  console.log(`Starting ${name}: ${uvPath} run --script ${scriptPath}`)
 
-  const proc = spawn('uv', ['run', '--script', scriptPath], {
+  const proc = spawn(uvPath, ['run', '--script', scriptPath], {
     cwd: projectRoot,
     detached: true,
-    stdio: ['ignore', 'pipe', 'pipe'],  // Capture stdout/stderr briefly for debugging
+    stdio: 'ignore',
     env: {
       ...process.env,
       CUDA_VISIBLE_DEVICES: '0'
     }
   })
 
-  // Log initial output for debugging
-  let output = ''
-  if (proc.stdout) {
-    proc.stdout.on('data', (data) => {
-      output += data.toString()
-      if (output.length < 500) console.log(`[${name}] ${data.toString().trim()}`)
-    })
-  }
-  if (proc.stderr) {
-    proc.stderr.on('data', (data) => {
-      output += data.toString()
-      if (output.length < 500) console.log(`[${name}] ${data.toString().trim()}`)
-    })
-  }
-
   proc.on('error', (err) => {
     console.error(`Failed to start ${name}:`, err.message)
-    delete serviceProcesses[name]
-  })
-
-  proc.on('exit', (code, signal) => {
-    if (code !== 0 && code !== null) {
-      console.error(`${name} exited with code ${code}`)
-    }
     delete serviceProcesses[name]
   })
 

@@ -16,15 +16,7 @@ export default function DevPanel() {
   }
 
   if (!devPanelOpen) {
-    return (
-      <button
-        onClick={toggleDevPanel}
-        className="fixed bottom-4 right-4 z-50 w-10 h-10 bg-bg-secondary border border-border rounded-full flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-all"
-        title="Open Dev Panel (Ctrl+D)"
-      >
-        { }
-      </button>
-    )
+    return null
   }
 
   return (
