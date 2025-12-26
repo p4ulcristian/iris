@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 
 let tabCounter = 1
 
@@ -8,16 +8,11 @@ export function useWorkspaces() {
   const [focusedGod, setFocusedGod] = useState(null)
   const [fullscreenGod, setFullscreenGod] = useState(null)
 
-  // Get active tab
-  const activeTab = useMemo(() => {
-    const found = tabs.find(t => t.id === activeTabId)
-    return found || tabs[0]
-  }, [tabs, activeTabId])
+  // Get active tab - computed directly, no memoization
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0]
 
-  // Get gods for active tab
-  const gods = useMemo(() => {
-    return activeTab?.gods || []
-  }, [activeTab])
+  // Get gods for active tab - computed directly
+  const gods = activeTab?.gods || []
 
   // Create new tab
   const createTab = useCallback((name) => {

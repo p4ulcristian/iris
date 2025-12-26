@@ -385,6 +385,12 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  // Forward renderer console to terminal
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const prefix = ['[LOG]', '[WARN]', '[ERR]'][level] || '[LOG]'
+    console.log(`${prefix} ${message}`)
+  })
 }
 
 // --- APP LIFECYCLE ---

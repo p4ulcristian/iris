@@ -2,51 +2,48 @@ import { useState, useEffect, useCallback } from 'react'
 import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
 import ConfirmModal from './components/ConfirmModal'
+import DevPanel from './components/DevPanel'
 import { useWebSocket } from './hooks/useWebSocket'
-import { useWorkspaces } from './hooks/useWorkspaces'
-
-const GOD_COLORS = {
-  zeus: '#ffd700',
-  apollo: '#ffeb3b',
-  artemis: '#009688',
-  athena: '#2196f3',
-  hermes: '#ff9800',
-  hades: '#9c27b0',
-  poseidon: '#00bcd4',
-  hera: '#e91e63',
-  ares: '#f44336',
-  hephaestus: '#cd7f32',
-  aphrodite: '#ff6b9d',
-  dionysus: '#7c4dff',
-  demeter: '#4caf50'
-}
-
-const GRID_LAYOUTS = ['auto', '1x1', '2x1', '2x2', '3x2', '3x3']
+import { useStore, GOD_COLORS } from './store'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket('ws://localhost:9999')
-  const {
-    tabs,
-    activeTab,
-    activeTabId,
-    createTab,
-    closeTab,
-    switchTab,
-    nextTab,
-    prevTab,
-    goToTab,
-    gods,
-    focusedGod,
-    setFocusedGod,
-    fullscreenGod,
-    addGod,
-    removeGod,
-    updateGodStatus,
-    toggleFullscreen
-  } = useWorkspaces()
 
-  const [layoutMode, setLayoutMode] = useState('auto')
+  // Get state and actions from store
+  const tabs = useStore(s => s.tabs)
+  const activeTabId = useStore(s => s.activeTabId)
+  const gods = useStore(s => s.gods)
+  const focusedGod = useStore(s => s.focusedGod)
+  const fullscreenGod = useStore(s => s.fullscreenGod)
+  const layoutMode = useStore(s => s.layoutMode)
+  const initialLoadDone = useStore(s => s.initialLoadDone)
+
+  // Actions
+  const createTab = useStore(s => s.createTab)
+  const closeTab = useStore(s => s.closeTab)
+  const switchTab = useStore(s => s.switchTab)
+  const nextTab = useStore(s => s.nextTab)
+  const prevTab = useStore(s => s.prevTab)
+  const goToTab = useStore(s => s.goToTab)
+  const addGod = useStore(s => s.addGod)
+  const removeGod = useStore(s => s.removeGod)
+  const updateGodStatus = useStore(s => s.updateGodStatus)
+  const setFocusedGod = useStore(s => s.setFocusedGod)
+  const toggleFullscreen = useStore(s => s.toggleFullscreen)
+  const rotateLayout = useStore(s => s.rotateLayout)
+  const setConnected = useStore(s => s.setConnected)
+  const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
+  const toggleDevPanel = useStore(s => s.toggleDevPanel)
+  const getActiveGods = useStore(s => s.getActiveGods)
+  const getGodsForTab = useStore(s => s.getGodsForTab)
+  const getAllGodNames = useStore(s => s.getAllGodNames)
+
   const [confirmModal, setConfirmModal] = useState(null)
+
+  // Update connection status in store
+  useEffect(() => {
+    setConnected(connected)
+  }, [connected, setConnected])
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -56,8 +53,10 @@ export default function App() {
 
     switch (event) {
       case 'connected':
-        if (data.gods) {
+        // Only add gods on first connect, not reconnects
+        if (!initialLoadDone && data.gods) {
           data.gods.forEach(god => addGod(god))
+          setInitialLoadDone(true)
         }
         break
 
@@ -74,13 +73,15 @@ export default function App() {
         removeGod(data.godName || data.name)
         break
     }
-  }, [lastMessage, addGod, removeGod, updateGodStatus])
+  }, [lastMessage, addGod, removeGod, updateGodStatus, initialLoadDone, setInitialLoadDone])
+
+  // Get gods for active tab
+  const activeGods = getActiveGods()
 
   // Summon a new god
   const handleSummon = useCallback(() => {
     const names = Object.keys(GOD_COLORS)
-    const allGods = tabs.flatMap(t => t.gods)
-    const usedNames = allGods.map(g => g.name.toLowerCase())
+    const usedNames = getAllGodNames().map(n => n.toLowerCase())
     const available = names.filter(n => !usedNames.includes(n))
     const name = available[0] || names[Math.floor(Math.random() * names.length)]
     const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1)
@@ -90,7 +91,7 @@ export default function App() {
       name: capitalizedName,
       task: ''
     })
-  }, [tabs, send])
+  }, [send, getAllGodNames])
 
   // Kill a god (with confirmation)
   const handleKillGod = useCallback((godName) => {
@@ -111,32 +112,27 @@ export default function App() {
     const tab = tabs.find(t => t.id === tabId)
     if (!tab) return
 
-    if (tabs.length === 1 && tab.gods.length === 0) {
+    const tabGods = getGodsForTab(tabId)
+
+    if (tabs.length === 1 && tabGods.length === 0) {
       return // Don't close last empty tab
     }
 
     setConfirmModal({
       title: `Close "${tab.name}"?`,
-      message: tab.gods.length > 0
-        ? `This will banish ${tab.gods.length} god${tab.gods.length > 1 ? 's' : ''}.`
+      message: tabGods.length > 0
+        ? `This will banish ${tabGods.length} god${tabGods.length > 1 ? 's' : ''}.`
         : 'This tab will be closed.',
       confirmText: 'Close',
       danger: true,
       onConfirm: () => {
         // Kill all gods in this tab
-        tab.gods.forEach(g => send({ event: 'god:kill', godName: g.name }))
+        tabGods.forEach(g => send({ event: 'god:kill', godName: g.name }))
         closeTab(tabId)
         setConfirmModal(null)
       }
     })
-  }, [tabs, activeTabId, closeTab, send])
-
-  // Rotate layout
-  const handleRotateLayout = useCallback(() => {
-    const idx = GRID_LAYOUTS.indexOf(layoutMode)
-    const nextIdx = (idx + 1) % GRID_LAYOUTS.length
-    setLayoutMode(GRID_LAYOUTS[nextIdx])
-  }, [layoutMode])
+  }, [tabs, activeTabId, closeTab, send, getGodsForTab])
 
   // Calculate grid classes based on layout mode and god count
   const getGridClass = (count) => {
@@ -147,7 +143,6 @@ export default function App() {
       if (count <= 6) return 'grid-cols-3'
       return 'grid-cols-4'
     }
-    // Manual layouts
     const layouts = {
       '1x1': 'grid-cols-1',
       '2x1': 'grid-cols-2',
@@ -186,8 +181,8 @@ export default function App() {
         e.stopPropagation()
         if (focusedGod) {
           handleKillGod(focusedGod)
-        } else if (gods.length === 1) {
-          handleKillGod(gods[0].name)
+        } else if (activeGods.length === 1) {
+          handleKillGod(activeGods[0].name)
         }
         return
       }
@@ -197,6 +192,14 @@ export default function App() {
         e.preventDefault()
         e.stopPropagation()
         handleKillTab()
+        return
+      }
+
+      // Ctrl+D: Toggle dev panel
+      if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault()
+        e.stopPropagation()
+        toggleDevPanel()
         return
       }
 
@@ -212,7 +215,7 @@ export default function App() {
       if (e.ctrlKey && e.key === 'l') {
         e.preventDefault()
         e.stopPropagation()
-        handleRotateLayout()
+        rotateLayout()
         return
       }
 
@@ -249,23 +252,20 @@ export default function App() {
           setFocusedGod(null)
         }
       }
-
-      // TODO: Ctrl+M for menu, Ctrl+T for themes, Ctrl+R for terminal
     }
 
-    // Use capture to intercept before xterm gets the events
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
     handleSummon, createTab, handleKillGod, handleKillTab, toggleFullscreen,
-    handleRotateLayout, prevTab, nextTab, goToTab, focusedGod, fullscreenGod,
-    gods, setFocusedGod
+    rotateLayout, prevTab, nextTab, goToTab, focusedGod, fullscreenGod,
+    activeGods, setFocusedGod, toggleDevPanel
   ])
 
   // Get gods to display (all or just fullscreen)
   const displayGods = fullscreenGod
-    ? gods.filter(g => g.name === fullscreenGod)
-    : gods
+    ? activeGods.filter(g => g.name === fullscreenGod)
+    : activeGods
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
@@ -278,19 +278,13 @@ export default function App() {
         onNew={createTab}
         onSummon={handleSummon}
         connected={connected}
-        godCount={gods.length}
+        godCount={activeGods.length}
+        getGodsForTab={getGodsForTab}
       />
-
-      {/* Layout indicator */}
-      {layoutMode !== 'auto' && (
-        <div className="absolute top-12 right-4 z-20 px-2 py-1 bg-bg-tertiary border border-border rounded text-xs text-text-secondary">
-          Layout: {layoutMode}
-        </div>
-      )}
 
       {/* Grid of gods */}
       <main className="flex-1 overflow-hidden p-4">
-        {gods.length === 0 ? (
+        {activeGods.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
             <p className="text-base">No gods summoned</p>
             <p className="text-sm opacity-70">
@@ -324,6 +318,9 @@ export default function App() {
         onConfirm={confirmModal?.onConfirm}
         onCancel={() => setConfirmModal(null)}
       />
+
+      {/* Dev panel */}
+      <DevPanel />
     </div>
   )
 }

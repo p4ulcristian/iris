@@ -6,13 +6,16 @@ export default function TabBar({
   onNew,
   onSummon,
   connected,
-  godCount
+  godCount,
+  getGodsForTab
 }) {
   return (
     <nav className="flex items-center h-10 bg-bg-secondary border-b border-border">
       {/* Tabs */}
       <div className="flex items-center gap-1 px-2 overflow-x-auto">
-        {tabs.map((tab, idx) => (
+        {tabs.map((tab, idx) => {
+          const tabGodCount = getGodsForTab ? getGodsForTab(tab.id).length : 0
+          return (
           <button
             key={tab.id}
             onClick={() => onSelect(tab.id)}
@@ -26,8 +29,8 @@ export default function TabBar({
           >
             <span className="text-xs text-text-secondary opacity-60">{idx + 1}</span>
             <span>{tab.name}</span>
-            {tab.gods.length > 0 && (
-              <span className="text-xs text-text-secondary">({tab.gods.length})</span>
+            {tabGodCount > 0 && (
+              <span className="text-xs text-text-secondary">({tabGodCount})</span>
             )}
             {tabs.length > 1 && (
               <span
@@ -41,7 +44,8 @@ export default function TabBar({
               </span>
             )}
           </button>
-        ))}
+          )
+        })}
 
         {/* New tab button */}
         <button

@@ -35,13 +35,15 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
 
     // Let app-level shortcuts pass through xterm
     term.attachCustomKeyEventHandler((e) => {
-      // Ctrl+N, Ctrl+K, Ctrl+F, Ctrl+L, Ctrl+M, Ctrl+T, Ctrl+R - let these bubble up
-      if (e.ctrlKey && ['n', 'k', 'f', 'l', 'm', 't', 'r'].includes(e.key.toLowerCase())) {
+      const key = e.key.toLowerCase()
+
+      // Ctrl+N, Ctrl+K, Ctrl+F, Ctrl+L, Ctrl+M, Ctrl+T, Ctrl+R, Ctrl+D - let these bubble up
+      if (e.ctrlKey && ['n', 'k', 'f', 'l', 'm', 't', 'r', 'd'].includes(key)) {
         return false // Don't handle in xterm, let it bubble
       }
       // Alt+N, Alt+K, Alt+comma, Alt+period, Alt+1-9
       if (e.altKey && (
-        ['n', 'k', ',', '.'].includes(e.key.toLowerCase()) ||
+        ['n', 'k', ',', '.'].includes(key) ||
         (e.key >= '1' && e.key <= '9')
       )) {
         return false
