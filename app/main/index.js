@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
+import http from 'http'
 import { fileURLToPath } from 'url'
 import { WebSocketServer } from 'ws'
 import { execSync, spawn } from 'child_process'
@@ -59,7 +60,7 @@ const PANTHEON = {
 
 async function checkServiceHealth(name, port) {
   return new Promise((resolve) => {
-    const req = require('http').get(`http://127.0.0.1:${port}/health`, { timeout: 1000 }, (res) => {
+    const req = http.get(`http://127.0.0.1:${port}/health`, { timeout: 1000 }, (res) => {
       resolve(res.statusCode === 200)
     })
     req.on('error', () => resolve(false))
