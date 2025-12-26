@@ -33,12 +33,14 @@ const initialState = {
   services: {
     speak: false,
     hear: false,
-    express: false
+    express: false,
+    wake: false
   },
   servicesLoading: {
     speak: false,
     hear: false,
-    express: false
+    express: false,
+    wake: false
   },
 
   // UI state

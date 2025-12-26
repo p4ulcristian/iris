@@ -73,6 +73,14 @@ export default function StatusBar({ godCount, connected, send }) {
       {/* Services */}
       <div className="flex items-center gap-1 ml-4 border-l border-border pl-4">
         <ServiceIndicator
+          name="Wake"
+          serviceKey="wake"
+          active={services.wake}
+          loading={servicesLoading.wake}
+          icon="⌨️"
+          onToggle={handleServiceToggle}
+        />
+        <ServiceIndicator
           name="Hear"
           serviceKey="hear"
           active={services.hear}
