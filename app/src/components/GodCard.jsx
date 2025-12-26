@@ -6,6 +6,7 @@ import { getThemeTerminalSettings } from '../themes/generated/themes'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faExpand, faCompress, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { WS_URL } from '../config'
 
 // Convert hex color to RGB for ANSI escape codes
 function hexToRgb(hex) {
@@ -197,7 +198,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
     window.addEventListener('iris:refit', handleRefit)
 
     // WebSocket connection
-    const ws = new WebSocket('ws://localhost:9999')
+    const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
     ws.onopen = () => {

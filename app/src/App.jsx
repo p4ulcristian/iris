@@ -8,9 +8,10 @@ import DevPanel from './components/DevPanel'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
+import { WS_URL } from './config'
 
 export default function App() {
-  const { connected, send, lastMessage } = useWebSocket('ws://localhost:9999')
+  const { connected, send, lastMessage } = useWebSocket(WS_URL)
 
   // Get state and actions from store
   const tabs = useStore(s => s.tabs)

@@ -5,12 +5,13 @@
   "main": "main/index.js",
   "type": "module",
   "scripts": {
-    "generate:themes": "node ../scripts/generate-themes.js",
-    "dev": "npm run generate:themes && concurrently -k \"vite\" \"node -e 'setTimeout(()=>{},2000)' && electron . --dev\"",
-    "dev:vite": "vite",
+    "generate:themes": "bun ../scripts/generate-themes.js",
+    "dev": "bun run generate:themes && concurrently -k -n vite,server,electron -c cyan,green,magenta \"bun:dev:vite\" \"bun:dev:server\" \"sleep 2 && bun run dev:electron\"",
+    "dev:vite": "bunx --bun vite",
+    "dev:server": "bun --watch server/index.js",
     "dev:electron": "electron . --dev",
-    "build": "npm run generate:themes && vite build && electron-builder",
-    "preview": "vite preview"
+    "build": "bun run generate:themes && bunx --bun vite build && electron-builder",
+    "preview": "bunx --bun vite preview"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
@@ -20,7 +21,6 @@
     "@xterm/xterm": "^6.0.0",
     "immer": "^11.1.0",
     "motion": "^12.0.0",
-    "node-pty": "^1.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "ws": "^8.18.0",
