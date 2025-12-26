@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import GodTabs from './components/GodTabs'
 import GodCard from './components/GodCard'
-import StatusBar from './components/StatusBar'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useGods } from './hooks/useGods'
 
@@ -120,48 +118,61 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [gods, activeGod, handleSummon, handleBanish, setActiveGod])
 
-  const activeGodData = gods.find(g => g.name === activeGod)
+  // Calculate grid layout based on god count
+  const getGridClass = (count) => {
+    if (count === 1) return 'grid-cols-1'
+    if (count === 2) return 'grid-cols-2'
+    if (count <= 4) return 'grid-cols-2'
+    if (count <= 6) return 'grid-cols-3'
+    return 'grid-cols-4'
+  }
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
 
-      {/* Tab bar */}
-      <GodTabs
-        gods={gods}
-        activeGod={activeGod}
-        onSelect={setActiveGod}
-        onClose={handleBanish}
-        onSummon={handleSummon}
-        connected={connected}
-      />
+      {/* Toolbar */}
+      <nav className="flex items-center gap-2 h-10 px-3 bg-bg-secondary border-b border-border">
+        <button
+          onClick={handleSummon}
+          disabled={!connected}
+          className={`
+            h-7 px-3 rounded text-sm font-medium transition-all
+            ${connected
+              ? 'bg-accent text-white hover:bg-[#5a62e0]'
+              : 'bg-bg-tertiary text-text-secondary cursor-not-allowed'
+            }
+          `}
+        >
+          + Summon
+        </button>
+        <span className="text-text-secondary text-sm">
+          {gods.length} god{gods.length !== 1 ? 's' : ''}
+        </span>
+        <div className="flex-1" />
+        <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+      </nav>
 
-      {/* Main content */}
-      <main className="flex-1 relative overflow-hidden">
+      {/* Grid of gods */}
+      <main className="flex-1 overflow-hidden p-4">
         {gods.length === 0 ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-secondary">
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
             <p className="text-base">No gods summoned</p>
             <p className="text-sm opacity-70">
               Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> or click Summon
             </p>
           </div>
         ) : (
-          gods.map(god => (
-            <GodCard
-              key={god.name}
-              god={god}
-              isActive={god.name === activeGod}
-              onClose={() => handleBanish(god.name)}
-            />
-          ))
+          <div className={`grid ${getGridClass(gods.length)} gap-4 h-full`}>
+            {gods.map(god => (
+              <GodCard
+                key={god.name}
+                god={god}
+                onClose={() => handleBanish(god.name)}
+              />
+            ))}
+          </div>
         )}
       </main>
-
-      {/* Status bar */}
-      <StatusBar
-        voiceState={voiceState}
-        godCount={gods.length}
-        connected={connected}
-      />
     </div>
   )
 }

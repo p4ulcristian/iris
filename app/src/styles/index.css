@@ -25,12 +25,6 @@
   --color-god-demeter: #4caf50;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 /* Frameless window resize handles */
 .resize-handle {
   position: fixed;

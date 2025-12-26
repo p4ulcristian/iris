@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 
-export default function GodCard({ god, isActive, onClose }) {
+export default function GodCard({ god, onClose }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
@@ -96,21 +96,22 @@ export default function GodCard({ god, isActive, onClose }) {
 
   return (
     <div
-      className={`absolute inset-0 flex flex-col bg-bg-primary transition-opacity duration-150 ${isActive ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`}
+      className="flex flex-col bg-bg-primary rounded-lg overflow-hidden border-2"
+      style={{
+        borderColor: color,
+        boxShadow: `0 0 20px ${color}22`
+      }}
     >
       {/* Header */}
       <div
-        className="flex items-center h-9 px-4 bg-bg-secondary border-b-2"
-        style={{
-          borderColor: color,
-          boxShadow: `0 2px 20px ${color}33`
-        }}
+        className="flex items-center h-8 px-3 bg-bg-secondary"
+        style={{ borderBottom: `1px solid ${color}44` }}
       >
         <span className="text-sm font-medium" style={{ color }}>{name}</span>
         <div className="flex-1" />
         <button
           onClick={onClose}
-          className="w-6 h-6 flex items-center justify-center text-text-secondary hover:text-red-500 hover:bg-white/10 rounded transition-all"
+          className="w-5 h-5 flex items-center justify-center text-text-secondary hover:text-red-500 hover:bg-white/10 rounded transition-all text-sm"
           title="Banish"
         >
           ×
