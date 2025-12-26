@@ -104,6 +104,66 @@ function stopHealthChecks() {
   }
 }
 
+// Service processes
+const serviceProcesses = {}
+
+function startService(name) {
+  if (serviceProcesses[name]) {
+    console.log(`Service ${name} already running`)
+    return
+  }
+
+  const scripts = {
+    speak: 'brain/speak/server.py',
+    hear: 'brain/hear/server.py',
+    express: 'brain/express/server.py'
+  }
+
+  const script = scripts[name]
+  if (!script) return
+
+  const projectRoot = path.join(__dirname, '../..')
+  const scriptPath = path.join(projectRoot, script)
+
+  console.log(`Starting ${name} service...`)
+
+  const proc = spawn('uv', ['run', scriptPath], {
+    cwd: projectRoot,
+    detached: true,
+    stdio: 'ignore'
+  })
+
+  proc.unref()
+  serviceProcesses[name] = proc.pid
+
+  // Check health after a moment
+  setTimeout(() => checkAllServices(), 2000)
+}
+
+function stopService(name) {
+  const pid = serviceProcesses[name]
+  if (pid) {
+    try {
+      process.kill(pid, 'SIGTERM')
+    } catch (e) {
+      // Process may already be dead
+    }
+    delete serviceProcesses[name]
+  }
+
+  // Also try to kill by port
+  const port = SERVICES[name]?.port
+  if (port) {
+    try {
+      execSync(`lsof -ti:${port} | xargs -r kill`, { stdio: 'ignore' })
+    } catch (e) {
+      // No process on port
+    }
+  }
+
+  setTimeout(() => checkAllServices(), 500)
+}
+
 // --- DTACH HELPERS ---
 
 function getSocketPath(godName) {
@@ -168,10 +228,17 @@ function createGodSession(name, task = '') {
     // -n = create new socket, run detached
     // -E = disable detach character (we manage lifecycle)
     const projectRoot = path.join(__dirname, '../..')
-    execSync(`TERM=xterm-256color GOD_NAME="${name}" dtach -n "${socketPath}" -E ${cmd}`, {
+    execSync(`dtach -n "${socketPath}" -E ${cmd}`, {
       stdio: 'ignore',
       detached: true,
-      cwd: projectRoot
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        FORCE_COLOR: '3',
+        GOD_NAME: name
+      }
     })
 
     // Give it a moment to start
@@ -218,7 +285,13 @@ function createTerminalSession(options = {}) {
       stdio: 'ignore',
       detached: true,
       cwd: workDir,
-      shell: true
+      shell: true,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        FORCE_COLOR: '3'
+      }
     })
 
     // Give it a moment to start
@@ -419,6 +492,22 @@ function handleMessage(ws, msg) {
     case 'god:list': {
       const gods = listGodSockets()
       ws.send(JSON.stringify({ event: 'god:list', gods }))
+      break
+    }
+
+    case 'service:start': {
+      const service = data.service
+      if (service && SERVICES[service]) {
+        startService(service)
+      }
+      break
+    }
+
+    case 'service:stop': {
+      const service = data.service
+      if (service && SERVICES[service]) {
+        stopService(service)
+      }
       break
     }
 

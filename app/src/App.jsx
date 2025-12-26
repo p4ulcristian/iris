@@ -380,7 +380,7 @@ export default function App() {
       />
 
       {/* Status bar */}
-      <StatusBar godCount={activeGods.length} connected={connected} />
+      <StatusBar godCount={activeGods.length} connected={connected} send={send} />
 
       {/* Dev panel */}
       <DevPanel />

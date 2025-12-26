@@ -1,21 +1,32 @@
 import { useStore } from '../store'
 
-function ServiceIndicator({ name, active, icon }) {
+function ServiceIndicator({ name, serviceKey, active, icon, onToggle }) {
   return (
-    <div
-      className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
-        active ? 'text-green-400' : 'text-text-tertiary'
+    <button
+      onClick={() => onToggle(serviceKey, active)}
+      className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+        active
+          ? 'text-green-400 hover:bg-green-400/10'
+          : 'text-text-tertiary hover:bg-bg-tertiary'
       }`}
-      title={`${name}: ${active ? 'Online' : 'Offline'}`}
+      title={`${name}: ${active ? 'Online - Click to stop' : 'Offline - Click to start'}`}
     >
       <span className={active ? '' : 'opacity-50'}>{icon}</span>
       <span className={active ? '' : 'line-through opacity-50'}>{name}</span>
-    </div>
+    </button>
   )
 }
 
-export default function StatusBar({ godCount, connected }) {
+export default function StatusBar({ godCount, connected, send }) {
   const services = useStore(s => s.services)
+
+  const handleServiceToggle = (service, isActive) => {
+    if (!send) return
+    send({
+      event: isActive ? 'service:stop' : 'service:start',
+      service
+    })
+  }
 
   return (
     <footer className="flex items-center h-8 px-4 bg-bg-secondary border-t border-border text-xs text-text-secondary">
@@ -29,9 +40,9 @@ export default function StatusBar({ godCount, connected }) {
 
       {/* Services */}
       <div className="flex items-center gap-1 ml-4 border-l border-border pl-4">
-        <ServiceIndicator name="Hear" active={services.hear} icon="👂" />
-        <ServiceIndicator name="Speak" active={services.speak} icon="🔊" />
-        <ServiceIndicator name="Express" active={services.express} icon="💬" />
+        <ServiceIndicator name="Hear" serviceKey="hear" active={services.hear} icon="👂" onToggle={handleServiceToggle} />
+        <ServiceIndicator name="Speak" serviceKey="speak" active={services.speak} icon="🔊" onToggle={handleServiceToggle} />
+        <ServiceIndicator name="Express" serviceKey="express" active={services.express} icon="💬" onToggle={handleServiceToggle} />
       </div>
 
       {/* God count */}

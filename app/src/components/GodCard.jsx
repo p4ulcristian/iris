@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { getGodPalette } from '../themes/god-palettes'
 
 export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose, onToggleFullscreen }) {
   const containerRef = useRef(null)
@@ -10,6 +11,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
 
   const { name, color } = god
   const godName = name
+  const palette = getGodPalette(name)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -25,13 +27,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
       rows: estimatedRows,
       cols: estimatedCols,
-      theme: {
-        background: '#0a0a0a',
-        foreground: '#e0e0e0',
-        cursor: color,
-        cursorAccent: '#0a0a0a',
-        selectionBackground: `${color}40`
-      }
+      theme: palette
     })
 
     const fitAddon = new FitAddon()
@@ -168,7 +164,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
       term.dispose()
       ws.close()
     }
-  }, [godName, color])
+  }, [godName, color, palette])
 
   return (
     <div
@@ -215,7 +211,7 @@ export default function GodCard({ god, isFocused, isFullscreen, onFocus, onClose
         <div
           ref={containerRef}
           className="absolute inset-0"
-          style={{ backgroundColor: '#0a0a0a' }}
+          style={{ backgroundColor: palette.background }}
         />
       </div>
     </div>
