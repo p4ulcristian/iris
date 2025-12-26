@@ -89,20 +89,15 @@ function createGodSession(name, task = '') {
     }
   }
 
-  // Build init prompt with god identity
+  // Build init prompt with god identity (always include identity)
+  const identity = `You are ${name}. Voice: ${god.voice}.`
   const initPrompt = task
-    ? `${task}
-
-You are ${name}. Voice: ${god.voice}. Color: ${god.color}.
-
-Announce yourself, then begin.`
-    : ''
+    ? `${task}\n\n${identity}\n\nAnnounce yourself, then begin.`
+    : `${identity}\n\nAnnounce yourself and ask what Paul needs.`
 
   // Build command
   const escapedPrompt = initPrompt.replace(/"/g, '\\"').replace(/\n/g, '\\n')
-  const cmd = initPrompt
-    ? `claude --dangerously-skip-permissions "${escapedPrompt}"`
-    : 'claude --dangerously-skip-permissions'
+  const cmd = `claude --dangerously-skip-permissions "${escapedPrompt}"`
 
   try {
     // Create detached dtach session
