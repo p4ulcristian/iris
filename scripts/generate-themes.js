@@ -449,8 +449,7 @@ export const THEMES = ${JSON.stringify(
     id,
     label: config.label || id,
     accent: config.colors.accent,
-    terminal: config.terminal || {},
-    gods: config.gods || {}
+    terminal: config.terminal || {}
   })),
   null,
   2
@@ -464,11 +463,6 @@ export function getThemeTerminalSettings(themeId) {
   return theme?.terminal || THEMES[0]?.terminal || {}
 }
 
-// Get god colors for a theme
-export function getThemeGodColors(themeId) {
-  const theme = THEMES.find(t => t.id === themeId)
-  return theme?.gods || THEMES[0]?.gods || {}
-}
 `
 writeFileSync(join(outDir, 'themes.js'), themesJs)
 

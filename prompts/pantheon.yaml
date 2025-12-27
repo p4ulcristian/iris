@@ -1,54 +1,54 @@
 zeus:
   voice: zeus
-  color: "#ffd700"
+  color: "#FFD700"
 
 apollo:
   voice: apollo
-  color: "#ffab00"
+  color: "#FFFF00"
 
 artemis:
   voice: artemis
-  color: "#009688"
+  color: "#00FF88"
 
 athena:
   voice: athena
-  color: "#2196f3"
+  color: "#0088FF"
 
 hermes:
   voice: hermes
-  color: "#ff9800"
+  color: "#00FFFF"
 
 hades:
   voice: hades
-  color: "#9c27b0"
+  color: "#555555"
 
 poseidon:
   voice: poseidon
-  color: "#00bcd4"
+  color: "#0044CC"
 
 hera:
   voice: hera
-  color: "#e91e63"
+  color: "#FF00BB"
 
 ares:
   voice: ares
-  color: "#f44336"
+  color: "#FF0000"
 
 hephaestus:
   voice: hephaestus
-  color: "#cd7f32"
+  color: "#FF6600"
 
 aphrodite:
   voice: aphrodite
-  color: "#f48fb1"
+  color: "#FFAACC"
 
 dionysus:
   voice: dionysus
-  color: "#7c4dff"
+  color: "#AA00FF"
 
 demeter:
   voice: demeter
-  color: "#4caf50"
+  color: "#00CC00"
 
 # Realms - places in Greek mythology for tab names
 realms:
