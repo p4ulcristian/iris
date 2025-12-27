@@ -44,6 +44,20 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
     }
   }, [palette])
 
+  // Scroll to bottom and focus terminal when this god becomes focused
+  // Delay to allow animation to complete first
+  useEffect(() => {
+    if (isFocused && termRef.current) {
+      const timeout = setTimeout(() => {
+        try {
+          termRef.current.scrollToBottom()
+          termRef.current.focus()
+        } catch {}
+      }, 350) // Wait for slide animation to complete
+      return () => clearTimeout(timeout)
+    }
+  }, [isFocused])
+
   // Close move menu when clicking outside
   useEffect(() => {
     if (!showMoveMenu) return
