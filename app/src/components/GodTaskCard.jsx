@@ -2,7 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear } from '@fortawesome/free-solid-svg-icons'
+
+// Type icons
+import claudeIcon from '../assets/icons/claude.png'
+import linearIcon from '../assets/icons/linear.png'
+import gitIcon from '../assets/icons/git.png'
 
 // Convert hex to RGB for CSS (comma-separated)
 function hexToRgbCss(hex) {
@@ -23,6 +28,31 @@ function formatElapsed(ms) {
     return `${minutes}m ${seconds % 60}s`
   } else {
     return `${seconds}s`
+  }
+}
+
+// Get type icon component
+function TypeIcon({ type }) {
+  const iconClass = "w-4 h-4 object-contain"
+  const faIconClass = "text-white/70"
+
+  switch (type) {
+    case 'god':
+      return <img src={claudeIcon} alt="Claude" className={iconClass} />
+    case 'linear':
+      return <img src={linearIcon} alt="Linear" className={iconClass} />
+    case 'git':
+      return <img src={gitIcon} alt="Git" className={iconClass} />
+    case 'terminal':
+      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
+    case 'browser':
+      return <FontAwesomeIcon icon={faGlobe} className={faIconClass} size="sm" />
+    case 'history':
+      return <FontAwesomeIcon icon={faClockRotateLeft} className={faIconClass} size="sm" />
+    case 'settings':
+      return <FontAwesomeIcon icon={faGear} className={faIconClass} size="sm" />
+    default:
+      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
   }
 }
 
@@ -98,7 +128,8 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
       initial={false}
     >
       {/* Header row */}
-      <div className="flex items-center h-8 px-3">
+      <div className="flex items-center h-8 px-3 gap-2">
+        <TypeIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
           {displayName || name}
         </span>

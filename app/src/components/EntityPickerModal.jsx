@@ -18,12 +18,13 @@ const ENTITY_TYPES = [
 
 export default function EntityPickerModal({
   isOpen,
+  initialMode = 'pick',
   usedGodNames = [],
   onSpawnGod,
   onSpawnEntity,
   onCancel
 }) {
-  const [mode, setMode] = useState('pick') // 'pick' | 'god'
+  const [mode, setMode] = useState(initialMode) // 'pick' | 'god'
   const [selectedGod, setSelectedGod] = useState('')
   const [task, setTask] = useState('')
   const inputRef = useRef(null)
@@ -38,12 +39,12 @@ export default function EntityPickerModal({
   // Reset state on open
   useEffect(() => {
     if (isOpen) {
-      setMode('pick')
+      setMode(initialMode)
       const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
       setSelectedGod(randomGod)
       setTask('')
     }
-  }, [isOpen])
+  }, [isOpen, initialMode])
 
   // Focus task input when entering god mode
   useEffect(() => {

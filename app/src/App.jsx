@@ -17,7 +17,10 @@ import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUserPlus, faTerminal, faCode } from '@fortawesome/free-solid-svg-icons'
+import {
+  faBolt, faTerminal, faCode, faGlobe, faCodeBranch,
+  faClockRotateLeft, faCheckSquare, faGear
+} from '@fortawesome/free-solid-svg-icons'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -52,6 +55,7 @@ export default function App() {
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [entityPickerOpen, setEntityPickerOpen] = useState(false)
+  const [entityPickerMode, setEntityPickerMode] = useState('pick') // 'pick' | 'god'
 
   // Update connection status in store
   useEffect(() => {
@@ -245,7 +249,7 @@ export default function App() {
 
       // Check if this is one of our app shortcuts
       const isAppShortcut = (
-        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)) ||
+        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'g'].includes(key)) ||
         (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
@@ -256,6 +260,16 @@ export default function App() {
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
+        setEntityPickerMode('pick')
+        setEntityPickerOpen(true)
+        return
+      }
+
+      // Ctrl+G: Open entity picker directly in god mode
+      if (e.ctrlKey && e.key === 'g') {
+        e.preventDefault()
+        e.stopPropagation()
+        setEntityPickerMode('god')
         setEntityPickerOpen(true)
         return
       }
@@ -525,27 +539,65 @@ export default function App() {
                 ))}
               </Reorder.Group>
               {/* Action buttons */}
-              <div className="flex gap-2 mt-4">
+              <div className="grid grid-cols-4 gap-2 mt-4">
                 <button
-                  onClick={() => setEntityPickerOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Add entity (Ctrl+N)"
+                  onClick={() => {
+                    setEntityPickerMode('god')
+                    setEntityPickerOpen(true)
+                  }}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="New god (Ctrl+G)"
                 >
-                  <FontAwesomeIcon icon={faUserPlus} />
+                  <FontAwesomeIcon icon={faBolt} />
                 </button>
                 <button
                   onClick={handleSpawnTerminal}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New terminal (Ctrl+R)"
                 >
                   <FontAwesomeIcon icon={faTerminal} />
                 </button>
                 <button
                   onClick={() => send({ event: 'nvim:spawn' })}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New nvim"
                 >
                   <FontAwesomeIcon icon={faCode} />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('browser')}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="New browser"
+                >
+                  <FontAwesomeIcon icon={faGlobe} />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('linear')}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Linear"
+                >
+                  <FontAwesomeIcon icon={faCheckSquare} />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('git')}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Git"
+                >
+                  <FontAwesomeIcon icon={faCodeBranch} />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('history')}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="History"
+                >
+                  <FontAwesomeIcon icon={faClockRotateLeft} />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('settings')}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Settings"
+                >
+                  <FontAwesomeIcon icon={faGear} />
                 </button>
               </div>
             </div>
@@ -582,6 +634,7 @@ export default function App() {
       {/* Entity picker modal */}
       <EntityPickerModal
         isOpen={entityPickerOpen}
+        initialMode={entityPickerMode}
         usedGodNames={getAllGodNames()}
         onSpawnGod={handleSummonGod}
         onSpawnEntity={handleSpawnEntity}

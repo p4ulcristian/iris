@@ -83,11 +83,11 @@ export default function TabBar({
           )
         })}
 
-        {/* Add entity button */}
+        {/* Add tab button */}
         <button
-          onClick={onOpenSummon}
+          onClick={onNew}
           className="h-7 w-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"
-          title="Add entity (Ctrl+N)"
+          title="New tab (Alt+N)"
         >
           +
         </button>
