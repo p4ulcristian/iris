@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Reorder, AnimatePresence, motion } from 'framer-motion'
 import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
@@ -46,6 +46,10 @@ export default function App() {
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
+
+  // Morph animation state
+  const [morphing, setMorphing] = useState(null) // { god, sourceRect, targetRect, color }
+  const mainPanelRef = useRef(null)
 
   // Update connection status in store
   useEffect(() => {
@@ -152,6 +156,17 @@ export default function App() {
 
   // Enter focus mode for a god
   const handleEnterFocus = useCallback((godName) => {
+    send({ event: 'workLayout:set', layout: 'focus', focusedGod: godName })
+  }, [send])
+
+  // Handle task card click with morph animation
+  const handleTaskCardClick = useCallback((godName, sourceRect, godColor) => {
+    // Get target rect from main panel
+    const targetRect = mainPanelRef.current?.getBoundingClientRect()
+    if (targetRect && sourceRect) {
+      setMorphing({ god: godName, sourceRect, targetRect, color: godColor })
+    }
+    // Send focus change
     send({ event: 'workLayout:set', layout: 'focus', focusedGod: godName })
   }, [send])
 
@@ -446,7 +461,7 @@ export default function App() {
             return (
           <div className="flex gap-4 h-full">
             {/* Main focused god - 2:1 ratio with sidebar */}
-            <div className="flex-[2] min-w-0 relative overflow-hidden">
+            <div ref={mainPanelRef} className="flex-[2] min-w-0 relative overflow-hidden">
               <AnimatePresence mode="popLayout">
                 {activeGods.filter(g => g.name === effectiveFocusedGod).map(god => (
                   <motion.div
