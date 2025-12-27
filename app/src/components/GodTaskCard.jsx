@@ -4,6 +4,13 @@ import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark } from '@fortawesome/free-solid-svg-icons'
 
+// Convert hex to RGB for CSS (comma-separated)
+function hexToRgbCss(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return '128, 128, 128'
+  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+}
+
 function formatElapsed(ms) {
   if (!ms || ms < 0) return null
   const seconds = Math.floor(ms / 1000)
@@ -77,14 +84,12 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
       dragListener={true}
       dragControls={dragControls}
       onClick={onClick}
-      className="group relative w-full rounded-lg cursor-grab active:cursor-grabbing overflow-hidden backdrop-blur-xl"
+      className="group relative w-full cursor-grab active:cursor-grabbing overflow-hidden liquid-glass-god"
       style={{
         '--god-color': godColor,
-        '--god-color-alpha': `${godColor}88`,
-        background: 'rgba(10, 10, 15, 0.5)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        borderLeft: `3px solid ${godColor}`,
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+        '--god-color-rgb': hexToRgbCss(godColor),
+        borderRadius: '12px',
+        borderLeft: `3px solid ${godColor}`
       }}
       initial={false}
     >

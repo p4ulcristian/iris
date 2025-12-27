@@ -13,6 +13,13 @@ function hexToRgb(hex) {
   return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
 }
 
+// Convert hex to RGB for CSS (comma-separated)
+function hexToRgbCss(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return '128, 128, 128'
+  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
+}
+
 export default function GodCard({ god, isFocused, isHidden, onFocus, onDoubleClick }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
@@ -244,20 +251,13 @@ export default function GodCard({ god, isFocused, isHidden, onFocus, onDoubleCli
     <div
       onClick={onFocus}
       onDoubleClick={onDoubleClick}
-      className="relative h-full min-h-0 rounded-lg overflow-hidden backdrop-blur-md transition-colors"
+      className={`relative h-full min-h-0 overflow-hidden transition-all ${isFocused ? 'liquid-glass-focused' : 'liquid-glass-god'}`}
       style={{
         '--god-color': godColor,
-        '--god-color-alpha': `${godColor}66`,
-        background: 'rgba(0, 0, 0, 0.5)',
-        border: 'none',
-        boxShadow: 'none',
+        '--god-color-rgb': hexToRgbCss(godColor),
         viewTransitionName: `god-${name.toLowerCase()}`
       }}
     >
-      {/* Passive overlay for unfocused panes */}
-      {!isFocused && (
-        <div className="absolute inset-0 bg-black/40 pointer-events-none z-10 rounded-lg" />
-      )}
       {/* Terminal */}
       <div
         ref={containerRef}

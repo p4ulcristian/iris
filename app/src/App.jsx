@@ -415,18 +415,24 @@ export default function App() {
 
   return (
     <div className={`flex flex-col h-screen theme-${theme}`}>
-      {/* Animated wallpaper */}
+      {/* Animated wallpaper - enhanced for liquid glass */}
       <div
         className="wallpaper transition-all duration-1000"
         style={wallpaperColor ? {
           '--blob-1': wallpaperColor,
-          '--blob-2': `color-mix(in srgb, ${wallpaperColor} 60%, #000)`,
-          '--blob-3': `color-mix(in srgb, ${wallpaperColor} 40%, #fff)`
+          '--blob-2': `color-mix(in srgb, ${wallpaperColor} 70%, #000)`,
+          '--blob-3': `color-mix(in srgb, ${wallpaperColor} 50%, #fff)`,
+          '--blob-4': `color-mix(in srgb, ${wallpaperColor} 80%, #000)`,
+          '--blob-5': `color-mix(in srgb, ${wallpaperColor} 60%, #fff)`,
+          '--blob-6': `color-mix(in srgb, ${wallpaperColor} 40%, #000)`
         } : undefined}
       >
         <div className="blob blob-1" />
         <div className="blob blob-2" />
         <div className="blob blob-3" />
+        <div className="blob blob-4" />
+        <div className="blob blob-5" />
+        <div className="blob blob-6" />
       </div>
 
       {/* Tab bar */}
@@ -443,7 +449,7 @@ export default function App() {
       />
 
       {/* Main content area */}
-      <main className="flex-1 min-h-0 overflow-hidden p-4">
+      <main className="flex-1 min-h-0 overflow-visible p-4">
         {/* Work View */}
         {view === 'work' && (
           activeGods.length === 0 ? (
@@ -464,7 +470,7 @@ export default function App() {
           <div className="flex gap-4 h-full">
             {/* Main focused god - 2:1 ratio with sidebar */}
             {/* All gods stay mounted to preserve terminal output; only focused one visible */}
-            <div className="flex-[2] min-w-0 relative overflow-hidden">
+            <div className="flex-[2] min-w-0 relative">
               {activeGods.map(god => {
                 const isThisFocused = god.name === effectiveFocusedGod
                 return (

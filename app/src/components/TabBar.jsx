@@ -48,7 +48,7 @@ export default function TabBar({
   }
 
   return (
-    <nav className="flex items-center h-10 bg-black/40 backdrop-blur-md border-b border-white/10">
+    <nav className="flex items-center h-10 liquid-glass-light">
       {/* Tabs */}
       <div className="flex items-center gap-1 px-2 overflow-x-auto">
         {tabs.map((tab, idx) => {
@@ -60,8 +60,8 @@ export default function TabBar({
             className={`
               group flex items-center gap-2 h-7 px-3 rounded text-sm transition-all
               ${activeTabId === tab.id
-                ? 'bg-bg-primary text-text-primary border border-border'
-                : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                ? 'bg-white/10 text-text-primary border border-white/20'
+                : 'text-text-secondary hover:bg-white/5 hover:text-text-primary'
               }
             `}
           >

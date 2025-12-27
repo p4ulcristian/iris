@@ -3,6 +3,18 @@
 @import "../themes/generated/colors.css";
 @import "../themes/generated/themes.css";
 
+/* Frosted glass noise texture - enhanced for liquid glass */
+.glass-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
 /* Register theme variables with Tailwind so it generates utility classes */
 @theme {
   --color-bg-primary: var(--color-bg-primary);
@@ -128,6 +140,137 @@ body {
   animation: ready-stuck 3s ease-in-out infinite;
 }
 
+/* ============================================
+   LIQUID GLASS DESIGN SYSTEM
+   ============================================ */
+
+/* Base liquid glass surface */
+.liquid-glass {
+  /* Heavy blur - the signature */
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+
+  /* Semi-transparent with subtle tint */
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+
+  /* Edge highlight - brighter at top */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.3);
+  border-left-color: rgba(255, 255, 255, 0.2);
+
+  /* Soft outer glow */
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  /* Smooth corners */
+  border-radius: 16px;
+}
+
+/* Clean liquid glass - no tint */
+.liquid-glass-god {
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+
+  /* Neutral transparent background */
+  background: rgba(0, 0, 0, 0.2);
+
+  /* Edge highlight */
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.25);
+
+  /* God-colored outer glow */
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(var(--god-color-rgb), 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  border-radius: 16px;
+}
+
+/* Focused state - brighter, lifted */
+.liquid-glass-focused {
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+
+  /* Neutral transparent background */
+  background: rgba(0, 0, 0, 0.15);
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-top-color: rgba(255, 255, 255, 0.4);
+
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(var(--god-color-rgb), 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+  border-radius: 16px;
+}
+
+/* Light variant for nav bars */
+.liquid-glass-light {
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Liquid glass ready states */
+.liquid-glass-god.ready-done,
+.liquid-glass-focused.ready-done {
+  --god-color-rgb: 34, 197, 94;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 40px rgba(34, 197, 94, 0.3),
+    0 0 60px rgba(34, 197, 94, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+@keyframes liquid-stuck {
+  0%, 100% {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 30px rgba(239, 68, 68, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 50px rgba(239, 68, 68, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+}
+
+.liquid-glass-god.ready-stuck,
+.liquid-glass-focused.ready-stuck {
+  --god-color-rgb: 239, 68, 68;
+  animation: liquid-stuck 3s ease-in-out infinite;
+}
+
+@keyframes liquid-question {
+  0%, 100% {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 30px rgba(234, 179, 8, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 45px rgba(234, 179, 8, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+}
+
+.liquid-glass-god.ready-question,
+.liquid-glass-focused.ready-question {
+  --god-color-rgb: 234, 179, 8;
+  animation: liquid-question 2s ease-in-out infinite;
+}
 
 /* View Transitions */
 ::view-transition-old(root),
@@ -169,93 +312,145 @@ body {
   background: var(--wallpaper-base, #050508);
 }
 
-/* Aurora blobs */
+/* Aurora blobs - enhanced for liquid glass */
 .wallpaper .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  filter: blur(100px);
   opacity: 0.6;
   mix-blend-mode: screen;
+  will-change: transform;
 }
 
 .wallpaper .blob-1 {
-  width: 60vmax;
-  height: 60vmax;
-  background: var(--blob-1, #6b4c9a);
-  animation: blob-1 25s ease-in-out infinite;
+  width: 50vmax;
+  height: 50vmax;
+  background: var(--blob-1, #8b5cf6);
+  animation: blob-1 40s ease-in-out infinite;
 }
 
 .wallpaper .blob-2 {
-  width: 50vmax;
-  height: 50vmax;
-  background: var(--blob-2, #4a6fa5);
-  animation: blob-2 30s ease-in-out infinite;
+  width: 45vmax;
+  height: 45vmax;
+  background: var(--blob-2, #6366f1);
+  animation: blob-2 45s ease-in-out infinite;
 }
 
 .wallpaper .blob-3 {
-  width: 45vmax;
-  height: 45vmax;
-  background: var(--blob-3, #8b5a8b);
-  animation: blob-3 20s ease-in-out infinite;
+  width: 40vmax;
+  height: 40vmax;
+  background: var(--blob-3, #a855f7);
+  animation: blob-3 35s ease-in-out infinite;
+}
+
+.wallpaper .blob-4 {
+  width: 35vmax;
+  height: 35vmax;
+  background: var(--blob-4, #ec4899);
+  animation: blob-4 50s ease-in-out infinite;
 }
 
 @keyframes blob-1 {
-  0%, 100% { top: -20%; left: -10%; transform: scale(1); }
-  33% { top: 50%; left: 60%; transform: scale(1.1); }
-  66% { top: 80%; left: 20%; transform: scale(0.9); }
+  0%, 100% { top: -15%; left: -5%; transform: scale(1) translateZ(0); }
+  50% { top: 60%; left: 50%; transform: scale(1.1) translateZ(0); }
 }
 
 @keyframes blob-2 {
-  0%, 100% { top: 60%; left: 70%; transform: scale(1); }
-  33% { top: 10%; left: 30%; transform: scale(0.9); }
-  66% { top: 40%; left: -10%; transform: scale(1.1); }
+  0%, 100% { top: 70%; left: 80%; transform: scale(1) translateZ(0); }
+  50% { top: 10%; left: 20%; transform: scale(0.9) translateZ(0); }
 }
 
 @keyframes blob-3 {
-  0%, 100% { top: 80%; left: 40%; transform: scale(1); }
-  33% { top: -10%; left: 80%; transform: scale(1.1); }
-  66% { top: 30%; left: 50%; transform: scale(0.9); }
+  0%, 100% { top: 50%; left: -10%; transform: scale(1) translateZ(0); }
+  50% { top: -10%; left: 70%; transform: scale(1.1) translateZ(0); }
+}
+
+@keyframes blob-4 {
+  0%, 100% { top: 90%; left: 30%; transform: scale(1) translateZ(0); }
+  50% { top: 20%; left: 90%; transform: scale(0.95) translateZ(0); }
+}
+
+.wallpaper .blob-5 {
+  width: 30vmax;
+  height: 30vmax;
+  background: var(--blob-5, #818cf8);
+  animation: blob-5 55s ease-in-out infinite;
+}
+
+.wallpaper .blob-6 {
+  width: 25vmax;
+  height: 25vmax;
+  background: var(--blob-6, #c084fc);
+  animation: blob-6 60s ease-in-out infinite;
+}
+
+@keyframes blob-5 {
+  0%, 100% { top: 30%; left: 60%; transform: scale(1) translateZ(0); }
+  50% { top: 70%; left: 10%; transform: scale(1.15) translateZ(0); }
+}
+
+@keyframes blob-6 {
+  0%, 100% { top: 80%; left: 50%; transform: scale(1) translateZ(0); }
+  50% { top: 20%; left: 80%; transform: scale(0.9) translateZ(0); }
 }
 
 /* Theme-specific blob colors */
 .theme-erebus {
   --wallpaper-base: #050506;
-  --blob-1: #6b4c9a;
-  --blob-2: #3d2a5c;
-  --blob-3: #8b5a8b;
+  --blob-1: #8b5cf6;
+  --blob-2: #6366f1;
+  --blob-3: #a855f7;
+  --blob-4: #7c3aed;
+  --blob-5: #818cf8;
+  --blob-6: #c084fc;
 }
 
 .theme-ichor {
   --wallpaper-base: #0c0a08;
-  --blob-1: #d4a020;
-  --blob-2: #8b6914;
-  --blob-3: #c47f17;
+  --blob-1: #f59e0b;
+  --blob-2: #d97706;
+  --blob-3: #fbbf24;
+  --blob-4: #b45309;
+  --blob-5: #f59e0b;
+  --blob-6: #fcd34d;
 }
 
 .theme-aether {
   --wallpaper-base: #06080a;
-  --blob-1: #4080b0;
-  --blob-2: #2a5a7a;
-  --blob-3: #60a0c0;
+  --blob-1: #38bdf8;
+  --blob-2: #0ea5e9;
+  --blob-3: #7dd3fc;
+  --blob-4: #0284c7;
+  --blob-5: #38bdf8;
+  --blob-6: #bae6fd;
 }
 
 .theme-morpheus {
   --wallpaper-base: #08060c;
-  --blob-1: #9060c0;
-  --blob-2: #6040a0;
-  --blob-3: #b080d0;
+  --blob-1: #a855f7;
+  --blob-2: #9333ea;
+  --blob-3: #c084fc;
+  --blob-4: #7c3aed;
+  --blob-5: #a855f7;
+  --blob-6: #d8b4fe;
 }
 
 .theme-adamant {
   --wallpaper-base: #08080a;
-  --blob-1: #5a6070;
-  --blob-2: #404550;
-  --blob-3: #6a7080;
+  --blob-1: #64748b;
+  --blob-2: #475569;
+  --blob-3: #94a3b8;
+  --blob-4: #334155;
+  --blob-5: #64748b;
+  --blob-6: #cbd5e1;
 }
 
 .theme-divine-void {
   --wallpaper-base: #0a0a0f;
-  --blob-1: #6050a0;
-  --blob-2: #405080;
-  --blob-3: #8060b0;
+  --blob-1: #8b5cf6;
+  --blob-2: #6366f1;
+  --blob-3: #a78bfa;
+  --blob-4: #4f46e5;
+  --blob-5: #818cf8;
+  --blob-6: #c4b5fd;
 }

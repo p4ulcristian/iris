@@ -154,7 +154,7 @@ export default function StatusBar({ connected, send }) {
   }
 
   return (
-    <footer className="flex items-center h-8 px-4 bg-black/40 backdrop-blur-md border-t border-white/10 text-xs text-text-secondary">
+    <footer className="flex items-center h-8 px-4 liquid-glass-light border-t border-white/10 text-xs text-text-secondary">
       {/* Connection status */}
       <div className="flex items-center gap-1.5">
         <span className={connected ? 'text-green-500' : 'text-red-500'}>
