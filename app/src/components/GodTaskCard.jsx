@@ -84,7 +84,7 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
       dragListener={true}
       dragControls={dragControls}
       onClick={onClick}
-      className="group relative w-full cursor-grab active:cursor-grabbing overflow-hidden liquid-glass-god"
+      className="group relative w-full cursor-grab active:cursor-grabbing overflow-hidden liquid-glass-god-tinted"
       style={{
         '--god-color': godColor,
         '--god-color-rgb': hexToRgbCss(godColor),

@@ -82,10 +82,7 @@ function blendHue(baseHue, targetHue, amount) {
 export function generatePalette(primaryHex, themeTerminal = {}) {
   const primary = hexToHsl(primaryHex)
 
-  // Background settings - enhanced transparency for liquid glass
-  const bgLightness = themeTerminal['bg-lightness'] ?? 6
-  const bgSaturation = themeTerminal['bg-saturation'] ?? 0.3
-  const bgOpacity = themeTerminal['bg-opacity'] ?? 0.7
+  // Background settings
   const fgLightness = themeTerminal['fg-lightness'] ?? 88
 
   // ANSI modifiers
@@ -94,8 +91,8 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   const hueBlend = themeTerminal['hue-blend'] ?? 0.15
   const hueTarget = themeTerminal['hue-target'] ?? primary.h
 
-  // Fully transparent background for liquid glass
-  const bg = 'rgba(0, 0, 0, 0)'
+  // Subtle dark background for readability while preserving liquid glass
+  const bg = 'rgba(0, 0, 0, 0.3)'
   const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
 
   const ansiBase = {

@@ -65,8 +65,8 @@ export default function App() {
 
     switch (event) {
       case 'state:sync': {
-        // Check if view, workLayout or focusedGod is changing - trigger view transition
-        const viewChanging = data.view !== view || data.workLayout !== workLayout || data.focusedGod !== focusedGod
+        // Only trigger view transition for major layout changes (not focus changes)
+        const majorChange = data.view !== view || data.workLayout !== workLayout
 
         const doSync = () => {
           syncState(data)
@@ -76,7 +76,7 @@ export default function App() {
           setInitialLoadDone(true)
         }
 
-        if (viewChanging && initialLoadDone) {
+        if (majorChange && initialLoadDone) {
           withViewTransition(doSync)
         } else {
           doSync()
@@ -413,6 +413,43 @@ export default function App() {
   // Get wallpaper color from focused god
   const wallpaperColor = focusedGod ? godColors[focusedGod.toLowerCase()] : null
 
+  // Stack depth animation helpers
+  const getStackPosition = (godName, focusedGod, gods) => {
+    const focusedIdx = gods.findIndex(g => g.name === focusedGod)
+    const godIdx = gods.findIndex(g => g.name === godName)
+    return godIdx - focusedIdx  // 0 = focused, positive = behind
+  }
+
+  const getStackStyle = (position) => {
+    // Focused - center stage
+    if (position === 0) {
+      return {
+        x: '0%',
+        opacity: 1,
+        zIndex: 10,
+        pointerEvents: 'auto',
+      }
+    }
+
+    // Cards before focused - slide off to the left
+    if (position < 0) {
+      return {
+        x: '-100%',
+        opacity: 0,
+        zIndex: 0,
+        pointerEvents: 'none',
+      }
+    }
+
+    // Cards after focused - slide off to the right
+    return {
+      x: '100%',
+      opacity: 0,
+      zIndex: 0,
+      pointerEvents: 'none',
+    }
+  }
+
   return (
     <div className={`flex flex-col h-screen theme-${theme}`}>
       {/* Animated wallpaper - enhanced for liquid glass */}
@@ -472,24 +509,34 @@ export default function App() {
             {/* All gods stay mounted to preserve terminal output; only focused one visible */}
             <div className="flex-[2] min-w-0 relative">
               {activeGods.map(god => {
-                const isThisFocused = god.name === effectiveFocusedGod
+                const position = getStackPosition(god.name, effectiveFocusedGod, activeGods)
+                const style = getStackStyle(position)
+
                 return (
-                  <div
+                  <motion.div
                     key={god.name}
-                    className="absolute inset-0 transition-opacity duration-150"
+                    className="absolute inset-0"
+                    animate={{
+                      x: style.x,
+                      opacity: style.opacity,
+                      zIndex: style.zIndex,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 500,
+                      damping: 35,
+                    }}
                     style={{
-                      opacity: isThisFocused ? 1 : 0,
-                      pointerEvents: isThisFocused ? 'auto' : 'none',
-                      zIndex: isThisFocused ? 1 : 0
+                      pointerEvents: style.pointerEvents,
                     }}
                   >
                     <GodCard
                       god={god}
-                      isFocused={isThisFocused}
-                      onFocus={() => {}}
+                      isFocused={position === 0}
+                      onFocus={() => handleEnterFocus(god.name)}
                       onDoubleClick={() => {}}
                     />
-                  </div>
+                  </motion.div>
                 )
               })}
             </div>
