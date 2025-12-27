@@ -64,6 +64,13 @@ function hslToHex(h, s, l) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 function blendHue(baseHue, targetHue, amount) {
   let diff = targetHue - baseHue
   if (diff > 180) diff -= 360
@@ -78,6 +85,7 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   // Background settings
   const bgLightness = themeTerminal['bg-lightness'] ?? 6
   const bgSaturation = themeTerminal['bg-saturation'] ?? 0.3
+  const bgOpacity = themeTerminal['bg-opacity'] ?? 0.85
   const fgLightness = themeTerminal['fg-lightness'] ?? 88
 
   // ANSI modifiers
@@ -86,8 +94,9 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   const hueBlend = themeTerminal['hue-blend'] ?? 0.15
   const hueTarget = themeTerminal['hue-target'] ?? primary.h
 
-  // Background with stronger god tint
-  const bg = hslToHex(primary.h, Math.min(primary.s * bgSaturation, 45), bgLightness)
+  // Background with stronger god tint (rgba for transparency)
+  const bgHex = hslToHex(primary.h, Math.min(primary.s * bgSaturation, 45), bgLightness)
+  const bg = hexToRgba(bgHex, bgOpacity)
   const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
 
   const ansiBase = {

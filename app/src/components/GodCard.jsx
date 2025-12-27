@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { generatePalette } from '../themes/generated/palettes'
 import { getThemeTerminalSettings } from '../themes/generated/themes'
 import { useStore } from '../store'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faExpand, faCompress, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { WS_URL } from '../config'
 
 // Convert hex color to RGB for ANSI escape codes
@@ -15,15 +13,13 @@ function hexToRgb(hex) {
   return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
 }
 
-export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocus, onDoubleClick, onClose, onToggleFullscreen, tabs, activeTabId, onMoveToTab, onMoveToNewTab, compact }) {
+export default function GodCard({ god, isFocused, isHidden, onFocus, onDoubleClick }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const fitAddonRef = useRef(null)
   const wsRef = useRef(null)
-  const [showMoveMenu, setShowMoveMenu] = useState(false)
-  const moveMenuRef = useRef(null)
 
-  const { name, displayName, color, title, status, readyState } = god
+  const { name, displayName, color } = god
   const godName = name
 
   // Get god color from server - use custom color for terminals, theme color for gods
@@ -57,21 +53,6 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
       return () => clearTimeout(timeout)
     }
   }, [isFocused])
-
-  // Close move menu when clicking outside
-  useEffect(() => {
-    if (!showMoveMenu) return
-    const handleClickOutside = (e) => {
-      if (moveMenuRef.current && !moveMenuRef.current.contains(e.target)) {
-        setShowMoveMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showMoveMenu])
-
-  // Get other tabs (tabs we can move to)
-  const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
 
   // Track previous hidden state to trigger refit when becoming visible
   const wasHiddenRef = useRef(isHidden)
@@ -114,7 +95,8 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
       rows: estimatedRows,
       cols: estimatedCols,
-      theme: palette
+      theme: palette,
+      allowTransparency: true
     })
 
     const fitAddon = new FitAddon()
@@ -262,7 +244,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
     <div
       onClick={onFocus}
       onDoubleClick={onDoubleClick}
-      className="relative flex flex-col h-full min-h-0 bg-bg-primary rounded-lg overflow-hidden border-2 transition-colors"
+      className="relative h-full min-h-0 rounded-lg overflow-hidden border-2 transition-colors"
       style={{
         '--god-color': godColor,
         '--god-color-alpha': `${godColor}66`,
@@ -275,97 +257,11 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
       {!isFocused && (
         <div className="absolute inset-0 bg-black/40 pointer-events-none z-10 rounded-lg" />
       )}
-      {/* Header */}
+      {/* Terminal */}
       <div
-        className="flex-shrink-0 flex items-center h-8 px-3"
-        style={{ backgroundColor: godColor }}
-      >
-        <span className="text-sm font-medium text-black truncate">
-          {displayName || name}{title && <span className="opacity-70"> — {title}</span>}
-        </span>
-        <div className="flex-1" />
-
-        {/* Move to tab button */}
-        <div className="relative" ref={moveMenuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowMoveMenu(!showMoveMenu)
-            }}
-            className="w-6 h-6 flex items-center justify-center text-black/60 hover:text-black hover:bg-black/10 rounded transition-all mr-1"
-            title="Move to tab"
-          >
-            <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />
-          </button>
-
-          {/* Dropdown menu */}
-          {showMoveMenu && (
-            <div className="absolute right-0 top-6 z-50 min-w-[140px] bg-bg-secondary border border-border rounded shadow-lg py-1">
-              {otherTabs.length > 0 && (
-                <>
-                  {otherTabs.map((tab, idx) => (
-                    <button
-                      key={tab.id}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onMoveToTab?.(godName, tab.id)
-                        setShowMoveMenu(false)
-                      }}
-                      className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
-                    >
-                      <span className="text-xs text-text-secondary opacity-60">{idx + 1}</span>
-                      <span>{tab.name}</span>
-                    </button>
-                  ))}
-                  <div className="border-t border-border my-1" />
-                </>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onMoveToNewTab?.(godName)
-                  setShowMoveMenu(false)
-                }}
-                className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
-              >
-                <span className="text-xs text-text-secondary opacity-60">+</span>
-                <span>New Tab</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFullscreen()
-          }}
-          className="w-6 h-6 flex items-center justify-center text-black/60 hover:text-black hover:bg-black/10 rounded transition-all mr-1"
-          title={isFullscreen ? 'Exit fullscreen (Ctrl+F)' : 'Fullscreen (Ctrl+F)'}
-        >
-          <FontAwesomeIcon icon={isFullscreen ? faCompress : faExpand} size="xs" />
-        </button>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-          className="w-6 h-6 flex items-center justify-center text-black/60 hover:text-black hover:bg-black/10 rounded transition-all"
-          title="Banish (Ctrl+K)"
-        >
-          <FontAwesomeIcon icon={faXmark} size="sm" />
-        </button>
-      </div>
-
-      {/* Terminal - absolute positioning gives explicit dimensions */}
-      <div className="flex-1 relative min-h-0">
-        <div
-          ref={containerRef}
-          className="absolute inset-0"
-          style={{ backgroundColor: palette.background }}
-        />
-      </div>
+        ref={containerRef}
+        className="absolute inset-0"
+      />
     </div>
   )
 }

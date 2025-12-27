@@ -62,20 +62,23 @@ body {
   background: #444;
 }
 
-/* xterm overrides - fill container height */
+/* xterm overrides - fill container height + transparency */
 .xterm {
   padding: 4px;
   height: 100% !important;
+  background: transparent !important;
 }
 
 .xterm-screen {
   width: 100% !important;
   height: 100% !important;
+  background: transparent !important;
 }
 
 .xterm-viewport {
   overflow-y: auto !important;
   height: 100% !important;
+  background: transparent !important;
 }
 
 .xterm-rows {
@@ -125,11 +128,6 @@ body {
   animation: ready-stuck 3s ease-in-out infinite;
 }
 
-/* Task card ready states (sidebar) - border only, no glows */
-.task-working { }
-.task-done { border-color: #22c55e !important; }
-.task-stuck { border-color: #ef4444 !important; }
-.task-question { border-color: #f59e0b !important; }
 
 /* View Transitions */
 ::view-transition-old(root),
