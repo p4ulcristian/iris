@@ -34,7 +34,7 @@ const initialState = {
 
   // Synced view state
   view: 'work',           // 'work' | 'history' | 'git' | 'browser'
-  workLayout: 'focus',    // 'grid' | 'focus' - controls work view layout
+  workLayout: 'focus',    // Focus mode is the only layout
 
   // Synced from server
   theme: 'divine-void',  // Will be overwritten by state:sync
@@ -43,6 +43,15 @@ const initialState = {
   // Connection
   connected: false,
   initialLoadDone: false,
+
+  // Git projects
+  gitProjects: [],
+
+  // Browser
+  browserUrl: null,
+
+  // Settings
+  settings: {},
 }
 
 // Store
@@ -147,8 +156,6 @@ export const useStore = create(
           // Auto-select another god from the same tab
           const remainingGods = Object.values(state.gods).filter(g => g.tabId === tabId)
           state.focusedGod = remainingGods.length > 0 ? remainingGods[0].name : null
-          // Exit focus mode if the focused god was removed and no replacement
-          if (!state.focusedGod) state.workLayout = 'grid'
         }
       }),
 
@@ -201,10 +208,6 @@ export const useStore = create(
       enterFocusMode: (godName) => set((state) => {
         state.workLayout = 'focus'
         state.focusedGod = godName
-      }),
-
-      exitFocusMode: () => set((state) => {
-        state.workLayout = 'grid'
       }),
 
       // ============ CONNECTION ============
@@ -281,7 +284,8 @@ export const useStore = create(
             displayName: god.displayName || null,
             color: god.color,
             voice: god.voice,
-            status: god.status || 'working',
+            title: god.title || null,
+            status: god.status || null,
             mission: god.mission || null,
             readyState: god.readyState || 'working',
             tabId: god.tabId,
@@ -308,6 +312,21 @@ export const useStore = create(
         }
         if (serverState.focusedGod !== undefined) {
           state.focusedGod = serverState.focusedGod
+        }
+
+        // Sync git projects
+        if (serverState.gitProjects !== undefined) {
+          state.gitProjects = serverState.gitProjects
+        }
+
+        // Sync browser URL
+        if (serverState.browserUrl !== undefined) {
+          state.browserUrl = serverState.browserUrl
+        }
+
+        // Sync settings
+        if (serverState.settings !== undefined) {
+          state.settings = serverState.settings
         }
 
         // Clear fullscreen if god no longer exists (fullscreen is still client-only)

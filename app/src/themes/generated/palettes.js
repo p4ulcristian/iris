@@ -1,10 +1,10 @@
-// Auto-generated from config/gods.yaml
+// Auto-generated from prompts/pantheon.yaml
 // Do not edit directly - run: node scripts/generate-themes.js
 
 // God primary colors
 export const GOD_COLORS = {
   "zeus": "#ffd700",
-  "apollo": "#ffeb3b",
+  "apollo": "#ffab00",
   "artemis": "#009688",
   "athena": "#2196f3",
   "hermes": "#ff9800",
@@ -13,7 +13,7 @@ export const GOD_COLORS = {
   "hera": "#e91e63",
   "ares": "#f44336",
   "hephaestus": "#cd7f32",
-  "aphrodite": "#ff6b9d",
+  "aphrodite": "#f48fb1",
   "dionysus": "#7c4dff",
   "demeter": "#4caf50"
 }

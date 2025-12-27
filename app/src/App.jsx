@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Reorder, AnimatePresence, motion } from 'framer-motion'
 import TabBar from './components/TabBar'
 import GodCard from './components/GodCard'
@@ -8,6 +8,10 @@ import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import DevPanel from './components/DevPanel'
 import HistoryView from './components/HistoryView'
+import BrowserView from './components/BrowserView'
+import GitView from './components/GitView'
+import LinearView from './components/LinearView'
+import SettingsView from './components/SettingsView'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
@@ -47,10 +51,6 @@ export default function App() {
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
 
-  // Morph animation state
-  const [morphing, setMorphing] = useState(null) // { god, sourceRect, targetRect, color }
-  const mainPanelRef = useRef(null)
-
   // Update connection status in store
   useEffect(() => {
     setConnected(connected)
@@ -89,7 +89,7 @@ export default function App() {
         }
         break
 
-      case 'god:status':
+      case 'god:set-status':
         updateGodStatus(data.godName || data.name, data.status)
         break
     }
@@ -157,22 +157,6 @@ export default function App() {
   // Enter focus mode for a god
   const handleEnterFocus = useCallback((godName) => {
     send({ event: 'workLayout:set', layout: 'focus', focusedGod: godName })
-  }, [send])
-
-  // Handle task card click with morph animation
-  const handleTaskCardClick = useCallback((godName, sourceRect, godColor) => {
-    // Get target rect from main panel
-    const targetRect = mainPanelRef.current?.getBoundingClientRect()
-    if (targetRect && sourceRect) {
-      setMorphing({ god: godName, sourceRect, targetRect, color: godColor })
-    }
-    // Send focus change
-    send({ event: 'workLayout:set', layout: 'focus', focusedGod: godName })
-  }, [send])
-
-  // Exit focus mode
-  const handleExitFocus = useCallback(() => {
-    send({ event: 'workLayout:set', layout: 'grid' })
   }, [send])
 
   // Change main view
@@ -252,7 +236,7 @@ export default function App() {
       // Check if this is one of our app shortcuts (Escape only works outside xterm)
       const isAppShortcut = (
         (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)) ||
-        (e.altKey && (['n', 'k', ',', '.', 'w', 'h', 'g', 'b'].includes(key) || (e.key >= '1' && e.key <= '9')))
+        (e.altKey && (['n', 'k', ',', '.', 'w', 'h', 'g', 'b', 'l', 's'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
       // Ignore inputs unless it's an app shortcut
@@ -297,6 +281,18 @@ export default function App() {
         e.preventDefault()
         e.stopPropagation()
         handleViewChange('browser')
+        return
+      }
+      if (e.altKey && key === 'l') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleViewChange('linear')
+        return
+      }
+      if (e.altKey && key === 's') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleViewChange('settings')
         return
       }
 
@@ -381,17 +377,12 @@ export default function App() {
         return
       }
 
-      // Escape: Exit fullscreen, then focus mode, then clear focus
+      // Escape: Exit fullscreen, then clear focus
       if (e.key === 'Escape') {
         if (fullscreenGod) {
           e.preventDefault()
           e.stopPropagation()
           handleToggleFullscreen()
-          return
-        } else if (workLayout === 'focus') {
-          e.preventDefault()
-          e.stopPropagation()
-          handleExitFocus()
           return
         } else if (focusedGod) {
           handleSetFocus(null)
@@ -404,7 +395,7 @@ export default function App() {
   }, [
     handleSpawnTerminal, handleKillGod, handleKillTab, handleToggleFullscreen,
     rotateLayout, focusedGod, fullscreenGod, view, workLayout, activeGods,
-    toggleDevPanel, handleExitFocus, handleSetFocus, handleViewChange, send, tabs, activeTabId
+    toggleDevPanel, handleSetFocus, handleViewChange, send, tabs, activeTabId
   ])
 
   // Get ALL gods for persistent rendering
@@ -451,7 +442,7 @@ export default function App() {
                 Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to summon
               </p>
             </div>
-          ) : workLayout === 'focus' && activeGods.length > 0 ? (
+          ) : (
           /* Focus mode: main god + sidebar */
           (() => {
             // Auto-select first god if focusedGod is not set or not in active tab
@@ -461,25 +452,23 @@ export default function App() {
             return (
           <div className="flex gap-4 h-full">
             {/* Main focused god - 2:1 ratio with sidebar */}
-            <div ref={mainPanelRef} className="flex-[2] min-w-0 relative overflow-hidden">
-              <AnimatePresence mode="popLayout">
-                {activeGods.filter(g => g.name === effectiveFocusedGod).map(god => (
-                  <motion.div
+            {/* All gods stay mounted to preserve terminal output; only focused one visible */}
+            <div className="flex-[2] min-w-0 relative overflow-hidden">
+              {activeGods.map(god => {
+                const isThisFocused = god.name === effectiveFocusedGod
+                return (
+                  <div
                     key={god.name}
-                    className="absolute inset-0"
-                    initial={{ x: '-100%', opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: '50%', opacity: 0 }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 300,
-                      damping: 30,
-                      opacity: { duration: 0.15 }
+                    className="absolute inset-0 transition-opacity duration-150"
+                    style={{
+                      opacity: isThisFocused ? 1 : 0,
+                      pointerEvents: isThisFocused ? 'auto' : 'none',
+                      zIndex: isThisFocused ? 1 : 0
                     }}
                   >
                     <GodCard
                       god={god}
-                      isFocused={true}
+                      isFocused={isThisFocused}
                       isFullscreen={false}
                       onFocus={() => {}}
                       onDoubleClick={() => {}}
@@ -495,9 +484,9 @@ export default function App() {
                         send({ event: 'god:move-to-new-tab', godName })
                       }}
                     />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                  </div>
+                )
+              })}
             </div>
             {/* Sidebar with all gods as task cards */}
             <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible p-4">
@@ -545,31 +534,6 @@ export default function App() {
           </div>
             )
           })()
-        ) : (
-          /* Grid mode */
-          <div className={`grid ${getGridClass(displayGods.length)} gap-4 h-full auto-rows-fr`}>
-            {displayGods.map(god => (
-              <GodCard
-                key={god.name}
-                god={god}
-                isFocused={focusedGod === god.name}
-                isFullscreen={fullscreenGod === god.name}
-                onFocus={() => handleSetFocus(god.name)}
-                onDoubleClick={() => handleEnterFocus(god.name)}
-                onClose={() => handleKillGod(god.name)}
-                onToggleFullscreen={() => handleToggleFullscreen(god.name)}
-                tabs={tabs}
-                activeTabId={activeTabId}
-                onMoveToTab={(godName, tabId) => {
-                  send({ event: 'god:move', godName, tabId })
-                  send({ event: 'tab:select', tabId })
-                }}
-                onMoveToNewTab={(godName) => {
-                  send({ event: 'god:move-to-new-tab', godName })
-                }}
-              />
-            ))}
-          </div>
         ))}
 
         {/* History View */}
@@ -579,17 +543,23 @@ export default function App() {
 
         {/* Git View */}
         {view === 'git' && (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-            <p className="text-base">Git View</p>
-            <p className="text-sm opacity-70">Coming soon...</p>
-          </div>
+          <GitView send={send} />
+        )}
+
+        {/* Linear View */}
+        {view === 'linear' && (
+          <LinearView send={send} />
+        )}
+
+        {/* Settings View */}
+        {view === 'settings' && (
+          <SettingsView send={send} />
         )}
 
         {/* Browser View */}
         {view === 'browser' && (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-            <p className="text-base">Browser View</p>
-            <p className="text-sm opacity-70">Coming soon...</p>
+          <div className="h-full relative">
+            <BrowserView />
           </div>
         )}
       </main>

@@ -153,6 +153,21 @@ body {
   }
 }
 
+/* Question: Yellow/amber gentle pulse - waiting for user input */
+.task-question {
+  border-color: #f59e0b !important;
+  animation: question-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes question-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px #f59e0b33, inset 0 0 15px #f59e0b11;
+  }
+  50% {
+    box-shadow: 0 0 25px #f59e0b55, inset 0 0 25px #f59e0b22;
+  }
+}
+
 /* View Transitions */
 ::view-transition-old(root),
 ::view-transition-new(root) {

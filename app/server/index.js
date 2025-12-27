@@ -20,21 +20,12 @@ if (!fs.existsSync(SOCKET_DIR)) {
 // WebSocket clients
 const wsClients = new Set()
 
-import { appendFileSync } from 'fs'
-const DEBUG_LOG = '/tmp/iris-debug.log'
-function debugLog(msg) {
-  appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`)
-}
-
 // Broadcast function
 function broadcast(event, data = {}) {
   const msg = JSON.stringify({ event, ...data })
-  debugLog(`broadcast ${event} to ${wsClients.size} clients`)
   wsClients.forEach(ws => {
     if (ws.readyState === 1) {
       ws.send(msg)
-    } else {
-      debugLog(`  - skipped client in state ${ws.readyState}`)
     }
   })
 }
@@ -64,7 +55,6 @@ wss.on('connection', (ws) => {
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString())
-      debugLog(`Received from client: ${msg.event}`)
       handleMessage(ws, msg, projectRoot)
     } catch (e) {
       console.error('Invalid message:', e)

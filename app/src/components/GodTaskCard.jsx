@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Reorder, useDragControls, motion, AnimatePresence } from 'framer-motion'
+import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 
 function formatElapsed(ms) {
@@ -18,7 +18,7 @@ function formatElapsed(ms) {
 }
 
 export default function GodTaskCard({ god, isActive, onClick, onClose }) {
-  const { name, displayName, color, status, mission, readyState, spawnedAt } = god
+  const { name, displayName, color, title, status, mission, readyState, spawnedAt } = god
   const [elapsed, setElapsed] = useState(null)
   const dragControls = useDragControls()
 
@@ -36,9 +36,10 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
   const godColors = useStore(s => s.godColors)
   const godColor = displayName ? color : (godColors[name.toLowerCase()] || color)
 
-  // Show status if god has updated it via focus skill, otherwise show mission
-  // Default status is 'working' which we don't want to show initially
-  const displayText = (status && status !== 'working') ? status : mission
+  // Title: the goal (set via focus skill) or initial mission
+  const displayTitle = title || mission
+  // Status: current action from hook (only show if different from title)
+  const displayStatus = status && status !== displayTitle ? status : null
 
   // Get CSS class for ready state
   const getReadyClass = () => {
@@ -46,15 +47,10 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       case 'working': return 'task-working'
       case 'done': return 'task-done'
       case 'stuck': return 'task-stuck'
+      case 'question': return 'task-question'
       default: return 'task-working'
     }
   }
-
-  // Invert colors when active: solid god color bg, dark text
-  const bgColor = isActive ? godColor : 'rgba(0, 0, 0, 0.4)'
-  const textColor = isActive ? '#111' : godColor
-  const subtextColor = isActive ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.6)'
-  const mutedColor = isActive ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.4)'
 
   return (
     <Reorder.Item
@@ -62,20 +58,18 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       dragListener={true}
       dragControls={dragControls}
       onClick={onClick}
-      className={`group relative w-full rounded-xl cursor-grab active:cursor-grabbing backdrop-blur-md border ${getReadyClass()}`}
+      className={`group relative w-full rounded-lg cursor-grab active:cursor-grabbing overflow-hidden border-2 transition-colors ${getReadyClass()}`}
       style={{
         '--god-color': godColor,
-        '--god-color-alpha': `${godColor}88`
+        '--god-color-alpha': `${godColor}88`,
+        borderColor: isActive ? godColor : '#333',
+        boxShadow: isActive ? `0 0 30px ${godColor}44` : 'none',
+        backgroundColor: 'var(--bg-primary)'
       }}
       initial={false}
       animate={{
         scale: isActive ? 1.02 : 1,
-        y: isActive ? -2 : 0,
-        backgroundColor: bgColor,
-        borderColor: isActive ? godColor : `${godColor}66`,
-        boxShadow: isActive
-          ? `0 0 30px ${godColor}66, inset 0 0 20px rgba(255,255,255,0.1)`
-          : `0 0 20px ${godColor}22, inset 0 0 30px ${godColor}11`
+        y: isActive ? -2 : 0
       }}
       whileHover={!isActive ? { scale: 1.01, y: -1 } : {}}
       whileTap={!isActive ? { scale: 0.98 } : {}}
@@ -89,60 +83,48 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
         stiffness: 400,
         damping: 25,
         scale: { type: 'spring', stiffness: 500, damping: 30 },
-        y: { type: 'spring', stiffness: 500, damping: 30 },
-        backgroundColor: { duration: 0.3, ease: 'easeOut' },
-        borderColor: { duration: 0.3, ease: 'easeOut' },
-        boxShadow: { duration: 0.3, ease: 'easeOut' }
+        y: { type: 'spring', stiffness: 500, damping: 30 }
       }}
     >
-      <div className="px-4 py-3">
-        {/* Top row: name + close button */}
-        <div className="flex items-start justify-between">
-          <motion.span
-            className="text-lg font-semibold truncate"
-            initial={false}
-            animate={{ color: textColor }}
-            transition={{ duration: 0.3 }}
-          >
-            {displayName || name}
-          </motion.span>
-        </div>
+      {/* Header - same style as GodCard */}
+      <div
+        className="flex items-center h-8 px-3"
+        style={{ backgroundColor: godColor }}
+      >
+        <span className="text-sm font-medium text-black truncate flex-1">
+          {displayName || name}
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation()
             onClose()
           }}
-          className="absolute -top-2 -right-2 w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer hover:scale-110 text-lg font-bold border-2"
-          style={{
-            backgroundColor: godColor,
-            color: '#111',
-            borderColor: '#111'
-          }}
+          className="w-6 h-6 flex items-center justify-center text-black/60 hover:text-black hover:bg-black/10 rounded transition-all"
           title="Banish"
         >
           ×
         </button>
-        {/* Row 2: status */}
-        {displayText && (
-          <motion.span
-            className="text-sm mt-1 block"
-            initial={false}
-            animate={{ color: subtextColor }}
-            transition={{ duration: 0.3 }}
-          >
-            {displayText}
-          </motion.span>
+      </div>
+
+      {/* Content */}
+      <div className="px-3 py-2">
+        {/* Title (goal) */}
+        {displayTitle && (
+          <span className="text-sm block font-medium text-text-secondary">
+            {displayTitle}
+          </span>
         )}
-        {/* Row 3: elapsed time */}
+        {/* Status (current action) */}
+        {displayStatus && (
+          <span className="text-xs mt-0.5 block text-text-secondary opacity-70">
+            {displayStatus}
+          </span>
+        )}
+        {/* Elapsed time */}
         {elapsed !== null && (
-          <motion.span
-            className="text-xs font-mono mt-1 block text-right"
-            initial={false}
-            animate={{ color: mutedColor }}
-            transition={{ duration: 0.3 }}
-          >
+          <span className="text-xs font-mono mt-1 block text-right text-text-secondary opacity-50">
             {formatElapsed(elapsed)}
-          </motion.span>
+          </span>
         )}
       </div>
     </Reorder.Item>

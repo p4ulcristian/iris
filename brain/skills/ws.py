@@ -119,11 +119,11 @@ def spawn_god(name: str, task: str = "") -> bool:
     })
 
 
-def update_status(status: str) -> bool:
-    """Update the current god's status.
+def update_title(title: str) -> bool:
+    """Update the current god's title (goal/task).
 
     Args:
-        status: Status text to display
+        title: Title text - what the god is working on
 
     Returns:
         True if successful, False otherwise
@@ -134,7 +134,28 @@ def update_status(status: str) -> bool:
         return False
 
     return send_message({
-        "event": "god:status",
+        "event": "god:set-title",
+        "godName": name,
+        "title": title
+    })
+
+
+def update_status(status: str) -> bool:
+    """Update the current god's status (current action).
+
+    Args:
+        status: Status text - what the god is currently doing
+
+    Returns:
+        True if successful, False otherwise
+    """
+    name = os.environ.get("GOD_NAME")
+    if not name:
+        print("\033[31mNot running as a god (GOD_NAME not set)\033[0m", file=sys.stderr)
+        return False
+
+    return send_message({
+        "event": "god:set-status",
         "godName": name,
         "status": status
     })
@@ -144,12 +165,12 @@ def update_ready(state: str) -> bool:
     """Update the current god's ready state.
 
     Args:
-        state: One of 'working', 'done', 'stuck'
+        state: One of 'working', 'done', 'stuck', 'question'
 
     Returns:
         True if successful, False otherwise
     """
-    valid_states = ('working', 'done', 'stuck')
+    valid_states = ('working', 'done', 'stuck', 'question')
     if state not in valid_states:
         print(f"\033[31mInvalid state: {state}. Must be one of: {', '.join(valid_states)}\033[0m", file=sys.stderr)
         return False
@@ -160,7 +181,7 @@ def update_ready(state: str) -> bool:
         return False
 
     return send_message({
-        "event": "god:ready",
+        "event": "god:set-ready",
         "godName": name,
         "readyState": state
     })

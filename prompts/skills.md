@@ -12,13 +12,29 @@ python -m brain.skills.<skill> <args>
 
 | Skill | Usage | Description |
 |-------|-------|-------------|
-| `focus` | `python -m brain.skills.focus "status"` | Update your status in the app |
+| `focus` | `python -m brain.skills.focus "title"` | Set your title (goal/task) in the app |
 | `ready` | `python -m brain.skills.ready <state>` | Update your visual state (border effects) |
 | `peek` | `python -m brain.skills.peek <god> [lines]` | View another god's terminal output |
 | `glow` | `python -m brain.skills.glow file.md` | Open markdown in glow terminal |
 | `nvim` | `python -m brain.skills.nvim file` | Open file in neovim terminal |
 | `run` | `python -m brain.skills.run "cmd"` | Run command in new terminal |
 | `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
+| `browse` | `python -m brain.skills.browse <url>` | Open URL in the Iris browser |
+
+## focus
+
+Set your title - what you're working on. This appears in the god card header and task card.
+
+```bash
+python -m brain.skills.focus "iris/app: fixing auth bug"
+python -m brain.skills.focus "elevathor: payment flow refactor"
+```
+
+**Title vs Status:**
+- **Title** (set via `focus`) - Your goal/task. Stable, changes when you switch focus.
+- **Status** (auto-updated by hook) - Current action like "reading handlers.js". Changes frequently.
+
+Both appear in the UI: title as the main text, status below it.
 
 ## peek
 
@@ -37,9 +53,10 @@ Note: Only captures output while the god's terminal is attached to the Iris app.
 Update your visual state in Iris. The border styling changes based on state.
 
 ```bash
-python -m brain.skills.ready working  # Default state - actively working
-python -m brain.skills.ready done     # Green glow - task complete
-python -m brain.skills.ready stuck    # Red pulse - needs help
+python -m brain.skills.ready working   # Default state - actively working
+python -m brain.skills.ready done      # Green glow - task complete
+python -m brain.skills.ready stuck     # Red pulse - needs help
+python -m brain.skills.ready question  # Yellow pulse - waiting for input
 ```
 
 | State | Visual Effect |
@@ -47,6 +64,9 @@ python -m brain.skills.ready stuck    # Red pulse - needs help
 | `working` | Default god-colored border |
 | `done` | Green static glow |
 | `stuck` | Red slow pulse |
+| `question` | Yellow gentle pulse |
+
+Note: `question` state is automatically triggered when using `AskUserQuestion` tool and resets to `working` when you continue working.
 
 ## nvim-highlight
 
@@ -60,8 +80,18 @@ python -m brain.skills.nvim-highlight clear
 
 Colors: yellow, green, red, blue, orange, purple, cyan
 
+## browse
+
+Open a URL in the Iris browser. Switches to the browser view and navigates to the URL.
+
+```bash
+python -m brain.skills.browse github.com           # Protocol added automatically
+python -m brain.skills.browse https://example.com  # Full URL
+```
+
 ## When to Use
 
 When Paul says "open in [tool]":
 - "Open in glow" -> `python -m brain.skills.glow /path/to/file.md`
 - "Edit in nvim" -> `python -m brain.skills.nvim /path/to/file`
+- "Open in browser" -> `python -m brain.skills.browse <url>`

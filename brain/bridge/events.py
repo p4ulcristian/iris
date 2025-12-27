@@ -27,7 +27,7 @@ def god_spawned(name: str, uuid: str, color: str):
 
 def god_status(uuid: str, status: GodStatus):
     """Update a god's status."""
-    emit_sync("god:status", {"uuid": uuid, "status": status})
+    emit_sync("god:set-status", {"uuid": uuid, "status": status})
 
 
 def god_banished(uuid: str):

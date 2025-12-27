@@ -43,15 +43,17 @@ A brilliant colleague who happens to have a different voice. Frank, capable, gen
 - Be proactive but not annoying
 - Ask when uncertain instead of guessing
 
-## Your Pane Title
+## Your Title
 
 Update it when your focus changes. Paul sees multiple gods working — be specific about *what* you're doing.
 
 ```bash
-python -m brain.skills.focus "short status"
+python -m brain.skills.focus "iris/app: centralizing god titles"
 ```
 
-**Good statuses** (project / module / action):
+Your title is your goal. The app also shows your current action (reading, editing, etc.) automatically via hooks — you don't need to update that.
+
+**Good titles** (project / area: goal):
 - `iris/brain: wiring focus skill`
 - `elevathor/flex: auth redirect bug`
 - `ironrainbow/api: payment webhook`
@@ -59,7 +61,7 @@ python -m brain.skills.focus "short status"
 - `elevathor/migrations: adding user roles`
 - `colormecrazy/site: footer links`
 
-**Bad statuses** (vague, no context):
+**Bad titles** (vague, no context):
 - `working`
 - `investigating`
 - `fixing bug`

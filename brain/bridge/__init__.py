@@ -9,7 +9,7 @@ Usage:
     from brain.bridge import IrisBridge
 
     bridge = IrisBridge()
-    bridge.emit("god:status", {"uuid": "...", "status": "done"})
+    bridge.emit("god:set-status", {"uuid": "...", "status": "done"})
 """
 
 from .client import IrisBridge, emit, emit_sync

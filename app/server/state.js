@@ -22,9 +22,14 @@ export const appState = {
   tabCounter: 1,
   gods: {},
   theme: 'divine-void',
-  view: 'work',           // 'work' | 'history' | 'git' | 'browser'
-  workLayout: 'focus',    // 'grid' | 'focus' (only applies when view === 'work')
-  focusedGod: null
+  view: 'work',           // 'work' | 'history' | 'git' | 'browser' | 'linear' | 'settings'
+  workLayout: 'focus',    // Focus mode is the only layout
+  focusedGod: null,
+  gitProjects: [],        // [{path, name}]
+  browserUrl: null,       // URL to navigate browser to
+  settings: {             // App settings (API keys, etc.)
+    linearApiKey: ''
+  }
 }
 
 export function loadState() {
@@ -65,21 +70,36 @@ export function loadState() {
     appState.view = 'work'
   }
 
-  // Validate focusedGod when in focus layout
-  if (appState.workLayout === 'focus') {
-    const godsInActiveTab = Object.keys(appState.gods)
-      .filter(name => appState.gods[name].tabId === appState.activeTabId)
+  // Validate focusedGod - ensure it's in active tab
+  const godsInActiveTab = Object.keys(appState.gods)
+    .filter(name => appState.gods[name].tabId === appState.activeTabId)
 
-    if (!godsInActiveTab.includes(appState.focusedGod)) {
-      appState.focusedGod = godsInActiveTab[0] || null
-    }
-
-    if (!appState.focusedGod) {
-      appState.workLayout = 'grid'
-    }
+  if (!godsInActiveTab.includes(appState.focusedGod)) {
+    appState.focusedGod = godsInActiveTab[0] || null
   }
 
+  // Ensure settings object exists
+  if (!appState.settings) {
+    appState.settings = { linearApiKey: '' }
+  }
+
+  // Apply settings to environment
+  applySettingsToEnv()
+
   saveState()
+}
+
+// Apply settings to process.env for runtime use
+export function applySettingsToEnv() {
+  if (appState.settings?.linearApiKey) {
+    process.env.LINEAR_API_KEY = appState.settings.linearApiKey
+  }
+}
+
+// Mask sensitive values for client
+function maskApiKey(key) {
+  if (!key || key.length < 8) return key ? '••••' : ''
+  return '••••••••' + key.slice(-4)
 }
 
 export function saveState() {
@@ -100,6 +120,7 @@ export function getStateForBroadcast() {
       displayName: godState.displayName || null,
       tabId: godState.tabId || 1,
       order: godState.order || 0,
+      title: godState.title || null,
       status: godState.status || null,
       mission: godState.mission || null,
       readyState: godState.readyState || 'working',
@@ -119,7 +140,14 @@ export function getStateForBroadcast() {
     godColors,
     view: appState.view,
     workLayout: appState.workLayout,
-    focusedGod: appState.focusedGod
+    focusedGod: appState.focusedGod,
+    gitProjects: appState.gitProjects || [],
+    browserUrl: appState.browserUrl,
+    settings: {
+      linearApiKey: maskApiKey(appState.settings?.linearApiKey),
+      // Add hasLinearApiKey so UI knows if it's configured
+      hasLinearApiKey: !!appState.settings?.linearApiKey
+    }
   }
 }
 

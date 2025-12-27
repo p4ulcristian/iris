@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store'
 import { THEMES } from '../themes/generated/themes'
-import HistoryPicker from './HistoryPicker'
 
 function Spinner() {
   return (
@@ -39,87 +38,6 @@ function ServiceIndicator({ name, serviceKey, active, loading, icon, onToggle })
   )
 }
 
-const WORK_LAYOUTS = [
-  { id: 'grid', label: 'Grid', icon: '▦' },
-  { id: 'focus', label: 'Focus', icon: '◰' }
-]
-
-function LayoutPicker({ send }) {
-  const [open, setOpen] = useState(false)
-  const menuRef = useRef(null)
-  const view = useStore(s => s.view)
-  const workLayout = useStore(s => s.workLayout)
-  const focusedGod = useStore(s => s.focusedGod)
-  const getActiveGods = useStore(s => s.getActiveGods)
-  const activeGods = getActiveGods()
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!open) return
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open])
-
-  const currentLayout = WORK_LAYOUTS.find(m => m.id === workLayout) || WORK_LAYOUTS[0]
-
-  const handleSelect = (layoutId) => {
-    if (layoutId === 'focus' && activeGods.length > 1) {
-      // Enter focus mode with first god if none focused
-      send({ event: 'workLayout:set', layout: 'focus', focusedGod: focusedGod || activeGods[0]?.name })
-    } else {
-      send({ event: 'workLayout:set', layout: layoutId })
-    }
-    setOpen(false)
-  }
-
-  // Only show when in work view
-  if (view !== 'work') return null
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs hover:bg-bg-tertiary transition-colors"
-        title="Change work layout"
-      >
-        <span>{currentLayout.icon}</span>
-        <span>{currentLayout.label}</span>
-        <span className="text-text-tertiary">▾</span>
-      </button>
-
-      {open && (
-        <div className="absolute bottom-full right-0 mb-1 min-w-[100px] bg-bg-secondary border border-border rounded shadow-lg py-1 z-50">
-          {WORK_LAYOUTS.map((m) => {
-            const disabled = m.id === 'focus' && activeGods.length < 2
-            return (
-              <button
-                key={m.id}
-                onClick={() => !disabled && handleSelect(m.id)}
-                disabled={disabled}
-                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${
-                  disabled
-                    ? 'text-text-tertiary cursor-not-allowed'
-                    : m.id === workLayout
-                      ? 'bg-bg-tertiary text-text-primary'
-                      : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-                }`}
-              >
-                <span>{m.icon}</span>
-                <span>{m.label}</span>
-                {m.id === workLayout && <span className="ml-auto">✓</span>}
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function DevToggle() {
   const devPanelOpen = useStore(s => s.devPanelOpen)
@@ -211,7 +129,11 @@ export default function StatusBar({ connected, send }) {
   const setServiceLoading = useStore(s => s.setServiceLoading)
 
   const handleServiceToggle = (service, isActive) => {
-    if (!send) return
+    console.log('handleServiceToggle called:', { service, isActive, hasSend: !!send })
+    if (!send) {
+      console.error('send function is not available!')
+      return
+    }
 
     if (!isActive) {
       // Starting a service - set loading state
@@ -223,10 +145,12 @@ export default function StatusBar({ connected, send }) {
       }, 15000)
     }
 
-    send({
+    const msg = {
       event: isActive ? 'service:stop' : 'service:start',
       service
-    })
+    }
+    console.log('Sending:', msg)
+    send(msg)
   }
 
   return (
@@ -277,18 +201,6 @@ export default function StatusBar({ connected, send }) {
 
       {/* Spacer */}
       <div className="flex-1" />
-
-      {/* History picker */}
-      <HistoryPicker send={send} />
-
-      {/* Divider */}
-      <div className="w-px h-4 bg-border mx-2" />
-
-      {/* Layout picker (only in work view) */}
-      <LayoutPicker send={send} />
-
-      {/* Divider */}
-      <div className="w-px h-4 bg-border mx-2" />
 
       {/* Theme picker */}
       <ThemePicker send={send} />

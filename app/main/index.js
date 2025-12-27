@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
@@ -45,6 +45,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      webviewTag: true,
       preload: path.join(__dirname, 'preload.js')
     }
   })
@@ -125,6 +126,14 @@ ipcMain.on('window-control', (event, action) => {
 
 ipcMain.handle('window-is-fullscreen', () => {
   return mainWindow?.isFullScreen() ?? false
+})
+
+ipcMain.handle('select-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Select Project Folder'
+  })
+  return result.canceled ? null : result.filePaths[0]
 })
 
 app.whenReady().then(() => {

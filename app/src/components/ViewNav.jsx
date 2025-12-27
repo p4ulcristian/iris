@@ -1,11 +1,13 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faBolt, faScroll, faCodeBranch, faGlobe } from '@fortawesome/free-solid-svg-icons'
+import { faBolt, faScroll, faCodeBranch, faGlobe, faListCheck, faGear } from '@fortawesome/free-solid-svg-icons'
 
 const views = [
   { id: 'work', icon: faBolt, label: 'Work', shortcut: 'Alt+W' },
   { id: 'history', icon: faScroll, label: 'History', shortcut: 'Alt+H' },
   { id: 'git', icon: faCodeBranch, label: 'Git', shortcut: 'Alt+G' },
+  { id: 'linear', icon: faListCheck, label: 'Linear', shortcut: 'Alt+L' },
   { id: 'browser', icon: faGlobe, label: 'Browser', shortcut: 'Alt+B' },
+  { id: 'settings', icon: faGear, label: 'Settings', shortcut: 'Alt+S' },
 ]
 
 export default function ViewNav({ currentView, onViewChange, disabled }) {

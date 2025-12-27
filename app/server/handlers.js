@@ -1,15 +1,11 @@
-import fs from 'fs'
 import { SERVICES, REALMS } from './config.js'
-
-const DEBUG_LOG = '/tmp/iris-debug.log'
-function debugLog(msg) {
-  fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`)
-}
-import { appState, saveState, broadcastState, broadcast } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
 import { listSessions } from './history.js'
+import * as git from './git.js'
+import * as linear from './linear.js'
 
 function getRandomRealmName() {
   const usedNames = new Set(appState.tabs.map(t => t.name))
@@ -99,11 +95,6 @@ export function handleMessage(ws, msg, projectRoot) {
           .filter(([_, g]) => g.tabId === appState.activeTabId)
           .sort((a, b) => a[1].order - b[1].order)
         appState.focusedGod = remainingGods.length > 0 ? remainingGods[0][0] : null
-
-        // Exit focus mode if no gods left
-        if (!appState.focusedGod && appState.workLayout === 'focus') {
-          appState.workLayout = 'grid'
-        }
       }
       saveState()
       broadcastState()
@@ -116,7 +107,18 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:status': {
+    case 'god:set-title': {
+      const godName = data.godName
+      const title = data.title
+      if (godName && appState.gods[godName]) {
+        appState.gods[godName].title = title
+        saveState()
+        broadcastState()
+      }
+      break
+    }
+
+    case 'god:set-status': {
       const godName = data.godName
       const status = data.status
       if (godName && appState.gods[godName]) {
@@ -127,7 +129,7 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:ready': {
+    case 'god:set-ready': {
       const godName = data.godName
       const readyState = data.readyState
       if (godName && appState.gods[godName]) {
@@ -153,22 +155,16 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'service:start': {
       const service = data.service
-      debugLog(`service:start received for: ${service}`)
       if (service && SERVICES[service]) {
         startService(service, projectRoot)
-      } else {
-        debugLog(`service:start INVALID service: ${service}`)
       }
       break
     }
 
     case 'service:stop': {
       const service = data.service
-      debugLog(`service:stop received for: ${service}`)
       if (service && SERVICES[service]) {
         stopService(service)
-      } else {
-        debugLog(`service:stop INVALID service: ${service}`)
       }
       break
     }
@@ -233,19 +229,13 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'tab:select': {
       appState.activeTabId = data.tabId
 
-      // If in focus mode, ensure focusedGod is in new tab
-      if (appState.workLayout === 'focus') {
-        const godsInTab = Object.keys(appState.gods)
-          .filter(name => appState.gods[name].tabId === data.tabId)
-          .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
+      // Ensure focusedGod is in new tab
+      const godsInTab = Object.keys(appState.gods)
+        .filter(name => appState.gods[name].tabId === data.tabId)
+        .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
 
-        if (!godsInTab.includes(appState.focusedGod)) {
-          appState.focusedGod = godsInTab[0] || null
-        }
-
-        if (!appState.focusedGod) {
-          appState.workLayout = 'grid'
-        }
+      if (!godsInTab.includes(appState.focusedGod)) {
+        appState.focusedGod = godsInTab[0] || null
       }
 
       saveState()
@@ -298,7 +288,7 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'view:set': {
-      const validViews = ['work', 'history', 'git', 'browser']
+      const validViews = ['work', 'history', 'git', 'browser', 'linear', 'settings']
       if (validViews.includes(data.view)) {
         appState.view = data.view
         saveState()
@@ -307,35 +297,37 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'workLayout:set':
-    case 'viewMode:set': {
-      appState.workLayout = data.layout || data.mode || 'grid'
-
-      if (appState.workLayout === 'focus') {
-        // Get all gods including sockets not yet in appState.gods
-        const allGods = listGodSockets()
-        allGods.forEach(sock => {
-          if (!appState.gods[sock.name]) {
-            appState.gods[sock.name] = { tabId: appState.activeTabId, order: 0 }
-          }
-        })
-
-        // Auto-focus: use provided god, or first god in active tab
-        const godsInTab = Object.keys(appState.gods)
-          .filter(name => appState.gods[name].tabId === appState.activeTabId)
-          .sort((a, b) => (appState.gods[a].order || 0) - (appState.gods[b].order || 0))
-
-        appState.focusedGod = data.focusedGod && godsInTab.includes(data.focusedGod)
-          ? data.focusedGod
-          : godsInTab[0] || null
-
-        // Can't enter focus mode with no gods - fall back to grid
-        if (!appState.focusedGod) {
-          appState.workLayout = 'grid'
-        }
-      } else {
-        appState.focusedGod = null
+    case 'browser:navigate': {
+      const url = data.url
+      if (url) {
+        // Switch to browser view and set URL
+        appState.view = 'browser'
+        appState.browserUrl = url
+        saveState()
+        broadcastState()
       }
+      break
+    }
+
+    case 'workLayout:set': {
+      appState.workLayout = data.layout || 'focus'
+
+      // Get all gods including sockets not yet in appState.gods
+      const allGods = listGodSockets()
+      allGods.forEach(sock => {
+        if (!appState.gods[sock.name]) {
+          appState.gods[sock.name] = { tabId: appState.activeTabId, order: 0 }
+        }
+      })
+
+      // Auto-focus: use provided god, or first god in active tab
+      const godsInTab = Object.keys(appState.gods)
+        .filter(name => appState.gods[name].tabId === appState.activeTabId)
+        .sort((a, b) => (appState.gods[a].order || 0) - (appState.gods[b].order || 0))
+
+      appState.focusedGod = data.focusedGod && godsInTab.includes(data.focusedGod)
+        ? data.focusedGod
+        : godsInTab[0] || null
 
       saveState()
       broadcastState()
@@ -423,6 +415,236 @@ export function handleMessage(ws, msg, projectRoot) {
       } else if (god?.exists) {
         ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
       }
+      break
+    }
+
+    // Git management
+    case 'git:projects:add': {
+      const projectPath = data.path
+      if (!projectPath) break
+
+      // Check if already added
+      if (appState.gitProjects.some(p => p.path === projectPath)) {
+        ws.send(JSON.stringify({ event: 'git:error', error: 'Project already added' }))
+        break
+      }
+
+      // Verify it's a git repo
+      git.isGitRepo(projectPath).then(isRepo => {
+        if (!isRepo) {
+          ws.send(JSON.stringify({ event: 'git:error', error: 'Not a git repository' }))
+          return
+        }
+
+        const name = git.getProjectName(projectPath)
+        appState.gitProjects.push({ path: projectPath, name })
+        saveState()
+        broadcastState()
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'git:projects:remove': {
+      const projectPath = data.path
+      appState.gitProjects = appState.gitProjects.filter(p => p.path !== projectPath)
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'git:status': {
+      const projectPath = data.project
+      if (!projectPath) break
+
+      git.getStatus(projectPath).then(status => {
+        git.getCurrentBranch(projectPath).then(branch => {
+          ws.send(JSON.stringify({
+            event: 'git:status:response',
+            project: projectPath,
+            branch,
+            ...status
+          }))
+        })
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project: projectPath, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:diff': {
+      const { project, file, mode, ref1, ref2, staged } = data
+      if (!project) break
+
+      const diffFn = staged ? git.getStagedDiff : git.getDiff
+      diffFn(project, file || null, ref1 || null, ref2 || null).then(diff => {
+        ws.send(JSON.stringify({
+          event: 'git:diff:response',
+          project,
+          file: file || null,
+          staged: !!staged,
+          diff
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:stage': {
+      const { project, files } = data
+      if (!project || !files) break
+
+      git.stageFiles(project, files).then(() => {
+        // Return updated status
+        return git.getStatus(project)
+      }).then(status => {
+        ws.send(JSON.stringify({
+          event: 'git:status:response',
+          project,
+          ...status
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:unstage': {
+      const { project, files } = data
+      if (!project || !files) break
+
+      git.unstageFiles(project, files).then(() => {
+        return git.getStatus(project)
+      }).then(status => {
+        ws.send(JSON.stringify({
+          event: 'git:status:response',
+          project,
+          ...status
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:discard': {
+      const { project, files } = data
+      if (!project || !files) break
+
+      git.discardChanges(project, files).then(() => {
+        return git.getStatus(project)
+      }).then(status => {
+        ws.send(JSON.stringify({
+          event: 'git:status:response',
+          project,
+          ...status
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:commits': {
+      const { project, limit } = data
+      if (!project) break
+
+      git.getCommits(project, limit || 50).then(commits => {
+        ws.send(JSON.stringify({
+          event: 'git:commits:response',
+          project,
+          commits
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    case 'git:branches': {
+      const { project } = data
+      if (!project) break
+
+      Promise.all([
+        git.getBranches(project),
+        git.getCurrentBranch(project)
+      ]).then(([branches, current]) => {
+        ws.send(JSON.stringify({
+          event: 'git:branches:response',
+          project,
+          branches,
+          current
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+      })
+      break
+    }
+
+    // Linear management
+    case 'linear:issues:fetch': {
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({
+          event: 'linear:error',
+          error: 'LINEAR_API_KEY not configured. Set the environment variable to use Linear.'
+        }))
+        break
+      }
+
+      linear.getMyIssues(data.limit || 50).then(issues => {
+        ws.send(JSON.stringify({
+          event: 'linear:issues:response',
+          issues
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:issue:get': {
+      const { id } = data
+      if (!id) break
+
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({
+          event: 'linear:error',
+          error: 'LINEAR_API_KEY not configured'
+        }))
+        break
+      }
+
+      linear.getIssue(id).then(issue => {
+        ws.send(JSON.stringify({
+          event: 'linear:issue:response',
+          issue
+        }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    // Settings management
+    case 'settings:update': {
+      const { key, value } = data
+      if (!key) break
+
+      // Initialize settings if needed
+      if (!appState.settings) {
+        appState.settings = {}
+      }
+
+      // Update the setting
+      appState.settings[key] = value
+
+      // Apply to environment if it's an API key
+      applySettingsToEnv()
+
+      saveState()
+      broadcastState()
       break
     }
 

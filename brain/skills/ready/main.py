@@ -3,7 +3,7 @@
 import sys
 from brain.skills.ws import update_ready
 
-STATES = ('working', 'done', 'stuck')
+STATES = ('working', 'done', 'stuck', 'question')
 
 
 def main():
@@ -12,9 +12,10 @@ def main():
         print(f"States: {', '.join(STATES)}")
         print()
         print("Examples:")
-        print("  python -m brain.skills.ready working  # Default state - actively working")
-        print("  python -m brain.skills.ready done     # Green glow - task complete")
-        print("  python -m brain.skills.ready stuck    # Red pulse - needs help")
+        print("  python -m brain.skills.ready working   # Default state - actively working")
+        print("  python -m brain.skills.ready done      # Green glow - task complete")
+        print("  python -m brain.skills.ready stuck     # Red pulse - needs help")
+        print("  python -m brain.skills.ready question  # Yellow pulse - waiting for input")
         sys.exit(1)
 
     state = sys.argv[1].lower()

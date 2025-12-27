@@ -27,6 +27,7 @@ Voice assistant for Paul.
 | **working** | God is actively working |
 | **done** | Task complete |
 | **stuck** | God needs help |
+| **question** | God is waiting for user input |
 | **scattered** | God crashed |
 | **speak** | TTS service (`brain/speak/`, port 8765) |
 | **hear** | STT service (`brain/hear/`, port 8766) |

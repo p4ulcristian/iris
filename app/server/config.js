@@ -1,5 +1,10 @@
 import path from 'path'
 import os from 'os'
+import fs from 'fs'
+import yaml from 'js-yaml'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export const WS_PORT = 9999
 export const SOCKET_DIR = path.join(os.homedir(), '.local/share/iris/sockets')
@@ -12,33 +17,16 @@ export const SERVICES = {
   wake: { port: null, name: 'Wake', icon: '⌨️', script: 'brain/wake/listener.py' }
 }
 
-export const PANTHEON = {
-  zeus:       { color: '#ffd700', voice: 'zeus' },
-  apollo:     { color: '#ffeb3b', voice: 'apollo' },
-  artemis:    { color: '#009688', voice: 'artemis' },
-  athena:     { color: '#2196f3', voice: 'athena' },
-  hermes:     { color: '#ff9800', voice: 'hermes' },
-  hades:      { color: '#9c27b0', voice: 'hades' },
-  poseidon:   { color: '#00bcd4', voice: 'poseidon' },
-  hera:       { color: '#e91e63', voice: 'hera' },
-  ares:       { color: '#f44336', voice: 'ares' },
-  hephaestus: { color: '#cd7f32', voice: 'hephaestus' },
-  aphrodite:  { color: '#ff6b9d', voice: 'aphrodite' },
-  dionysus:   { color: '#7c4dff', voice: 'dionysus' },
-  demeter:    { color: '#4caf50', voice: 'demeter' }
-}
+// Load pantheon from YAML (single source of truth)
+const pantheonPath = path.join(__dirname, '../../prompts/pantheon.yaml')
+const pantheonYaml = yaml.load(fs.readFileSync(pantheonPath, 'utf-8'))
 
-export const REALMS = [
-  'Olympus',
-  'Elysium',
-  'Tartarus',
-  'Agora',
-  'Forge',
-  'Grove',
-  'Styx',
-  'Temple',
-  'Acropolis',
-  'Nectar Hall',
-  'Labyrinth',
-  'Oracle'
-]
+// Build PANTHEON object from YAML (exclude 'realms' key)
+export const PANTHEON = Object.fromEntries(
+  Object.entries(pantheonYaml)
+    .filter(([key]) => key !== 'realms')
+    .map(([name, data]) => [name, { color: data.color, voice: data.voice }])
+)
+
+// Build REALMS array from YAML
+export const REALMS = pantheonYaml.realms || []

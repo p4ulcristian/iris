@@ -42,11 +42,15 @@ export function useWebSocket(url) {
   }, [url])
 
   const send = useCallback((data) => {
+    console.log('useWebSocket.send called:', data)
     const state = wsRef.current?.readyState
+    console.log('WebSocket readyState:', state, '(OPEN=1)')
     if (state === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data))
+      console.log('Message sent successfully')
       document.title = `SENT: ${data.event}`
     } else {
+      console.error('WebSocket not open! State:', state)
       document.title = `FAILED: state=${state}`
     }
   }, [])

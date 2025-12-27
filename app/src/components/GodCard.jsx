@@ -23,7 +23,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const moveMenuRef = useRef(null)
 
-  const { name, displayName, color, status, readyState } = god
+  const { name, displayName, color, title, status, readyState } = god
   const godName = name
 
   // Get god color from server - use custom color for terminals, theme color for gods
@@ -281,7 +281,7 @@ export default function GodCard({ god, isFocused, isFullscreen, isHidden, onFocu
         style={{ backgroundColor: godColor }}
       >
         <span className="text-sm font-medium text-black truncate">
-          {displayName || name}{status && <span className="opacity-70"> — {status}</span>}
+          {displayName || name}{title && <span className="opacity-70"> — {title}</span>}
         </span>
         <div className="flex-1" />
 

@@ -1,19 +1,12 @@
 import http from 'http'
-import fs from 'fs'
 import { spawn, execSync } from 'child_process'
 import { SERVICES } from './config.js'
-
-const DEBUG_LOG = '/tmp/iris-debug.log'
-function debugLog(msg) {
-  fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`)
-}
 
 // Broadcast function - set by index.js
 let broadcastFn = null
 
 export function setBroadcast(fn) {
   broadcastFn = fn
-  debugLog('setBroadcast called - server is running with new code')
 }
 
 // Service status
@@ -74,14 +67,8 @@ export async function checkAllServices() {
   serviceStatus.express = results[2]
   serviceStatus.wake = results[3]
 
-  if (changed) {
-    debugLog(`Status changed: ${JSON.stringify(serviceStatus)}`)
-    if (broadcastFn) {
-      debugLog('Broadcasting services:status')
-      broadcastFn('services:status', { services: serviceStatus })
-    } else {
-      debugLog('WARNING: broadcastFn is not set!')
-    }
+  if (changed && broadcastFn) {
+    broadcastFn('services:status', { services: serviceStatus })
   }
 }
 
@@ -98,31 +85,22 @@ export function stopHealthChecks() {
 }
 
 export function startService(name, projectRoot) {
-  debugLog(`startService called for: ${name}`)
-
   // Check if we think it's running, but verify PID is still alive
   if (serviceProcesses[name]) {
     try {
       process.kill(serviceProcesses[name], 0)  // Signal 0 = check if alive
-      debugLog(`Service ${name} already running (pid ${serviceProcesses[name]})`)
       return
     } catch {
       // Process is dead, clean up and continue
-      debugLog(`Service ${name} pid ${serviceProcesses[name]} is dead, restarting`)
       delete serviceProcesses[name]
     }
   }
 
   const script = SERVICES[name]?.script
-  if (!script) {
-    debugLog(`startService: no script found for ${name}`)
-    return
-  }
+  if (!script) return
 
   const scriptPath = `${projectRoot}/${script}`
   const uvPath = process.env.HOME + '/.local/bin/uv'
-
-  debugLog(`Starting ${name}: ${uvPath} run --script ${scriptPath}`)
 
   const proc = spawn(uvPath, ['run', '--script', scriptPath], {
     cwd: projectRoot,
@@ -134,29 +112,22 @@ export function startService(name, projectRoot) {
     }
   })
 
-  proc.on('error', (err) => {
-    debugLog(`Failed to start ${name}: ${err.message}`)
+  proc.on('error', () => {
     delete serviceProcesses[name]
   })
 
   proc.unref()
   serviceProcesses[name] = proc.pid
-  debugLog(`Started ${name} with pid ${proc.pid}`)
 
   setTimeout(() => checkAllServices(), 2000)
 }
 
 export function stopService(name) {
-  debugLog(`stopService called for: ${name}`)
-
   const pid = serviceProcesses[name]
   if (pid) {
     try {
       process.kill(pid, 'SIGTERM')
-      debugLog(`Killed ${name} by pid ${pid}`)
-    } catch (e) {
-      debugLog(`Failed to kill ${name} by pid: ${e.message}`)
-    }
+    } catch {}
     delete serviceProcesses[name]
   }
 
@@ -165,8 +136,7 @@ export function stopService(name) {
   if (port) {
     try {
       execSync(`lsof -ti:${port} | xargs -r kill`, { stdio: 'ignore' })
-      debugLog(`Killed ${name} by port ${port}`)
-    } catch (e) {}
+    } catch {}
   }
 
   // Also kill by script name (catches zombies not listening on port)
@@ -174,10 +144,8 @@ export function stopService(name) {
   if (script) {
     try {
       execSync(`pkill -f "${script}"`, { stdio: 'ignore' })
-      debugLog(`Killed ${name} by script name`)
-    } catch (e) {}
+    } catch {}
   }
 
-  debugLog(`stopService scheduling checkAllServices in 500ms`)
   setTimeout(() => checkAllServices(), 500)
 }

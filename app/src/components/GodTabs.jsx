@@ -33,8 +33,8 @@ export default function GodTabs({ gods, activeGod, onSelect, onClose, onSummon, 
           >
             <span className="text-[10px]" style={{ color: god.color }}>●</span>
             <span>{god.name}</span>
-            <span className={`text-[10px] opacity-70 ${god.status === 'done' ? 'text-green-500' : god.status === 'stuck' ? 'text-red-500' : god.status === 'scattered' ? 'text-red-500' : ''}`}>
-              {STATUS_ICONS[god.status] || '▶'}
+            <span className={`text-[10px] opacity-70 ${god.readyState === 'done' ? 'text-green-500' : god.readyState === 'stuck' ? 'text-red-500' : god.readyState === 'scattered' ? 'text-red-500' : ''}`}>
+              {STATUS_ICONS[god.readyState] || '▶'}
             </span>
             <button
               onClick={(e) => {

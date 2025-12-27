@@ -12,7 +12,8 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 
-// Simple YAML parser for flat structure (gods.yaml)
+// Simple YAML parser for flat structure (pantheon.yaml)
+// Only parses god entries (those with voice and color properties)
 function parseGodsYaml(content) {
   const gods = {}
   let currentGod = null
@@ -34,7 +35,15 @@ function parseGodsYaml(content) {
     }
   }
 
-  return gods
+  // Filter to only include entries with both voice and color (gods, not realms)
+  const validGods = {}
+  for (const [name, config] of Object.entries(gods)) {
+    if (config.voice && config.color) {
+      validGods[name] = config
+    }
+  }
+
+  return validGods
 }
 
 // YAML parser for nested structure (themes.yaml)
@@ -223,8 +232,8 @@ function generatePalette(primaryHex, themeTerminal = {}) {
 
 // ============ MAIN ============
 
-// Read config files
-const godsYaml = readFileSync(join(ROOT, 'config', 'gods.yaml'), 'utf8')
+// Read config files (prompts/pantheon.yaml is the single source of truth for gods)
+const godsYaml = readFileSync(join(ROOT, 'prompts', 'pantheon.yaml'), 'utf8')
 const themesYaml = readFileSync(join(ROOT, 'config', 'themes.yaml'), 'utf8')
 
 const gods = parseGodsYaml(godsYaml)
@@ -241,7 +250,7 @@ for (const [name, config] of Object.entries(gods)) {
   godColors[name] = config.color
 }
 
-const palettesJs = `// Auto-generated from config/gods.yaml
+const palettesJs = `// Auto-generated from prompts/pantheon.yaml
 // Do not edit directly - run: node scripts/generate-themes.js
 
 // God primary colors
@@ -382,7 +391,7 @@ export function getGodPalette(godName, themeTerminal = {}) {
 writeFileSync(join(outDir, 'palettes.js'), palettesJs)
 
 // ============ GOD COLORS CSS ============
-let colorsCss = `/* Auto-generated from config/gods.yaml */
+let colorsCss = `/* Auto-generated from prompts/pantheon.yaml */
 /* Do not edit directly - run: node scripts/generate-themes.js */
 
 @theme {
