@@ -85,7 +85,7 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   // Background settings
   const bgLightness = themeTerminal['bg-lightness'] ?? 6
   const bgSaturation = themeTerminal['bg-saturation'] ?? 0.3
-  const bgOpacity = themeTerminal['bg-opacity'] ?? 0.85
+  const bgOpacity = themeTerminal['bg-opacity'] ?? 0
   const fgLightness = themeTerminal['fg-lightness'] ?? 88
 
   // ANSI modifiers

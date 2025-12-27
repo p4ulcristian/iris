@@ -33,6 +33,7 @@ export default function App() {
   const workLayout = useStore(s => s.workLayout)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const theme = useStore(s => s.theme)
+  const godColors = useStore(s => s.godColors)
 
   // Actions (local UI state only - fullscreen and layoutMode are still client-only)
   const updateGodStatus = useStore(s => s.updateGodStatus)
@@ -409,10 +410,20 @@ export default function App() {
   // Get hidden gods (on other tabs) - these stay mounted but invisible
   const hiddenGods = allGods.filter(g => g.tabId !== activeTabId)
 
+  // Get wallpaper color from focused god
+  const wallpaperColor = focusedGod ? godColors[focusedGod.toLowerCase()] : null
+
   return (
     <div className={`flex flex-col h-screen theme-${theme}`}>
       {/* Animated wallpaper */}
-      <div className="wallpaper">
+      <div
+        className="wallpaper transition-all duration-1000"
+        style={wallpaperColor ? {
+          '--blob-1': wallpaperColor,
+          '--blob-2': `color-mix(in srgb, ${wallpaperColor} 60%, #000)`,
+          '--blob-3': `color-mix(in srgb, ${wallpaperColor} 40%, #fff)`
+        } : undefined}
+      >
         <div className="blob blob-1" />
         <div className="blob blob-2" />
         <div className="blob blob-3" />
@@ -469,27 +480,15 @@ export default function App() {
                     <GodCard
                       god={god}
                       isFocused={isThisFocused}
-                      isFullscreen={false}
                       onFocus={() => {}}
                       onDoubleClick={() => {}}
-                      onClose={() => handleKillGod(god.name)}
-                      onToggleFullscreen={() => handleToggleFullscreen(god.name)}
-                      tabs={tabs}
-                      activeTabId={activeTabId}
-                      onMoveToTab={(godName, tabId) => {
-                        send({ event: 'god:move', godName, tabId })
-                        send({ event: 'tab:select', tabId })
-                      }}
-                      onMoveToNewTab={(godName) => {
-                        send({ event: 'god:move-to-new-tab', godName })
-                      }}
                     />
                   </div>
                 )
               })}
             </div>
             {/* Sidebar with all gods as task cards */}
-            <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible p-4">
+            <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible">
               <Reorder.Group
                 axis="y"
                 values={activeGods}
@@ -503,6 +502,15 @@ export default function App() {
                     isActive={god.name === effectiveFocusedGod}
                     onClick={() => handleEnterFocus(god.name)}
                     onClose={() => handleKillGod(god.name)}
+                    tabs={tabs}
+                    activeTabId={activeTabId}
+                    onMoveToTab={(godName, tabId) => {
+                      send({ event: 'god:move', godName, tabId })
+                      send({ event: 'tab:select', tabId })
+                    }}
+                    onMoveToNewTab={(godName) => {
+                      send({ event: 'god:move-to-new-tab', godName })
+                    }}
                   />
                 ))}
               </Reorder.Group>
@@ -571,16 +579,9 @@ export default function App() {
             <GodCard
               god={god}
               isFocused={false}
-              isFullscreen={false}
               isHidden={true}
               onFocus={() => {}}
               onDoubleClick={() => {}}
-              onClose={() => handleKillGod(god.name)}
-              onToggleFullscreen={() => {}}
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onMoveToTab={() => {}}
-              onMoveToNewTab={() => {}}
             />
           </div>
         ))}

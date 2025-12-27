@@ -244,12 +244,13 @@ export default function GodCard({ god, isFocused, isHidden, onFocus, onDoubleCli
     <div
       onClick={onFocus}
       onDoubleClick={onDoubleClick}
-      className="relative h-full min-h-0 rounded-lg overflow-hidden border-2 transition-colors"
+      className="relative h-full min-h-0 rounded-lg overflow-hidden backdrop-blur-md transition-colors"
       style={{
         '--god-color': godColor,
         '--god-color-alpha': `${godColor}66`,
-        borderColor: isFocused ? godColor : '#333',
-        boxShadow: isFocused ? `0 0 30px ${godColor}44` : 'none',
+        background: 'rgba(0, 0, 0, 0.5)',
+        border: 'none',
+        boxShadow: 'none',
         viewTransitionName: `god-${name.toLowerCase()}`
       }}
     >
