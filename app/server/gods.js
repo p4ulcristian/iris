@@ -3,6 +3,9 @@ import path from 'path'
 import { execSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
 
+// Re-export for pty.js
+export { SOCKET_DIR }
+
 let terminalCounter = 0
 
 export function sanitizeName(name) {

@@ -58,12 +58,11 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       dragListener={true}
       dragControls={dragControls}
       onClick={onClick}
-      className={`group relative w-full rounded-lg cursor-grab active:cursor-grabbing overflow-hidden border-2 transition-colors ${getReadyClass()}`}
+      className={`task-card group relative w-full rounded-lg cursor-grab active:cursor-grabbing overflow-hidden border-2 transition-colors ${getReadyClass()}`}
       style={{
         '--god-color': godColor,
         '--god-color-alpha': `${godColor}88`,
         borderColor: isActive ? godColor : '#333',
-        boxShadow: isActive ? `0 0 30px ${godColor}44` : 'none',
         backgroundColor: 'var(--bg-primary)'
       }}
       initial={false}
@@ -75,7 +74,6 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       whileTap={!isActive ? { scale: 0.98 } : {}}
       whileDrag={{
         scale: 1.05,
-        boxShadow: `0 0 40px ${godColor}88, 0 20px 40px rgba(0,0,0,0.3)`,
         cursor: 'grabbing'
       }}
       transition={{

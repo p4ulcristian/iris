@@ -1,39 +1,98 @@
 import fs from 'fs'
-import { getSocketPath } from './gods.js'
+import path from 'path'
+import { getSocketPath, sanitizeName, SOCKET_DIR } from './gods.js'
 
 // godName -> { proc, terminal, clients: Set<ws>, socketPath }
 export const ptyProcesses = new Map()
 
-// godName -> string[] (ring buffer of output lines)
+// godName -> string (raw output buffer - preserves ANSI codes)
 const outputBuffers = new Map()
-const MAX_BUFFER_LINES = 500
+const MAX_BUFFER_SIZE = 100000 // ~100KB per terminal
+
+function getBufferPath(godName) {
+  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)
+}
+
+function loadBufferFromDisk(godName) {
+  const bufferPath = getBufferPath(godName)
+  try {
+    if (fs.existsSync(bufferPath)) {
+      return fs.readFileSync(bufferPath, 'utf-8')
+    }
+  } catch {}
+  return ''
+}
+
+function saveBufferToDisk(godName) {
+  const buffer = outputBuffers.get(godName) || ''
+  const bufferPath = getBufferPath(godName)
+  try {
+    fs.writeFileSync(bufferPath, buffer)
+  } catch {}
+}
+
+// Debounced save - don't write on every output
+const saveTimeouts = new Map()
+function debouncedSave(godName) {
+  if (saveTimeouts.has(godName)) {
+    clearTimeout(saveTimeouts.get(godName))
+  }
+  saveTimeouts.set(godName, setTimeout(() => {
+    saveBufferToDisk(godName)
+    saveTimeouts.delete(godName)
+  }, 1000))
+}
 
 function appendToBuffer(godName, data) {
-  if (!outputBuffers.has(godName)) {
-    outputBuffers.set(godName, [])
-  }
-  const buffer = outputBuffers.get(godName)
+  let buffer = outputBuffers.get(godName) || ''
+  buffer += data
 
-  // Split by newlines and append
-  const lines = data.split('\n')
-  for (const line of lines) {
-    buffer.push(line)
+  // Trim from start if too large
+  if (buffer.length > MAX_BUFFER_SIZE) {
+    buffer = buffer.slice(-MAX_BUFFER_SIZE)
   }
 
-  // Trim to max size
-  while (buffer.length > MAX_BUFFER_LINES) {
-    buffer.shift()
-  }
+  outputBuffers.set(godName, buffer)
+  debouncedSave(godName)
 }
 
 export function getOutputBuffer(godName, lines = 50) {
-  const buffer = outputBuffers.get(godName) || []
-  const startIdx = Math.max(0, buffer.length - lines)
-  return buffer.slice(startIdx).join('\n')
+  // First try memory, then disk
+  let buffer = outputBuffers.get(godName)
+  if (!buffer) {
+    buffer = loadBufferFromDisk(godName)
+    if (buffer) {
+      outputBuffers.set(godName, buffer)
+    }
+  }
+
+  if (!buffer) return ''
+
+  // Return last N lines
+  const allLines = buffer.split('\n')
+  const startIdx = Math.max(0, allLines.length - lines)
+  return allLines.slice(startIdx).join('\n')
+}
+
+export function getFullBuffer(godName) {
+  let buffer = outputBuffers.get(godName)
+  if (!buffer) {
+    buffer = loadBufferFromDisk(godName)
+    if (buffer) {
+      outputBuffers.set(godName, buffer)
+    }
+  }
+  return buffer || ''
 }
 
 export function clearOutputBuffer(godName) {
   outputBuffers.delete(godName)
+  const bufferPath = getBufferPath(godName)
+  try {
+    if (fs.existsSync(bufferPath)) {
+      fs.unlinkSync(bufferPath)
+    }
+  } catch {}
 }
 
 export function attachPty(godName, ws, cols, rows) {
@@ -44,11 +103,25 @@ export function attachPty(godName, ws, cols, rows) {
     return
   }
 
-  // If PTY already exists for this god, just add client
+  // If PTY already exists for this god, just add client and send buffer
   if (ptyProcesses.has(godName)) {
     const entry = ptyProcesses.get(godName)
     entry.clients.add(ws)
+
+    // Send buffered output to new client
+    const buffer = getFullBuffer(godName)
+    if (buffer) {
+      ws.send(JSON.stringify({ event: 'pty:output', godName, data: buffer }))
+    }
     return
+  }
+
+  // Load any persisted buffer from disk for this session
+  const persistedBuffer = loadBufferFromDisk(godName)
+  if (persistedBuffer) {
+    outputBuffers.set(godName, persistedBuffer)
+    // Send persisted buffer to client immediately
+    ws.send(JSON.stringify({ event: 'pty:output', godName, data: persistedBuffer }))
   }
 
   const clients = new Set([ws])
@@ -79,7 +152,7 @@ export function attachPty(godName, ws, cols, rows) {
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, socketPath })
 
-  // Trigger redraw with resize jiggle
+  // Trigger redraw with resize jiggle (no Ctrl+L - would clear replayed buffer)
   const actualCols = cols || 120
   const actualRows = rows || 40
   setTimeout(() => {
