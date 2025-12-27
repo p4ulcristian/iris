@@ -527,124 +527,127 @@ export default function App() {
 
         {/* Main content area */}
         <main className="flex-1 min-h-0 overflow-visible py-2 pr-2">
-        {activeEntities.length === 0 ? (
-          /* Empty state */
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-            <p className="text-base">No entities</p>
-            <p className="text-sm opacity-70">
-              Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
-            </p>
-          </div>
-        ) : (
-          /* Main layout: focused entity + sidebar */
+          {/* Main layout: focused entity + sidebar */}
           <div className="flex gap-3 h-full">
             {/* Main focused entity area */}
             <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full" style={{ perspective: '1200px' }}>
-              {/* Render all entities with EntityCard wrapper */}
-              <AnimatePresence mode="popLayout">
-                {activeEntities.map(entity => {
-                  const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
-                  const style = getStackStyle(position)
+              {activeEntities.length === 0 ? (
+                /* Empty state */
+                <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
+                  <p className="text-base">No entities</p>
+                  <p className="text-sm opacity-70">
+                    Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
+                  </p>
+                </div>
+              ) : (
+                /* Render all entities with EntityCard wrapper */
+                <AnimatePresence mode="popLayout">
+                  {activeEntities.map(entity => {
+                    const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
+                    const style = getStackStyle(position)
 
-                  return (
-                    <motion.div
-                      key={entity.id}
-                      initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
-                      animate={{
-                        y: style.y,
-                        rotateX: style.rotateX,
-                        scale: style.scale,
-                        opacity: style.opacity,
-                        zIndex: style.zIndex,
-                      }}
-                      exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 250,
-                        damping: 25,
-                        opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
-                      }}
-                      className="absolute inset-0"
-                      style={{
-                        pointerEvents: style.pointerEvents,
-                        transformOrigin: 'center center',
-                      }}
-                    >
-                      {containerSize && (
-                        <EntityCard
-                          entity={entity}
-                          isFocused={position === 0}
-                          onClick={() => handleSetFocus(entity.id)}
-                        >
-                          {/* Render content based on entity type */}
-                          {(entity.type === 'god' || entity.type === 'terminal') && (
-                            <TerminalContent
-                              entity={entity}
-                              isFocused={position === 0}
-                              expectedWidth={containerSize.width}
-                              expectedHeight={containerSize.height}
-                            />
-                          )}
-                          {entity.type === 'browser' && (
-                            <BrowserView entityId={entity.id} />
-                          )}
-                          {entity.type === 'history' && (
-                            <HistoryView send={send} />
-                          )}
-                          {entity.type === 'git' && (
-                            <GitView send={send} />
-                          )}
-                          {entity.type === 'linear' && (
-                            <LinearView send={send} />
-                          )}
-                          {entity.type === 'settings' && (
-                            <SettingsView send={send} />
-                          )}
-                          {entity.type === 'cemetery' && (
-                            <CemeteryView send={send} />
-                          )}
-                          {entity.type === 'calendar' && (
-                            <CalendarView send={send} />
-                          )}
-                        </EntityCard>
-                      )}
-                    </motion.div>
-                  )
-                })}
-              </AnimatePresence>
+                    return (
+                      <motion.div
+                        key={entity.id}
+                        initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
+                        animate={{
+                          y: style.y,
+                          rotateX: style.rotateX,
+                          scale: style.scale,
+                          opacity: style.opacity,
+                          zIndex: style.zIndex,
+                        }}
+                        exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 250,
+                          damping: 25,
+                          opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
+                        }}
+                        className="absolute inset-0"
+                        style={{
+                          pointerEvents: style.pointerEvents,
+                          transformOrigin: 'center center',
+                        }}
+                      >
+                        {containerSize && (
+                          <EntityCard
+                            entity={entity}
+                            isFocused={position === 0}
+                            onClick={() => handleSetFocus(entity.id)}
+                          >
+                            {/* Render content based on entity type */}
+                            {(entity.type === 'god' || entity.type === 'terminal') && (
+                              <TerminalContent
+                                entity={entity}
+                                isFocused={position === 0}
+                                expectedWidth={containerSize.width}
+                                expectedHeight={containerSize.height}
+                              />
+                            )}
+                            {entity.type === 'browser' && (
+                              <BrowserView entityId={entity.id} />
+                            )}
+                            {entity.type === 'history' && (
+                              <HistoryView send={send} />
+                            )}
+                            {entity.type === 'git' && (
+                              <GitView send={send} />
+                            )}
+                            {entity.type === 'linear' && (
+                              <LinearView send={send} />
+                            )}
+                            {entity.type === 'settings' && (
+                              <SettingsView send={send} />
+                            )}
+                            {entity.type === 'cemetery' && (
+                              <CemeteryView send={send} />
+                            )}
+                            {entity.type === 'calendar' && (
+                              <CalendarView send={send} />
+                            )}
+                          </EntityCard>
+                        )}
+                      </motion.div>
+                    )
+                  })}
+                </AnimatePresence>
+              )}
             </div>
 
             {/* Sidebar with all entities as task cards */}
             <div className="w-80 flex flex-col overflow-x-visible">
               {/* Scrollable task cards area */}
               <div className="flex-1 overflow-y-auto overflow-x-visible">
-                <Reorder.Group
-                  axis="y"
-                  values={activeEntities}
-                  onReorder={handleEntityReorder}
-                  className="flex flex-col gap-4"
-                >
-                  <AnimatePresence mode="popLayout">
-                    {activeEntities.map(entity => (
-                      <GodTaskCard
-                        key={entity.id}
-                        entity={entity}
-                        isActive={entity.id === effectiveFocusedEntity}
-                        onClick={() => handleSetFocus(entity.id)}
-                        onClose={() => handleKillEntity(entity.id)}
-                        tabs={tabs}
-                        activeTabId={activeTabId}
-                        onMoveToTab={(entityId, tabId) => {
-                          send({ event: 'entity:move', entityId, tabId })
-                          send({ event: 'tab:select', tabId })
-                        }}
-                        onMoveToNewTab={(entityId) => {
-                          send({ event: 'entity:move-to-new-tab', entityId })
-                        }}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </Reorder.Group>
+                {activeEntities.length > 0 && (
+                  <Reorder.Group
+                    axis="y"
+                    values={activeEntities}
+                    onReorder={handleEntityReorder}
+                    className="flex flex-col gap-4"
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {activeEntities.map(entity => (
+                        <GodTaskCard
+                          key={entity.id}
+                          entity={entity}
+                          isActive={entity.id === effectiveFocusedEntity}
+                          onClick={() => handleSetFocus(entity.id)}
+                          onClose={() => handleKillEntity(entity.id)}
+                          tabs={tabs}
+                          activeTabId={activeTabId}
+                          onMoveToTab={(entityId, tabId) => {
+                            send({ event: 'entity:move', entityId, tabId })
+                            send({ event: 'tab:select', tabId })
+                          }}
+                          onMoveToNewTab={(entityId) => {
+                            send({ event: 'entity:move-to-new-tab', entityId })
+                          }}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </Reorder.Group>
+                )}
               </div>
               {/* Action buttons - pinned to bottom */}
               <div className="grid grid-cols-5 gap-1.5 mt-3 flex-shrink-0">
@@ -731,7 +734,6 @@ export default function App() {
               </div>
             </div>
           </div>
-        )}
       </main>
       </div>
 
