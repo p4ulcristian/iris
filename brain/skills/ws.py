@@ -164,3 +164,129 @@ def update_ready(state: str) -> bool:
         "godName": name,
         "readyState": state
     })
+
+
+def request_response(message: dict, response_event: str, host: str = "127.0.0.1", port: int = 9999, timeout: float = 5.0) -> dict | None:
+    """Send a WebSocket message and wait for a response.
+
+    Args:
+        message: Dict to send as JSON
+        response_event: The event name to wait for in response
+        host: WebSocket host
+        port: WebSocket port
+        timeout: Timeout in seconds
+
+    Returns:
+        Response dict if successful, None otherwise
+    """
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((host, port))
+
+        # WebSocket handshake
+        key = base64.b64encode(os.urandom(16)).decode()
+        handshake = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n"
+            f"\r\n"
+        )
+        sock.send(handshake.encode())
+
+        # Read response (we don't validate, just consume it)
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = sock.recv(1024)
+            if not chunk:
+                break
+            response += chunk
+
+        # Send WebSocket frame
+        payload = json.dumps(message).encode()
+        frame = bytearray()
+        frame.append(0x81)  # Text frame, FIN bit set
+
+        length = len(payload)
+        if length <= 125:
+            frame.append(0x80 | length)  # Masked
+        elif length <= 65535:
+            frame.append(0x80 | 126)
+            frame.extend(struct.pack(">H", length))
+        else:
+            frame.append(0x80 | 127)
+            frame.extend(struct.pack(">Q", length))
+
+        # Masking key and masked payload
+        mask = os.urandom(4)
+        frame.extend(mask)
+        for i, byte in enumerate(payload):
+            frame.append(byte ^ mask[i % 4])
+
+        sock.send(bytes(frame))
+
+        # Wait for response
+        while True:
+            # Read frame header
+            header = sock.recv(2)
+            if len(header) < 2:
+                return None
+
+            opcode = header[0] & 0x0f
+            masked = (header[1] & 0x80) != 0
+            payload_len = header[1] & 0x7f
+
+            if payload_len == 126:
+                ext = sock.recv(2)
+                payload_len = struct.unpack(">H", ext)[0]
+            elif payload_len == 127:
+                ext = sock.recv(8)
+                payload_len = struct.unpack(">Q", ext)[0]
+
+            if masked:
+                mask_key = sock.recv(4)
+
+            data = b""
+            while len(data) < payload_len:
+                chunk = sock.recv(payload_len - len(data))
+                if not chunk:
+                    break
+                data += chunk
+
+            if masked:
+                data = bytes(b ^ mask_key[i % 4] for i, b in enumerate(data))
+
+            if opcode == 0x01:  # Text frame
+                try:
+                    msg = json.loads(data.decode())
+                    if msg.get("event") == response_event:
+                        sock.close()
+                        return msg
+                except:
+                    pass
+
+    except Exception as e:
+        print(f"WebSocket error: {e}", file=sys.stderr)
+        return None
+
+
+def peek_god(god_name: str, lines: int = 50) -> str | None:
+    """Get terminal output from another god.
+
+    Args:
+        god_name: Name of the god to peek at
+        lines: Number of lines to retrieve (default 50)
+
+    Returns:
+        Terminal output string if successful, None otherwise
+    """
+    response = request_response(
+        {"event": "god:peek", "godName": god_name, "lines": lines},
+        "god:peek:response"
+    )
+    if response:
+        return response.get("output")
+    return None

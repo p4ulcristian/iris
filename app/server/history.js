@@ -73,7 +73,7 @@ async function parseSessionFile(filePath) {
 }
 
 // List recent sessions for a project
-export async function listSessions(projectPath, limit = 20) {
+export async function listSessions(projectPath, limit = 20, offset = 0) {
   const projectFolder = pathToProjectFolder(projectPath)
   const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectFolder)
 
@@ -82,14 +82,16 @@ export async function listSessions(projectPath, limit = 20) {
   }
 
   // Get all JSONL files, sorted by modification time (newest first)
-  const files = fs.readdirSync(projectDir)
+  const allFiles = fs.readdirSync(projectDir)
     .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
     .map(f => ({
       path: path.join(projectDir, f),
       mtime: fs.statSync(path.join(projectDir, f)).mtime
     }))
     .sort((a, b) => b.mtime - a.mtime)
-    .slice(0, limit * 2) // Get extra in case some fail to parse
+
+  // Skip files for offset, then take enough to fill limit (with buffer for parse failures)
+  const files = allFiles.slice(offset, offset + limit * 2)
 
   // Parse each file
   const sessions = []

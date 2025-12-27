@@ -1,16 +1,2 @@
 #!/bin/bash
-cd "$(dirname "$0")"
-
-case "${1:-start}" in
-  start)
-    cd app && bun run dev
-    ;;
-  stop)
-    pkill -f "electron.*iris" 2>/dev/null
-    pkill -f "vite.*iris" 2>/dev/null
-    echo "Stopped"
-    ;;
-  *)
-    echo "Usage: iris [start|stop]"
-    ;;
-esac
+cd ~/Work/iris/app && bun run dev

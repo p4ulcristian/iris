@@ -22,7 +22,8 @@ export const appState = {
   tabCounter: 1,
   gods: {},
   theme: 'divine-void',
-  viewMode: 'focus',
+  view: 'work',           // 'work' | 'history' | 'git' | 'browser'
+  workLayout: 'focus',    // 'grid' | 'focus' (only applies when view === 'work')
   focusedGod: null
 }
 
@@ -53,8 +54,19 @@ export function loadState() {
     }
   })
 
-  // Validate focusedGod when in focus mode
-  if (appState.viewMode === 'focus') {
+  // Migrate viewMode -> workLayout if needed
+  if (appState.viewMode && !appState.workLayout) {
+    appState.workLayout = appState.viewMode
+    delete appState.viewMode
+  }
+
+  // Ensure view exists
+  if (!appState.view) {
+    appState.view = 'work'
+  }
+
+  // Validate focusedGod when in focus layout
+  if (appState.workLayout === 'focus') {
     const godsInActiveTab = Object.keys(appState.gods)
       .filter(name => appState.gods[name].tabId === appState.activeTabId)
 
@@ -63,7 +75,7 @@ export function loadState() {
     }
 
     if (!appState.focusedGod) {
-      appState.viewMode = 'grid'
+      appState.workLayout = 'grid'
     }
   }
 
@@ -105,7 +117,8 @@ export function getStateForBroadcast() {
     gods,
     theme: appState.theme,
     godColors,
-    viewMode: appState.viewMode,
+    view: appState.view,
+    workLayout: appState.workLayout,
     focusedGod: appState.focusedGod
   }
 }

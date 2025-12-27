@@ -1,14 +1,52 @@
+import { useState, useEffect } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faExpand, faCompress } from '@fortawesome/free-solid-svg-icons'
+import ViewNav from './ViewNav'
+
 export default function TabBar({
   tabs,
   activeTabId,
   onSelect,
   onClose,
   onNew,
-  onSummon,
   connected,
-  godCount,
-  getGodsForTab
+  getGodsForTab,
+  currentView,
+  onViewChange
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  // Check fullscreen state on mount and when it changes
+  useEffect(() => {
+    const checkFullscreen = async () => {
+      if (window.iris?.isFullscreen) {
+        const fs = await window.iris.isFullscreen()
+        setIsFullscreen(fs)
+      }
+    }
+    checkFullscreen()
+
+    // Listen for fullscreen changes
+    const handleFullscreenChange = () => checkFullscreen()
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
+    // Check periodically since Electron fullscreen doesn't trigger DOM event
+    const interval = setInterval(checkFullscreen, 500)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+      clearInterval(interval)
+    }
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (window.iris?.windowControl) {
+      window.iris.windowControl('toggle-fullscreen')
+      // Optimistically update state
+      setIsFullscreen(!isFullscreen)
+    }
+  }
+
   return (
     <nav className="flex items-center h-10 bg-black/40 backdrop-blur-md border-b border-white/10">
       {/* Tabs */}
@@ -60,25 +98,20 @@ export default function TabBar({
       <div className="flex-1" />
 
       {/* Right side controls */}
-      <div className="flex items-center gap-2 px-3">
-        <button
-          onClick={onSummon}
+      <div className="flex items-center gap-3 px-3">
+        <ViewNav
+          currentView={currentView}
+          onViewChange={onViewChange}
           disabled={!connected}
-          className={`
-            h-7 px-3 rounded text-sm font-medium transition-all
-            ${connected
-              ? 'bg-accent text-white hover:bg-[#5a62e0]'
-              : 'bg-bg-tertiary text-text-secondary cursor-not-allowed'
-            }
-          `}
-          title="Summon (Ctrl+N)"
-        >
-          + Summon
-        </button>
+        />
 
-        <span className="text-text-secondary text-sm">
-          {godCount} god{godCount !== 1 ? 's' : ''}
-        </span>
+        <button
+          onClick={toggleFullscreen}
+          className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"
+          title={isFullscreen ? 'Exit fullscreen (F11)' : 'Fullscreen (F11)'}
+        >
+          <FontAwesomeIcon icon={isFullscreen ? faCompress : faExpand} size="sm" />
+        </button>
 
         <span
           className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}

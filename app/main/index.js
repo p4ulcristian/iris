@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
@@ -51,8 +51,16 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false)
 
-  // Zoom shortcuts
+  // Keyboard shortcuts
   mainWindow.webContents.on('before-input-event', (event, input) => {
+    // F11: Toggle fullscreen
+    if (input.key === 'F11') {
+      event.preventDefault()
+      mainWindow.setFullScreen(!mainWindow.isFullScreen())
+      return
+    }
+
+    // Zoom shortcuts (Ctrl +/-)
     if (input.control && !input.alt && !input.meta) {
       const zoomLevel = mainWindow.webContents.getZoomLevel()
       let zoomed = false
@@ -94,6 +102,30 @@ function createWindow() {
     console.log(`${prefix} ${message}`)
   })
 }
+
+// IPC handlers for window control
+ipcMain.on('window-control', (event, action) => {
+  if (!mainWindow) return
+
+  switch (action) {
+    case 'toggle-fullscreen':
+      mainWindow.setFullScreen(!mainWindow.isFullScreen())
+      break
+    case 'minimize':
+      mainWindow.minimize()
+      break
+    case 'maximize':
+      mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+      break
+    case 'close':
+      mainWindow.close()
+      break
+  }
+})
+
+ipcMain.handle('window-is-fullscreen', () => {
+  return mainWindow?.isFullScreen() ?? false
+})
 
 app.whenReady().then(() => {
   startServer()

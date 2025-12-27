@@ -30,8 +30,11 @@ const initialState = {
   focusedGod: null,
   fullscreenGod: null,
   layoutMode: 'auto',
-  viewMode: 'focus',  // 'grid' | 'focus' - controls main layout style
   devPanelOpen: false,
+
+  // Synced view state
+  view: 'work',           // 'work' | 'history' | 'git' | 'browser'
+  workLayout: 'focus',    // 'grid' | 'focus' - controls work view layout
 
   // Synced from server
   theme: 'divine-void',  // Will be overwritten by state:sync
@@ -145,7 +148,7 @@ export const useStore = create(
           const remainingGods = Object.values(state.gods).filter(g => g.tabId === tabId)
           state.focusedGod = remainingGods.length > 0 ? remainingGods[0].name : null
           // Exit focus mode if the focused god was removed and no replacement
-          if (!state.focusedGod) state.viewMode = 'grid'
+          if (!state.focusedGod) state.workLayout = 'grid'
         }
       }),
 
@@ -187,17 +190,21 @@ export const useStore = create(
         state.devPanelOpen = !state.devPanelOpen
       }),
 
-      setViewMode: (mode) => set((state) => {
-        state.viewMode = mode
+      setView: (view) => set((state) => {
+        state.view = view
+      }),
+
+      setWorkLayout: (layout) => set((state) => {
+        state.workLayout = layout
       }),
 
       enterFocusMode: (godName) => set((state) => {
-        state.viewMode = 'focus'
+        state.workLayout = 'focus'
         state.focusedGod = godName
       }),
 
       exitFocusMode: () => set((state) => {
-        state.viewMode = 'grid'
+        state.workLayout = 'grid'
       }),
 
       // ============ CONNECTION ============
@@ -292,9 +299,12 @@ export const useStore = create(
           state.godColors = serverState.godColors
         }
 
-        // Sync viewMode and focusedGod from server
-        if (serverState.viewMode !== undefined) {
-          state.viewMode = serverState.viewMode
+        // Sync view, workLayout and focusedGod from server
+        if (serverState.view !== undefined) {
+          state.view = serverState.view
+        }
+        if (serverState.workLayout !== undefined) {
+          state.workLayout = serverState.workLayout
         }
         if (serverState.focusedGod !== undefined) {
           state.focusedGod = serverState.focusedGod

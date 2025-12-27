@@ -1,8 +1,14 @@
+import fs from 'fs'
 import { SERVICES, REALMS } from './config.js'
+
+const DEBUG_LOG = '/tmp/iris-debug.log'
+function debugLog(msg) {
+  fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`)
+}
 import { appState, saveState, broadcastState, broadcast } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses } from './pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
 import { listSessions } from './history.js'
 
 function getRandomRealmName() {
@@ -38,7 +44,7 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
         // Auto-focus new god in focus mode
-        if (appState.viewMode === 'focus') {
+        if (appState.workLayout === 'focus') {
           appState.focusedGod = god.name
         }
         saveState()
@@ -66,7 +72,7 @@ export function handleMessage(ws, msg, projectRoot) {
           color: terminal.color
         }
         // Auto-focus new terminal in focus mode
-        if (appState.viewMode === 'focus') {
+        if (appState.workLayout === 'focus') {
           appState.focusedGod = terminal.name
         }
         saveState()
@@ -85,6 +91,7 @@ export function handleMessage(ws, msg, projectRoot) {
         ptyProcesses.delete(godName)
       }
       killGodSession(godName)
+      clearOutputBuffer(godName)
       delete appState.gods[godName]
       if (appState.focusedGod === godName) {
         // Find another god in the same tab to focus
@@ -94,8 +101,8 @@ export function handleMessage(ws, msg, projectRoot) {
         appState.focusedGod = remainingGods.length > 0 ? remainingGods[0][0] : null
 
         // Exit focus mode if no gods left
-        if (!appState.focusedGod && appState.viewMode === 'focus') {
-          appState.viewMode = 'grid'
+        if (!appState.focusedGod && appState.workLayout === 'focus') {
+          appState.workLayout = 'grid'
         }
       }
       saveState()
@@ -131,18 +138,37 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
+    case 'god:peek': {
+      const godName = data.godName
+      const lines = data.lines || 50
+      const output = getOutputBuffer(godName, lines)
+      ws.send(JSON.stringify({
+        event: 'god:peek:response',
+        godName,
+        output,
+        lines: output.split('\n').length
+      }))
+      break
+    }
+
     case 'service:start': {
       const service = data.service
+      debugLog(`service:start received for: ${service}`)
       if (service && SERVICES[service]) {
         startService(service, projectRoot)
+      } else {
+        debugLog(`service:start INVALID service: ${service}`)
       }
       break
     }
 
     case 'service:stop': {
       const service = data.service
+      debugLog(`service:stop received for: ${service}`)
       if (service && SERVICES[service]) {
         stopService(service)
+      } else {
+        debugLog(`service:stop INVALID service: ${service}`)
       }
       break
     }
@@ -159,6 +185,13 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'pty:input': {
+      // Reset readyState when user types to a god
+      if (appState.gods[data.godName]?.readyState &&
+          appState.gods[data.godName].readyState !== 'working') {
+        appState.gods[data.godName].readyState = 'working'
+        saveState()
+        broadcastState()
+      }
       sendToPty(data.godName, data.data)
       break
     }
@@ -201,7 +234,7 @@ export function handleMessage(ws, msg, projectRoot) {
       appState.activeTabId = data.tabId
 
       // If in focus mode, ensure focusedGod is in new tab
-      if (appState.viewMode === 'focus') {
+      if (appState.workLayout === 'focus') {
         const godsInTab = Object.keys(appState.gods)
           .filter(name => appState.gods[name].tabId === data.tabId)
           .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
@@ -211,7 +244,7 @@ export function handleMessage(ws, msg, projectRoot) {
         }
 
         if (!appState.focusedGod) {
-          appState.viewMode = 'grid'
+          appState.workLayout = 'grid'
         }
       }
 
@@ -264,14 +297,33 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'viewMode:set': {
-      appState.viewMode = data.mode || 'grid'
+    case 'view:set': {
+      const validViews = ['work', 'history', 'git', 'browser']
+      if (validViews.includes(data.view)) {
+        appState.view = data.view
+        saveState()
+        broadcastState()
+      }
+      break
+    }
 
-      if (appState.viewMode === 'focus') {
+    case 'workLayout:set':
+    case 'viewMode:set': {
+      appState.workLayout = data.layout || data.mode || 'grid'
+
+      if (appState.workLayout === 'focus') {
+        // Get all gods including sockets not yet in appState.gods
+        const allGods = listGodSockets()
+        allGods.forEach(sock => {
+          if (!appState.gods[sock.name]) {
+            appState.gods[sock.name] = { tabId: appState.activeTabId, order: 0 }
+          }
+        })
+
         // Auto-focus: use provided god, or first god in active tab
         const godsInTab = Object.keys(appState.gods)
           .filter(name => appState.gods[name].tabId === appState.activeTabId)
-          .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
+          .sort((a, b) => (appState.gods[a].order || 0) - (appState.gods[b].order || 0))
 
         appState.focusedGod = data.focusedGod && godsInTab.includes(data.focusedGod)
           ? data.focusedGod
@@ -279,7 +331,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
         // Can't enter focus mode with no gods - fall back to grid
         if (!appState.focusedGod) {
-          appState.viewMode = 'grid'
+          appState.workLayout = 'grid'
         }
       } else {
         appState.focusedGod = null
@@ -330,7 +382,7 @@ export function handleMessage(ws, msg, projectRoot) {
           color: terminal.color
         }
         // Auto-focus new nvim in focus mode
-        if (appState.viewMode === 'focus') {
+        if (appState.workLayout === 'focus') {
           appState.focusedGod = terminal.name
         }
         saveState()
@@ -343,7 +395,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
     // History management
     case 'history:list': {
-      listSessions(projectRoot, data.limit || 20).then(sessions => {
+      listSessions(projectRoot, data.limit || 20, data.offset || 0).then(sessions => {
         ws.send(JSON.stringify({ event: 'history:list', sessions }))
       }).catch(err => {
         console.error('Failed to list sessions:', err)
@@ -363,7 +415,7 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
         // Auto-focus resumed god in focus mode
-        if (appState.viewMode === 'focus') {
+        if (appState.workLayout === 'focus') {
           appState.focusedGod = god.name
         }
         saveState()

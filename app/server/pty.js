@@ -4,6 +4,38 @@ import { getSocketPath } from './gods.js'
 // godName -> { proc, terminal, clients: Set<ws>, socketPath }
 export const ptyProcesses = new Map()
 
+// godName -> string[] (ring buffer of output lines)
+const outputBuffers = new Map()
+const MAX_BUFFER_LINES = 500
+
+function appendToBuffer(godName, data) {
+  if (!outputBuffers.has(godName)) {
+    outputBuffers.set(godName, [])
+  }
+  const buffer = outputBuffers.get(godName)
+
+  // Split by newlines and append
+  const lines = data.split('\n')
+  for (const line of lines) {
+    buffer.push(line)
+  }
+
+  // Trim to max size
+  while (buffer.length > MAX_BUFFER_LINES) {
+    buffer.shift()
+  }
+}
+
+export function getOutputBuffer(godName, lines = 50) {
+  const buffer = outputBuffers.get(godName) || []
+  const startIdx = Math.max(0, buffer.length - lines)
+  return buffer.slice(startIdx).join('\n')
+}
+
+export function clearOutputBuffer(godName) {
+  outputBuffers.delete(godName)
+}
+
 export function attachPty(godName, ws, cols, rows) {
   const socketPath = getSocketPath(godName)
 
@@ -30,7 +62,12 @@ export function attachPty(godName, ws, cols, rows) {
         const entry = ptyProcesses.get(godName)
         if (!entry) return
 
-        const msg = JSON.stringify({ event: 'pty:output', godName, data: data.toString() })
+        const dataStr = data.toString()
+
+        // Store in buffer for peek
+        appendToBuffer(godName, dataStr)
+
+        const msg = JSON.stringify({ event: 'pty:output', godName, data: dataStr })
         entry.clients.forEach(client => {
           if (client.readyState === 1) {
             client.send(msg)

@@ -1,6 +1,10 @@
-"""Output handling - type text using wtype."""
+"""Output handling - type text using wtype and send to Iris via WebSocket."""
 
 import subprocess
+import json
+
+
+IRIS_WS_URL = "ws://127.0.0.1:9999"
 
 
 def paste_text(text: str):
@@ -10,3 +14,36 @@ def paste_text(text: str):
         print(f"Typed: {text}", flush=True)
     except Exception as e:
         print(f"paste_text error: {e}", flush=True)
+
+
+def send_to_iris(text: str):
+    """Send text to Iris app via WebSocket."""
+    try:
+        # Use websocat to send a message to Iris
+        message = json.dumps({"event": "voice:input", "text": text})
+        result = subprocess.run(
+            ["websocat", "-1", IRIS_WS_URL],
+            input=message,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        print(f"Sent to Iris: {text}", flush=True)
+    except Exception as e:
+        print(f"send_to_iris error: {e}", flush=True)
+
+
+def send_enter_to_iris():
+    """Send Enter key event to Iris app via WebSocket."""
+    try:
+        message = json.dumps({"event": "voice:enter"})
+        result = subprocess.run(
+            ["websocat", "-1", IRIS_WS_URL],
+            input=message,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        print("Sent Enter to Iris", flush=True)
+    except Exception as e:
+        print(f"send_enter_to_iris error: {e}", flush=True)

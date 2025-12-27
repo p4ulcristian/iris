@@ -39,15 +39,16 @@ function ServiceIndicator({ name, serviceKey, active, loading, icon, onToggle })
   )
 }
 
-const VIEW_MODES = [
+const WORK_LAYOUTS = [
   { id: 'grid', label: 'Grid', icon: '▦' },
   { id: 'focus', label: 'Focus', icon: '◰' }
 ]
 
-function ModePicker({ send }) {
+function LayoutPicker({ send }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
-  const viewMode = useStore(s => s.viewMode)
+  const view = useStore(s => s.view)
+  const workLayout = useStore(s => s.workLayout)
   const focusedGod = useStore(s => s.focusedGod)
   const getActiveGods = useStore(s => s.getActiveGods)
   const activeGods = getActiveGods()
@@ -64,33 +65,36 @@ function ModePicker({ send }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  const currentMode = VIEW_MODES.find(m => m.id === viewMode) || VIEW_MODES[0]
+  const currentLayout = WORK_LAYOUTS.find(m => m.id === workLayout) || WORK_LAYOUTS[0]
 
-  const handleSelect = (modeId) => {
-    if (modeId === 'focus' && activeGods.length > 1) {
+  const handleSelect = (layoutId) => {
+    if (layoutId === 'focus' && activeGods.length > 1) {
       // Enter focus mode with first god if none focused
-      send({ event: 'viewMode:set', mode: 'focus', focusedGod: focusedGod || activeGods[0]?.name })
+      send({ event: 'workLayout:set', layout: 'focus', focusedGod: focusedGod || activeGods[0]?.name })
     } else {
-      send({ event: 'viewMode:set', mode: modeId })
+      send({ event: 'workLayout:set', layout: layoutId })
     }
     setOpen(false)
   }
+
+  // Only show when in work view
+  if (view !== 'work') return null
 
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs hover:bg-bg-tertiary transition-colors"
-        title="Change layout mode"
+        title="Change work layout"
       >
-        <span>{currentMode.icon}</span>
-        <span>{currentMode.label}</span>
+        <span>{currentLayout.icon}</span>
+        <span>{currentLayout.label}</span>
         <span className="text-text-tertiary">▾</span>
       </button>
 
       {open && (
         <div className="absolute bottom-full right-0 mb-1 min-w-[100px] bg-bg-secondary border border-border rounded shadow-lg py-1 z-50">
-          {VIEW_MODES.map((m) => {
+          {WORK_LAYOUTS.map((m) => {
             const disabled = m.id === 'focus' && activeGods.length < 2
             return (
               <button
@@ -100,14 +104,14 @@ function ModePicker({ send }) {
                 className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${
                   disabled
                     ? 'text-text-tertiary cursor-not-allowed'
-                    : m.id === viewMode
+                    : m.id === workLayout
                       ? 'bg-bg-tertiary text-text-primary'
                       : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
                 }`}
               >
                 <span>{m.icon}</span>
                 <span>{m.label}</span>
-                {m.id === viewMode && <span className="ml-auto">✓</span>}
+                {m.id === workLayout && <span className="ml-auto">✓</span>}
               </button>
             )
           })}
@@ -280,8 +284,8 @@ export default function StatusBar({ connected, send }) {
       {/* Divider */}
       <div className="w-px h-4 bg-border mx-2" />
 
-      {/* Mode picker */}
-      <ModePicker send={send} />
+      {/* Layout picker (only in work view) */}
+      <LayoutPicker send={send} />
 
       {/* Divider */}
       <div className="w-px h-4 bg-border mx-2" />

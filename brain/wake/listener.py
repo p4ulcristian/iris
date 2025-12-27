@@ -127,9 +127,8 @@ def on_iris_enter():
 def main():
     """Start the wake listener"""
     logger.info("Starting Iris Wake listener")
-    logger.info("Waiting for servers to be ready...")
 
-    # Wait for servers to be ready
+    # Check which servers are available (non-blocking)
     servers = {
         "speak": SPEAK_SERVER,
         "hear": HEAR_SERVER,
@@ -137,18 +136,16 @@ def main():
     }
 
     for name, url in servers.items():
-        while True:
-            try:
-                resp = requests.get(f"{url}/health", timeout=2)
-                if resp.json().get("ready"):
-                    logger.info(f"{name} server ready")
-                    break
-            except Exception:
-                pass
-            import time
-            time.sleep(1)
+        try:
+            resp = requests.get(f"{url}/health", timeout=1)
+            if resp.json().get("ready"):
+                logger.info(f"{name} server ready")
+            else:
+                logger.warning(f"{name} server not ready (will retry on use)")
+        except Exception:
+            logger.warning(f"{name} server not available (will retry on use)")
 
-    logger.info("All servers ready - starting PTT listener")
+    logger.info("Starting PTT listener (services checked lazily)")
 
     # Start PTT listener
     listener = PTTListener(

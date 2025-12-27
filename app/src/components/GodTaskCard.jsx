@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Reorder, useDragControls } from 'framer-motion'
+import { Reorder, useDragControls, motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store'
 
 function formatElapsed(ms) {
@@ -64,14 +64,21 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       onClick={onClick}
       className={`group relative w-full rounded-xl cursor-grab active:cursor-grabbing backdrop-blur-md border ${getReadyClass()}`}
       style={{
+        '--god-color': godColor,
+        '--god-color-alpha': `${godColor}88`
+      }}
+      initial={false}
+      animate={{
+        scale: isActive ? 1.02 : 1,
+        y: isActive ? -2 : 0,
         backgroundColor: bgColor,
         borderColor: isActive ? godColor : `${godColor}66`,
         boxShadow: isActive
           ? `0 0 30px ${godColor}66, inset 0 0 20px rgba(255,255,255,0.1)`
-          : `0 0 20px ${godColor}22, inset 0 0 30px ${godColor}11`,
-        '--god-color': godColor,
-        '--god-color-alpha': `${godColor}88`
+          : `0 0 20px ${godColor}22, inset 0 0 30px ${godColor}11`
       }}
+      whileHover={!isActive ? { scale: 1.01, y: -1 } : {}}
+      whileTap={!isActive ? { scale: 0.98 } : {}}
       whileDrag={{
         scale: 1.05,
         boxShadow: `0 0 40px ${godColor}88, 0 20px 40px rgba(0,0,0,0.3)`,
@@ -80,18 +87,25 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
       transition={{
         type: 'spring',
         stiffness: 400,
-        damping: 25
+        damping: 25,
+        scale: { type: 'spring', stiffness: 500, damping: 30 },
+        y: { type: 'spring', stiffness: 500, damping: 30 },
+        backgroundColor: { duration: 0.3, ease: 'easeOut' },
+        borderColor: { duration: 0.3, ease: 'easeOut' },
+        boxShadow: { duration: 0.3, ease: 'easeOut' }
       }}
     >
       <div className="px-4 py-3">
         {/* Top row: name + close button */}
         <div className="flex items-start justify-between">
-          <span
+          <motion.span
             className="text-lg font-semibold truncate"
-            style={{ color: textColor }}
+            initial={false}
+            animate={{ color: textColor }}
+            transition={{ duration: 0.3 }}
           >
             {displayName || name}
-          </span>
+          </motion.span>
         </div>
         <button
           onClick={(e) => {
@@ -110,15 +124,25 @@ export default function GodTaskCard({ god, isActive, onClick, onClose }) {
         </button>
         {/* Row 2: status */}
         {displayText && (
-          <span className="text-sm mt-1 block" style={{ color: subtextColor }}>
+          <motion.span
+            className="text-sm mt-1 block"
+            initial={false}
+            animate={{ color: subtextColor }}
+            transition={{ duration: 0.3 }}
+          >
             {displayText}
-          </span>
+          </motion.span>
         )}
         {/* Row 3: elapsed time */}
         {elapsed !== null && (
-          <span className="text-xs font-mono mt-1 block text-right" style={{ color: mutedColor }}>
+          <motion.span
+            className="text-xs font-mono mt-1 block text-right"
+            initial={false}
+            animate={{ color: mutedColor }}
+            transition={{ duration: 0.3 }}
+          >
             {formatElapsed(elapsed)}
-          </span>
+          </motion.span>
         )}
       </div>
     </Reorder.Item>
