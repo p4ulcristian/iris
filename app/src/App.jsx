@@ -1,26 +1,32 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Reorder, AnimatePresence, motion } from 'framer-motion'
-import TabBar from './components/TabBar'
-import GodCard from './components/GodCard'
+import EntityCard from './components/EntityCard'
+import TerminalContent from './components/TerminalContent'
 import GodTaskCard from './components/GodTaskCard'
 import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
-import EntityPickerModal from './components/EntityPickerModal'
+import SummonModal from './components/SummonModal'
 import DevPanel from './components/DevPanel'
 import HistoryView from './components/HistoryView'
 import BrowserView from './components/BrowserView'
 import GitView from './components/GitView'
 import LinearView from './components/LinearView'
 import SettingsView from './components/SettingsView'
+import CemeteryView from './components/CemeteryView'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
+import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faBolt, faTerminal, faCode, faGlobe, faCodeBranch,
-  faClockRotateLeft, faCheckSquare, faGear
-} from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus } from '@fortawesome/free-solid-svg-icons'
+
+// Type icons
+import claudeIcon from './assets/icons/claude.png'
+import linearIcon from './assets/icons/linear.png'
+import gitIcon from './assets/icons/git.png'
+import nvimIcon from './assets/icons/nvim.png'
+import browserIcon from './assets/icons/browser.png'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -54,13 +60,48 @@ export default function App() {
   const syncState = useStore(s => s.syncState)
 
   const [confirmModal, setConfirmModal] = useState(null)
-  const [entityPickerOpen, setEntityPickerOpen] = useState(false)
-  const [entityPickerMode, setEntityPickerMode] = useState('pick') // 'pick' | 'god'
+  const [summonModalOpen, setSummonModalOpen] = useState(false)
+
+  // Refs for keyboard handlers (avoid stale closures)
+  const tabsRef = useRef(tabs)
+  const activeTabIdRef = useRef(activeTabId)
+  useEffect(() => { tabsRef.current = tabs }, [tabs])
+  useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
+
+  // Ref and state for measuring god card container
+  const [containerSize, setContainerSize] = useState(null) // null = not measured yet
+  const observerRef = useRef(null)
+
+  // Callback ref that sets up ResizeObserver when element mounts
+  const godContainerRef = useCallback((node) => {
+    // Cleanup old observer
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
+    }
+
+    if (node) {
+      const measure = () => {
+        const rect = node.getBoundingClientRect()
+        console.log('[App] Container size:', rect.width, 'x', rect.height)
+        setContainerSize({ width: rect.width, height: rect.height })
+      }
+
+      measure()
+      observerRef.current = new ResizeObserver(measure)
+      observerRef.current.observe(node)
+    }
+  }, [])
 
   // Update connection status in store
   useEffect(() => {
     setConnected(connected)
   }, [connected, setConnected])
+
+  // Setup global error handlers
+  useEffect(() => {
+    setupGlobalErrorHandlers(send)
+  }, [send])
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -133,15 +174,25 @@ export default function App() {
     }
   }, [])
 
-  // Summon a new god
+  // Summon a new god (with specific name)
   const handleSummonGod = useCallback((name, task = '') => {
     send({
       event: 'god:spawn',
       name,
       task
     })
-    setEntityPickerOpen(false)
   }, [send])
+
+  // Spawn a random available god
+  const handleSpawnRandomGod = useCallback(() => {
+    const allGods = Object.keys(godColors)
+    const usedNames = getAllGodNames().map(n => n.toLowerCase())
+    const availableGods = allGods.filter(g => !usedNames.includes(g))
+    const godPool = availableGods.length > 0 ? availableGods : allGods
+    const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
+    const name = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
+    send({ event: 'god:spawn', name, task: '' })
+  }, [send, godColors, getAllGodNames])
 
   // Spawn a raw terminal (no Claude)
   const handleSpawnTerminal = useCallback(() => {
@@ -150,28 +201,10 @@ export default function App() {
     })
   }, [send])
 
-  // Kill an entity (with confirmation for gods/terminals)
+  // Kill an entity (gods go to cemetery, can be resurrected)
   const handleKillEntity = useCallback((entityId) => {
-    const entity = entities[entityId]
-    const isGodOrTerminal = entity?.type === 'god' || entity?.type === 'terminal'
-    const displayName = entity?.name || entityId
-
-    if (isGodOrTerminal) {
-      setConfirmModal({
-        title: `Banish ${displayName}?`,
-        message: 'This will terminate the session.',
-        confirmText: 'Banish',
-        danger: true,
-        onConfirm: () => {
-          send({ event: 'entity:kill', entityId })
-          setConfirmModal(null)
-        }
-      })
-    } else {
-      // View entities can be closed without confirmation
-      send({ event: 'entity:kill', entityId })
-    }
-  }, [send, entities])
+    send({ event: 'entity:kill', entityId })
+  }, [send])
 
   // Set focused entity (server event)
   const handleSetFocus = useCallback((entityId) => {
@@ -249,28 +282,18 @@ export default function App() {
 
       // Check if this is one of our app shortcuts
       const isAppShortcut = (
-        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'g'].includes(key)) ||
+        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'arrowup', 'arrowdown'].includes(key)) ||
         (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Ctrl+N: Open entity picker modal
+      // Ctrl+N: Open summon modal
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        setEntityPickerMode('pick')
-        setEntityPickerOpen(true)
-        return
-      }
-
-      // Ctrl+G: Open entity picker directly in god mode
-      if (e.ctrlKey && e.key === 'g') {
-        e.preventDefault()
-        e.stopPropagation()
-        setEntityPickerMode('god')
-        setEntityPickerOpen(true)
+        setSummonModalOpen(true)
         return
       }
 
@@ -374,12 +397,60 @@ export default function App() {
           handleSetFocus(null)
         }
       }
+
+      // Ctrl+Up: Focus previous entity
+      if (e.ctrlKey && e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        send({ event: 'focus:prev' })
+        return
+      }
+
+      // Ctrl+Down: Focus next entity
+      if (e.ctrlKey && e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        send({ event: 'focus:next' })
+        return
+      }
+
+      // Ctrl+Left: Previous tab
+      if (e.ctrlKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        e.stopPropagation()
+        const t = tabsRef.current
+        const a = activeTabIdRef.current
+        console.log('Ctrl+Left', { t, a })
+        if (t?.length > 0) {
+          const idx = t.findIndex(x => x.id === a)
+          const prev = (idx - 1 + t.length) % t.length
+          console.log('switching', { idx, prev, to: t[prev]?.id })
+          send({ event: 'tab:select', tabId: t[prev].id })
+        }
+        return
+      }
+
+      // Ctrl+Right: Next tab
+      if (e.ctrlKey && e.key === 'ArrowRight') {
+        e.preventDefault()
+        e.stopPropagation()
+        const t = tabsRef.current
+        const a = activeTabIdRef.current
+        console.log('Ctrl+Right', { t, a })
+        if (t?.length > 0) {
+          const idx = t.findIndex(x => x.id === a)
+          const next = (idx + 1) % t.length
+          console.log('switching', { idx, next, to: t[next]?.id })
+          send({ event: 'tab:select', tabId: t[next].id })
+        }
+        return
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSpawnTerminal, handleKillEntity, handleKillTab, handleToggleFullscreen,
+    handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, handleToggleFullscreen,
     rotateLayout, focusedEntity, fullscreenEntity, activeEntities,
     toggleDevPanel, handleSetFocus, send, tabs, activeTabId
   ])
@@ -398,13 +469,19 @@ export default function App() {
   }
 
   const getStackStyle = (position) => {
-    if (position === 0) {
-      return { x: '0%', opacity: 1, zIndex: 10, pointerEvents: 'auto' }
+    // 3D carousel effect: cards tilt away as they recede
+    const y = `${position * 90}%`
+    const rotateX = position * -15  // Tilt back as it goes up/down
+    const absPos = Math.abs(position)
+
+    return {
+      y,
+      rotateX,
+      opacity: absPos === 0 ? 1 : 0,
+      scale: 1 - absPos * 0.08,
+      zIndex: 10 - absPos,
+      pointerEvents: position === 0 ? 'auto' : 'none'
     }
-    if (position < 0) {
-      return { x: '-100%', opacity: 0, zIndex: 0, pointerEvents: 'none' }
-    }
-    return { x: '100%', opacity: 0, zIndex: 0, pointerEvents: 'none' }
   }
 
   // Get effective focused entity (ensure it's in active tab)
@@ -427,20 +504,22 @@ export default function App() {
         <div className="blob blob-6" />
       </div>
 
-      {/* Tab bar */}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSelect={(tabId) => send({ event: 'tab:select', tabId })}
-        onClose={handleKillTab}
-        onNew={() => send({ event: 'tab:add' })}
-        onOpenSummon={() => setEntityPickerOpen(true)}
-        connected={connected}
-        getEntitiesForTab={getEntitiesForTab}
-      />
+      {/* Main layout: sidebar + content */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left sidebar (tabs + services) */}
+        <StatusBar
+          connected={connected}
+          send={send}
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
+          onTabClose={handleKillTab}
+          onTabNew={() => send({ event: 'tab:add' })}
+          getEntitiesForTab={getEntitiesForTab}
+        />
 
-      {/* Main content area */}
-      <main className="flex-1 min-h-0 overflow-visible p-4">
+        {/* Main content area */}
+        <main className="flex-1 min-h-0 overflow-visible py-2 pr-2">
         {activeEntities.length === 0 ? (
           /* Empty state */
           <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
@@ -451,171 +530,206 @@ export default function App() {
           </div>
         ) : (
           /* Main layout: focused entity + sidebar */
-          <div className="flex gap-4 h-full">
+          <div className="flex gap-3 h-full">
             {/* Main focused entity area */}
-            <div className="flex-[2] min-w-0 relative">
-              {/* Render based on focused entity type */}
-              {(effectiveFocusedType === 'god' || effectiveFocusedType === 'terminal') && (
-                /* God/Terminal: stack animation with terminals */
-                activeGods.filter(g => g.tabId === activeTabId).map(god => {
-                  const position = getStackPosition(god.id, effectiveFocusedEntity, activeGods.filter(g => g.tabId === activeTabId))
+            <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full" style={{ perspective: '1200px' }}>
+              {/* Render all entities with EntityCard wrapper */}
+              <AnimatePresence mode="popLayout">
+                {activeEntities.map(entity => {
+                  const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
                   const style = getStackStyle(position)
 
                   return (
                     <motion.div
-                      key={god.id}
-                      className="absolute inset-0"
+                      key={entity.id}
+                      initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
                       animate={{
-                        x: style.x,
+                        y: style.y,
+                        rotateX: style.rotateX,
+                        scale: style.scale,
                         opacity: style.opacity,
                         zIndex: style.zIndex,
                       }}
+                      exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
                       transition={{
                         type: 'spring',
-                        stiffness: 500,
-                        damping: 35,
+                        stiffness: 250,
+                        damping: 25,
+                        opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
                       }}
-                      style={{ pointerEvents: style.pointerEvents }}
+                      className="absolute inset-0"
+                      style={{
+                        pointerEvents: style.pointerEvents,
+                        transformOrigin: 'center center',
+                      }}
                     >
-                      <GodCard
-                        god={god}
-                        isFocused={position === 0}
-                        onFocus={() => handleSetFocus(god.id)}
-                        onDoubleClick={() => {}}
-                      />
+                      {containerSize && (
+                        <EntityCard
+                          entity={entity}
+                          isFocused={position === 0}
+                          onClick={() => handleSetFocus(entity.id)}
+                        >
+                          {/* Render content based on entity type */}
+                          {(entity.type === 'god' || entity.type === 'terminal') && (
+                            <TerminalContent
+                              entity={entity}
+                              isFocused={position === 0}
+                              expectedWidth={containerSize.width}
+                              expectedHeight={containerSize.height}
+                            />
+                          )}
+                          {entity.type === 'browser' && (
+                            <BrowserView entityId={entity.id} />
+                          )}
+                          {entity.type === 'history' && (
+                            <HistoryView send={send} />
+                          )}
+                          {entity.type === 'git' && (
+                            <GitView send={send} />
+                          )}
+                          {entity.type === 'linear' && (
+                            <LinearView send={send} />
+                          )}
+                          {entity.type === 'settings' && (
+                            <SettingsView send={send} />
+                          )}
+                          {entity.type === 'cemetery' && (
+                            <CemeteryView send={send} />
+                          )}
+                        </EntityCard>
+                      )}
                     </motion.div>
                   )
-                })
-              )}
-
-              {effectiveFocusedType === 'browser' && (
-                <div className="h-full relative">
-                  <BrowserView entityId={effectiveFocusedEntity} />
-                </div>
-              )}
-
-              {effectiveFocusedType === 'history' && (
-                <HistoryView send={send} />
-              )}
-
-              {effectiveFocusedType === 'git' && (
-                <GitView send={send} />
-              )}
-
-              {effectiveFocusedType === 'linear' && (
-                <LinearView send={send} />
-              )}
-
-              {effectiveFocusedType === 'settings' && (
-                <SettingsView send={send} />
-              )}
+                })}
+              </AnimatePresence>
             </div>
 
             {/* Sidebar with all entities as task cards */}
-            <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible">
-              <Reorder.Group
-                axis="y"
-                values={activeEntities}
-                onReorder={handleEntityReorder}
-                className="flex flex-col gap-4"
-              >
-                {activeEntities.map(entity => (
-                  <GodTaskCard
-                    key={entity.id}
-                    entity={entity}
-                    isActive={entity.id === effectiveFocusedEntity}
-                    onClick={() => handleSetFocus(entity.id)}
-                    onClose={() => handleKillEntity(entity.id)}
-                    tabs={tabs}
-                    activeTabId={activeTabId}
-                    onMoveToTab={(entityId, tabId) => {
-                      send({ event: 'entity:move', entityId, tabId })
-                      send({ event: 'tab:select', tabId })
-                    }}
-                    onMoveToNewTab={(entityId) => {
-                      send({ event: 'entity:move-to-new-tab', entityId })
-                    }}
-                  />
-                ))}
-              </Reorder.Group>
-              {/* Action buttons */}
-              <div className="grid grid-cols-4 gap-2 mt-4">
-                <button
-                  onClick={() => {
-                    setEntityPickerMode('god')
-                    setEntityPickerOpen(true)
-                  }}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="New god (Ctrl+G)"
+            <div className="w-80 flex flex-col overflow-x-visible">
+              {/* Scrollable task cards area */}
+              <div className="flex-1 overflow-y-auto overflow-x-visible">
+                <Reorder.Group
+                  axis="y"
+                  values={activeEntities}
+                  onReorder={handleEntityReorder}
+                  className="flex flex-col gap-4"
                 >
-                  <FontAwesomeIcon icon={faBolt} />
+                  <AnimatePresence mode="popLayout">
+                    {activeEntities.map(entity => (
+                      <GodTaskCard
+                        key={entity.id}
+                        entity={entity}
+                        isActive={entity.id === effectiveFocusedEntity}
+                        onClick={() => handleSetFocus(entity.id)}
+                        onClose={() => handleKillEntity(entity.id)}
+                        tabs={tabs}
+                        activeTabId={activeTabId}
+                        onMoveToTab={(entityId, tabId) => {
+                          send({ event: 'entity:move', entityId, tabId })
+                          send({ event: 'tab:select', tabId })
+                        }}
+                        onMoveToNewTab={(entityId) => {
+                          send({ event: 'entity:move-to-new-tab', entityId })
+                        }}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </Reorder.Group>
+              </div>
+              {/* Action buttons - pinned to bottom */}
+              <div className="grid grid-cols-5 gap-1.5 mt-3 flex-shrink-0">
+                <button
+                  onClick={handleSpawnRandomGod}
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="New god (Ctrl+N)"
+                >
+                  <img src={claudeIcon} alt="Claude" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={handleSpawnTerminal}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New terminal (Ctrl+R)"
                 >
-                  <FontAwesomeIcon icon={faTerminal} />
+                  <FontAwesomeIcon icon={faTerminal} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => send({ event: 'nvim:spawn' })}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New nvim"
                 >
-                  <FontAwesomeIcon icon={faCode} />
+                  <img src={nvimIcon} alt="Nvim" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => handleSpawnEntity('browser')}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New browser"
                 >
-                  <FontAwesomeIcon icon={faGlobe} />
+                  <img src={browserIcon} alt="Browser" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => handleSpawnEntity('linear')}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="Linear"
                 >
-                  <FontAwesomeIcon icon={faCheckSquare} />
+                  <img src={linearIcon} alt="Linear" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => handleSpawnEntity('git')}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="Git"
                 >
-                  <FontAwesomeIcon icon={faCodeBranch} />
+                  <img src={gitIcon} alt="Git" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => handleSpawnEntity('history')}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="History"
                 >
-                  <FontAwesomeIcon icon={faClockRotateLeft} />
+                  <FontAwesomeIcon icon={faClockRotateLeft} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button
                   onClick={() => handleSpawnEntity('settings')}
-                  className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="Settings"
                 >
-                  <FontAwesomeIcon icon={faGear} />
+                  <FontAwesomeIcon icon={faGear} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('cemetery')}
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Cemetery"
+                >
+                  <FontAwesomeIcon icon={faSkull} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
               </div>
             </div>
           </div>
         )}
       </main>
+      </div>
 
       {/* Hidden gods container - keeps terminals alive when on other tabs */}
       <div className="fixed -left-[9999px] -top-[9999px] w-[800px] h-[600px] overflow-hidden pointer-events-none" aria-hidden="true">
         {hiddenGods.map(god => (
           <div key={god.id} className="w-full h-full">
-            <GodCard
-              god={god}
-              isFocused={false}
-              isHidden={true}
-              onFocus={() => {}}
-              onDoubleClick={() => {}}
-            />
+            <EntityCard entity={god} isFocused={false}>
+              <TerminalContent
+                entity={god}
+                isFocused={false}
+                isHidden={true}
+                expectedWidth={800}
+                expectedHeight={600}
+              />
+            </EntityCard>
           </div>
         ))}
       </div>
@@ -631,18 +745,16 @@ export default function App() {
         onCancel={() => setConfirmModal(null)}
       />
 
-      {/* Entity picker modal */}
-      <EntityPickerModal
-        isOpen={entityPickerOpen}
-        initialMode={entityPickerMode}
+      {/* Summon modal */}
+      <SummonModal
+        isOpen={summonModalOpen}
         usedGodNames={getAllGodNames()}
-        onSpawnGod={handleSummonGod}
-        onSpawnEntity={handleSpawnEntity}
-        onCancel={() => setEntityPickerOpen(false)}
+        onSummon={(name, task) => {
+          handleSummonGod(name, task)
+          setSummonModalOpen(false)
+        }}
+        onCancel={() => setSummonModalOpen(false)}
       />
-
-      {/* Status bar */}
-      <StatusBar connected={connected} send={send} />
 
       {/* Dev panel */}
       <DevPanel />

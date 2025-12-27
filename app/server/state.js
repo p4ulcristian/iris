@@ -25,6 +25,7 @@ export const appState = {
   theme: 'divine-void',
   focusedEntity: null,    // ID of focused entity
   gitProjects: [],        // [{path, name}]
+  cemetery: [],           // Fallen gods: [{id, name, color, voice, mission, title, banishedAt, tabName, sessionId}]
   settings: {             // App settings (API keys, etc.)
     linearApiKey: ''
   }
@@ -118,6 +119,11 @@ export function loadState() {
     appState.settings = { linearApiKey: '' }
   }
 
+  // Ensure cemetery array exists
+  if (!appState.cemetery) {
+    appState.cemetery = []
+  }
+
   // Apply settings to environment
   applySettingsToEnv()
 
@@ -198,6 +204,7 @@ export function getStateForBroadcast() {
     godColors,
     focusedEntity: appState.focusedEntity,
     gitProjects: appState.gitProjects || [],
+    cemetery: appState.cemetery || [],
     settings: {
       linearApiKey: maskApiKey(appState.settings?.linearApiKey),
       hasLinearApiKey: !!appState.settings?.linearApiKey

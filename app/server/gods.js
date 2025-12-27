@@ -1,10 +1,35 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { execSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
 
+const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
+
 // Re-export for pty.js
 export { SOCKET_DIR }
+
+// Get the most recent Claude session ID for a project
+export function getLatestSessionId(projectPath) {
+  try {
+    const projectFolder = projectPath.replace(/\//g, '-')
+    const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectFolder)
+
+    if (!fs.existsSync(projectDir)) return null
+
+    const files = fs.readdirSync(projectDir)
+      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+      .map(f => ({
+        id: f.replace('.jsonl', ''),
+        mtime: fs.statSync(path.join(projectDir, f)).mtime
+      }))
+      .sort((a, b) => b.mtime - a.mtime)
+
+    return files.length > 0 ? files[0].id : null
+  } catch {
+    return null
+  }
+}
 
 let terminalCounter = 0
 
@@ -49,15 +74,23 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   const { resumeSessionId } = options
 
   if (socketExists(godKey)) {
-    return {
-      name,
-      socketPath,
-      color: god.color,
-      voice: god.voice,
-      status: 'working',
-      exists: true
+    if (resumeSessionId) {
+      // Resurrection: kill existing socket to make room for the resumed session
+      killGodSession(godKey)
+    } else {
+      return {
+        name,
+        socketPath,
+        color: god.color,
+        voice: god.voice,
+        status: 'working',
+        exists: true
+      }
     }
   }
+
+  // Record sessions before spawn so we can detect the new one
+  const sessionsBefore = new Set(getSessionIds(projectRoot))
 
   let cmd
 
@@ -88,17 +121,44 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       }
     })
 
+    // Wait briefly for Claude to create its session file
+    execSync('sleep 0.5')
+
+    // Find the new session ID (one that wasn't there before)
+    let sessionId = resumeSessionId || null
+    if (!resumeSessionId) {
+      const sessionsAfter = getSessionIds(projectRoot)
+      sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
+    }
+
     return {
       name,
       socketPath,
       color: god.color,
       voice: god.voice,
       status: 'working',
-      mission: task || null
+      mission: task || null,
+      sessionId
     }
   } catch (e) {
     console.error('Failed to create dtach session:', e)
     return null
+  }
+}
+
+// Get all session IDs for a project
+function getSessionIds(projectPath) {
+  try {
+    const projectFolder = projectPath.replace(/\//g, '-')
+    const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectFolder)
+
+    if (!fs.existsSync(projectDir)) return []
+
+    return fs.readdirSync(projectDir)
+      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+      .map(f => f.replace('.jsonl', ''))
+  } catch {
+    return []
   }
 }
 

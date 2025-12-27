@@ -1,19 +1,53 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import {
-  faBolt, faTerminal, faGlobe, faCodeBranch,
-  faClockRotateLeft, faCheckSquare, faGear
-} from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull } from '@fortawesome/free-solid-svg-icons'
+
+// Type icons
+import claudeIcon from '../assets/icons/claude.png'
+import linearIcon from '../assets/icons/linear.png'
+import gitIcon from '../assets/icons/git.png'
+import nvimIcon from '../assets/icons/nvim.png'
+import browserIcon from '../assets/icons/browser.png'
+
+// Icon component for entity types
+function EntityIcon({ type, className = "" }) {
+  const imgClass = `w-5 h-5 object-contain ${className}`
+
+  switch (type) {
+    case 'god':
+      return <img src={claudeIcon} alt="Claude" className={imgClass} />
+    case 'linear':
+      return <img src={linearIcon} alt="Linear" className={imgClass} />
+    case 'git':
+      return <img src={gitIcon} alt="Git" className={imgClass} />
+    case 'nvim':
+      return <img src={nvimIcon} alt="Nvim" className={imgClass} />
+    case 'browser':
+      return <img src={browserIcon} alt="Browser" className={imgClass} />
+    case 'terminal':
+      return <FontAwesomeIcon icon={faTerminal} className="text-lg" />
+    case 'history':
+      return <FontAwesomeIcon icon={faClockRotateLeft} className="text-lg" />
+    case 'settings':
+      return <FontAwesomeIcon icon={faGear} className="text-lg" />
+    case 'cemetery':
+      return <FontAwesomeIcon icon={faSkull} className="text-lg" />
+    default:
+      return <FontAwesomeIcon icon={faTerminal} className="text-lg" />
+  }
+}
 
 const ENTITY_TYPES = [
-  { type: 'god', icon: faBolt, label: 'God', description: 'Claude AI assistant' },
-  { type: 'terminal', icon: faTerminal, label: 'Terminal', description: 'Raw shell session' },
-  { type: 'browser', icon: faGlobe, label: 'Browser', description: 'Web browser' },
-  { type: 'git', icon: faCodeBranch, label: 'Git', description: 'Git repository view' },
-  { type: 'history', icon: faClockRotateLeft, label: 'History', description: 'Command history' },
-  { type: 'linear', icon: faCheckSquare, label: 'Linear', description: 'Linear issues' },
-  { type: 'settings', icon: faGear, label: 'Settings', description: 'App settings' },
+  { type: 'god', label: 'God', description: 'Claude AI assistant' },
+  { type: 'terminal', label: 'Terminal', description: 'Raw shell session' },
+  { type: 'nvim', label: 'Nvim', description: 'Neovim editor' },
+  { type: 'browser', label: 'Browser', description: 'Web browser' },
+  { type: 'git', label: 'Git', description: 'Git repository view' },
+  { type: 'linear', label: 'Linear', description: 'Linear issues' },
+  { type: 'history', label: 'History', description: 'Session history' },
+  { type: 'cemetery', label: 'Cemetery', description: 'Fallen gods' },
+  { type: 'settings', label: 'Settings', description: 'App settings' },
 ]
 
 export default function EntityPickerModal({
@@ -115,7 +149,7 @@ export default function EntityPickerModal({
                   className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-left group cursor-pointer"
                 >
                   <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-white/70 group-hover:text-white group-hover:bg-white/15 transition-all">
-                    <FontAwesomeIcon icon={entity.icon} className="text-lg" />
+                    <EntityIcon type={entity.type} />
                   </div>
                   <div>
                     <div className="text-white font-medium text-sm">{entity.label}</div>

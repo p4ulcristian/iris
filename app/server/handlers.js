@@ -1,4 +1,6 @@
-import { SERVICES, REALMS } from './config.js'
+import fs from 'fs'
+import path from 'path'
+import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
 import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
@@ -15,7 +17,31 @@ const ENTITY_TYPES = {
   git: { icon: '⚙️', label: 'Git' },
   history: { icon: '📜', label: 'History' },
   linear: { icon: '✓', label: 'Linear' },
-  settings: { icon: '⚙️', label: 'Settings' }
+  settings: { icon: '⚙️', label: 'Settings' },
+  cemetery: { icon: '🪦', label: 'Cemetery' }
+}
+
+// Add a god to the cemetery before banishing
+function addToCemetery(entity) {
+  if (entity.type !== 'god') return  // Only gods go to cemetery, not terminals
+
+  const godKey = entity.id.toLowerCase()
+  const pantheonGod = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
+  const tab = appState.tabs.find(t => t.id === entity.tabId)
+
+  const fallen = {
+    id: entity.id,
+    name: entity.name || entity.id,
+    color: entity.color || pantheonGod.color,
+    voice: pantheonGod.voice,
+    mission: entity.mission || null,
+    title: entity.title || null,
+    banishedAt: Date.now(),
+    tabName: tab?.name || 'Unknown',
+    sessionId: entity.sessionId || null  // Use the entity's tracked session ID
+  }
+
+  appState.cemetery.unshift(fallen)  // Add to front (newest first)
 }
 
 function getRandomRealmName() {
@@ -51,7 +77,8 @@ export function handleMessage(ws, msg, projectRoot) {
           tabId: appState.activeTabId,
           order: entitiesInTab.length,
           mission: god.mission || null,
-          spawnedAt: Date.now()
+          spawnedAt: Date.now(),
+          sessionId: god.sessionId || null
         }
         // Auto-focus new god
         appState.focusedEntity = god.name
@@ -95,6 +122,11 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'entity:kill': {
       const entityId = data.entityId || data.godName || data.name
       const entity = appState.entities[entityId]
+
+      // Add god to cemetery before banishing
+      if (entity?.type === 'god') {
+        addToCemetery(entity)
+      }
 
       // For god/terminal types, clean up PTY
       if (entity?.type === 'god' || entity?.type === 'terminal') {
@@ -240,6 +272,11 @@ export function handleMessage(ws, msg, projectRoot) {
       Object.keys(appState.entities).forEach(id => {
         const entity = appState.entities[id]
         if (entity.tabId === tabId) {
+          // Add gods to cemetery before banishing
+          if (entity.type === 'god') {
+            addToCemetery(entity)
+          }
+
           if (entity.type === 'god' || entity.type === 'terminal') {
             if (ptyProcesses.has(id)) {
               const entry = ptyProcesses.get(id)
@@ -386,6 +423,29 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'focus:set': {
       const entityId = data.entityId || data.godName
       appState.focusedEntity = entityId || null
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'focus:next':
+    case 'focus:prev': {
+      const entitiesInTab = Object.entries(appState.entities)
+        .filter(([_, e]) => e.tabId === appState.activeTabId)
+        .sort((a, b) => a[1].order - b[1].order)
+
+      if (entitiesInTab.length === 0) break
+
+      const currentIdx = entitiesInTab.findIndex(([id]) => id === appState.focusedEntity)
+      let newIdx
+
+      if (event === 'focus:next') {
+        newIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % entitiesInTab.length
+      } else {
+        newIdx = currentIdx < 0 ? entitiesInTab.length - 1 : (currentIdx - 1 + entitiesInTab.length) % entitiesInTab.length
+      }
+
+      appState.focusedEntity = entitiesInTab[newIdx][0]
       saveState()
       broadcastState()
       break
@@ -695,6 +755,102 @@ export function handleMessage(ws, msg, projectRoot) {
 
       saveState()
       broadcastState()
+      break
+    }
+
+    // Cemetery management
+    case 'cemetery:resurrect': {
+      const { godId, sessionId, name, mission, title } = data
+      if (!sessionId) break
+
+      // Use the original god name or fall back to provided name
+      const godName = godId || name
+      if (!godName) break
+
+      // If there's an existing entity with this name, clean it up first
+      const existingEntity = appState.entities[godName]
+      if (existingEntity) {
+        // Add current god to cemetery before replacing
+        if (existingEntity.type === 'god') {
+          addToCemetery(existingEntity)
+        }
+        // Clean up PTY
+        if (ptyProcesses.has(godName)) {
+          const entry = ptyProcesses.get(godName)
+          entry.proc.kill()
+          ptyProcesses.delete(godName)
+        }
+        clearOutputBuffer(godName)
+        delete appState.entities[godName]
+      }
+
+      // Resume the session with the god's name
+      const god = createGodSession(godName, '', projectRoot, { resumeSessionId: sessionId })
+      if (god && !god.exists) {
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+        appState.entities[god.name] = {
+          id: god.name,
+          type: 'god',
+          name: god.name,
+          tabId: appState.activeTabId,
+          order: entitiesInTab.length,
+          spawnedAt: Date.now(),
+          mission: mission || null,
+          title: title || null,
+          sessionId: sessionId  // Preserve sessionId for re-banish
+        }
+        appState.focusedEntity = god.name
+
+        // Remove from cemetery
+        appState.cemetery = appState.cemetery.filter(f => f.sessionId !== sessionId)
+
+        saveState()
+        broadcastState()
+      } else if (god?.exists) {
+        ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
+      }
+      break
+    }
+
+    case 'cemetery:remove': {
+      const { sessionId } = data
+      if (!sessionId) break
+      appState.cemetery = appState.cemetery.filter(f => f.sessionId !== sessionId)
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'cemetery:clear': {
+      appState.cemetery = []
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Frontend error reporting
+    case 'error:report': {
+      const { error } = data
+      if (!error) break
+
+      // Ensure logs dir exists
+      if (!fs.existsSync(LOGS_DIR)) {
+        fs.mkdirSync(LOGS_DIR, { recursive: true })
+      }
+
+      const logFile = path.join(LOGS_DIR, 'frontend-errors.log')
+      const timestamp = new Date().toISOString()
+      const logEntry = [
+        `[${timestamp}]`,
+        `Source: ${error.source || 'unknown'}`,
+        `Message: ${error.message || 'No message'}`,
+        error.stack ? `Stack: ${error.stack}` : null,
+        error.context ? `Context: ${JSON.stringify(error.context)}` : null,
+        '---'
+      ].filter(Boolean).join('\n') + '\n'
+
+      fs.appendFileSync(logFile, logEntry)
+      console.error('[Frontend Error]', error.message, error.source ? `(${error.source})` : '')
       break
     }
 

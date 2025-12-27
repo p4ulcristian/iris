@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { reportError } from '../utils/error-reporter'
 
 export function useWebSocket(url) {
   const [connected, setConnected] = useState(false)
@@ -22,6 +23,7 @@ export function useWebSocket(url) {
         setLastMessage(data)
       } catch (e) {
         console.error('Invalid WebSocket message:', e)
+        reportError(e, 'websocket', { type: 'parse', data: event.data?.slice(0, 200) })
       }
     }
 
@@ -34,6 +36,7 @@ export function useWebSocket(url) {
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error)
+      reportError({ message: 'WebSocket connection error' }, 'websocket', { type: 'connection' })
     }
 
     wsRef.current = ws

@@ -1,13 +1,42 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical } from '@fortawesome/free-solid-svg-icons'
+
+// 3D Tilt hook - tracks mouse position and applies perspective transform
+function use3DTilt(ref, maxRotation = 12) {
+  const [transform, setTransform] = useState('')
+
+  const handleMouseMove = useCallback((e) => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const mouseX = e.clientX - centerX
+    const mouseY = e.clientY - centerY
+    // Normalize to -1 to 1 range
+    const normalizedX = mouseX / (rect.width / 2)
+    const normalizedY = mouseY / (rect.height / 2)
+    // Clamp and invert for natural feel
+    const rotateY = Math.max(-maxRotation, Math.min(maxRotation, normalizedX * maxRotation))
+    const rotateX = Math.max(-maxRotation, Math.min(maxRotation, -normalizedY * maxRotation))
+    setTransform(`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`)
+  }, [ref, maxRotation])
+
+  const handleMouseLeave = useCallback(() => {
+    setTransform('')
+  }, [])
+
+  return { transform, handleMouseMove, handleMouseLeave }
+}
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
 import linearIcon from '../assets/icons/linear.png'
 import gitIcon from '../assets/icons/git.png'
+import nvimIcon from '../assets/icons/nvim.png'
+import browserIcon from '../assets/icons/browser.png'
 
 // Convert hex to RGB for CSS (comma-separated)
 function hexToRgbCss(hex) {
@@ -43,14 +72,18 @@ function TypeIcon({ type }) {
       return <img src={linearIcon} alt="Linear" className={iconClass} />
     case 'git':
       return <img src={gitIcon} alt="Git" className={iconClass} />
+    case 'nvim':
+      return <img src={nvimIcon} alt="Nvim" className={iconClass} />
+    case 'browser':
+      return <img src={browserIcon} alt="Browser" className={iconClass} />
     case 'terminal':
       return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
-    case 'browser':
-      return <FontAwesomeIcon icon={faGlobe} className={faIconClass} size="sm" />
     case 'history':
       return <FontAwesomeIcon icon={faClockRotateLeft} className={faIconClass} size="sm" />
     case 'settings':
       return <FontAwesomeIcon icon={faGear} className={faIconClass} size="sm" />
+    case 'cemetery':
+      return <FontAwesomeIcon icon={faSkull} className={faIconClass} size="sm" />
     default:
       return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
   }
@@ -60,8 +93,19 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
+  const [isSummoning, setIsSummoning] = useState(true)
   const moveMenuRef = useRef(null)
+  const cardRef = useRef(null)
   const dragControls = useDragControls()
+
+  // 3D tilt effect on hover
+  const { transform: tiltTransform, handleMouseMove, handleMouseLeave } = use3DTilt(cardRef, 8)
+
+  // Clear summon glow after animation completes
+  useEffect(() => {
+    const timer = setTimeout(() => setIsSummoning(false), 500)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Get other tabs (tabs we can move to)
   const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
@@ -99,45 +143,72 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
   // Status: current action from hook (only show if different from title)
   const displayStatus = status && status !== displayTitle ? status : null
 
-  // Get status icon for ready state
-  const getStatusIcon = () => {
+  // Get status pill config for ready state
+  const getStatusPill = () => {
     switch (readyState) {
-      case 'done': return faCheck
-      case 'stuck': return faTriangleExclamation
-      case 'question': return faQuestion
+      case 'done': return { icon: faCheck, label: 'done', className: 'liquid-glass-pill-done' }
+      case 'stuck': return { icon: faTriangleExclamation, label: 'stuck', className: 'liquid-glass-pill-stuck' }
+      case 'question': return { icon: faQuestion, label: 'question', className: 'liquid-glass-pill-question' }
       default: return null
     }
   }
-  const statusIcon = getStatusIcon()
+  const statusPill = getStatusPill()
 
   return (
     <Reorder.Item
       value={entity}
-      dragListener={true}
+      dragListener={false}
       dragControls={dragControls}
       onClick={onClick}
-      className="group relative w-full cursor-grab active:cursor-grabbing overflow-hidden liquid-glass-god-tinted"
+      className={`group relative w-full cursor-pointer overflow-hidden liquid-glass-god-tinted ${isSummoning ? 'summon-glow' : ''}`}
       style={{
         '--god-color': entityColor,
         '--god-color-rgb': hexToRgbCss(entityColor),
         borderRadius: '12px 16px 16px 12px',
         borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
-        opacity: isActive ? 1 : 0.65,
-        transition: 'opacity 0.2s ease, border-color 0.2s ease'
+        opacity: isActive ? 1 : 0.5,
+        filter: isActive ? 'none' : 'saturate(0.6)',
+        transition: 'opacity 0.2s ease, border-color 0.2s ease, filter 0.2s ease'
       }}
-      initial={false}
+      // Summon animation - divine arrival from above
+      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
+      animate={{
+        opacity: isActive ? 1 : 0.5,
+        y: 0,
+        scale: 1,
+        filter: isActive ? 'blur(0px)' : 'saturate(0.6) blur(0px)'
+      }}
+      // Banish animation - dissolve downward
+      exit={{
+        opacity: 0,
+        y: 30,
+        scale: 0.85,
+        filter: 'blur(12px)',
+        transition: { duration: 0.25, ease: 'easeIn' }
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 25,
+        mass: 0.8
+      }}
+      layout
     >
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">
+        {/* Drag handle */}
+        <div
+          onPointerDown={(e) => dragControls.start(e)}
+          className="w-5 h-5 flex items-center justify-center text-white/30 hover:text-white/70 cursor-grab active:cursor-grabbing transition-colors touch-none"
+          title="Drag to reorder"
+        >
+          <FontAwesomeIcon icon={faGripVertical} size="sm" />
+        </div>
+
         <TypeIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
           {displayName || name}
         </span>
-        {statusIcon && (
-          <div className="w-6 h-6 flex items-center justify-center text-white/70">
-            <FontAwesomeIcon icon={statusIcon} size="xs" />
-          </div>
-        )}
 
         {/* Move to tab button */}
         <div className="relative" ref={moveMenuRef}>
@@ -215,11 +286,24 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
             {displayStatus}
           </span>
         )}
-        {/* Elapsed time */}
-        {elapsed !== null && (
-          <span className="text-xs font-mono mt-1 block text-right text-white/50">
-            {formatElapsed(elapsed)}
-          </span>
+        {/* Pills row - status & time */}
+        {(statusPill || elapsed !== null) && (
+          <div className="flex items-center justify-between mt-2 gap-2">
+            {/* Status pill */}
+            {statusPill && (
+              <span className={`liquid-glass-pill ${statusPill.className}`}>
+                <FontAwesomeIcon icon={statusPill.icon} size="xs" />
+                {statusPill.label}
+              </span>
+            )}
+            <div className="flex-1" />
+            {/* Time pill */}
+            {elapsed !== null && (
+              <span className="liquid-glass-pill text-white/70 font-mono">
+                {formatElapsed(elapsed)}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </Reorder.Item>

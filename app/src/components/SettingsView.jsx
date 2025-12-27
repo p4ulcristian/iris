@@ -1,12 +1,47 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../store'
+import { THEMES } from '../themes/generated/themes'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faEye,
   faEyeSlash,
   faCheck,
-  faExternalLink
+  faExternalLink,
+  faPalette
 } from '@fortawesome/free-solid-svg-icons'
+
+function ThemePicker({ send }) {
+  const theme = useStore(s => s.theme)
+
+  const handleSelect = (themeId) => {
+    send({ event: 'theme:set', theme: themeId })
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {THEMES.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => handleSelect(t.id)}
+          className={`px-3 py-2 text-left text-sm flex items-center gap-2 rounded-lg border transition-all ${
+            t.id === theme
+              ? 'bg-accent/20 border-accent/50 text-text-primary'
+              : 'bg-black/20 border-white/10 text-text-secondary hover:bg-black/30 hover:border-white/20'
+          }`}
+        >
+          <span
+            className="w-3 h-3 rounded-full border border-white/20 flex-shrink-0"
+            style={{ backgroundColor: t.accent }}
+          />
+          <span className="truncate">{t.label}</span>
+          {t.id === theme && (
+            <FontAwesomeIcon icon={faCheck} className="ml-auto text-accent text-xs" />
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 function SettingCard({ title, description, children }) {
   return (
@@ -114,6 +149,21 @@ export default function SettingsView({ send }) {
         <div className="mb-6">
           <h1 className="text-xl font-medium text-text-primary">Settings</h1>
           <p className="text-sm text-text-tertiary">Configure Iris integrations and preferences</p>
+        </div>
+
+        {/* Appearance section */}
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
+            Appearance
+          </h2>
+          <div className="flex flex-col gap-4">
+            <SettingCard
+              title="Theme"
+              description="Choose a color theme for the interface"
+            >
+              <ThemePicker send={send} />
+            </SettingCard>
+          </div>
         </div>
 
         {/* Integrations section */}

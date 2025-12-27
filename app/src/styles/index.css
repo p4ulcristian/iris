@@ -55,23 +55,14 @@ body {
   flex-direction: column;
 }
 
-/* Custom scrollbar */
+/* Hide all scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  display: none;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--color-bg-primary);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #444;
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
 
 /* xterm overrides - fill container height + transparency */
@@ -200,9 +191,104 @@ body {
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.2),
     0 0 20px rgba(var(--god-color-rgb), 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 2px 10px rgba(var(--god-color-rgb), 0.15);
 
   border-radius: 12px;
+
+  /* 3D tilt support */
+  transform-style: preserve-3d;
+  transition: all 0.2s ease, transform 0.15s ease-out, box-shadow 0.2s ease;
+}
+
+/* Task card shimmer animation */
+@keyframes task-card-shimmer {
+  0%, 100% {
+    background-position: 0% 0%;
+    border-color: rgba(var(--god-color-rgb), 0.2);
+  }
+  50% {
+    background-position: 100% 0%;
+    border-color: rgba(var(--god-color-rgb), 0.4);
+  }
+}
+
+/* Hover state with shimmer */
+.liquid-glass-god-tinted:hover {
+  background-color: rgba(0, 0, 0, 0.2);
+  background-image: linear-gradient(
+    90deg,
+    rgba(var(--god-color-rgb), 0) 0%,
+    rgba(var(--god-color-rgb), 0.15) 50%,
+    rgba(var(--god-color-rgb), 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: task-card-shimmer 2.5s ease-in-out infinite;
+
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(var(--god-color-rgb), 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 2px 15px rgba(var(--god-color-rgb), 0.2);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass-god-tinted {
+    transition: none;
+  }
+  .liquid-glass-god-tinted:hover {
+    animation: none;
+    background-image: none;
+  }
+}
+
+/* Liquid glass pills - small rounded indicators */
+.liquid-glass-pill {
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.liquid-glass-pill-done {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 12px rgba(34, 197, 94, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.liquid-glass-pill-stuck {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 12px rgba(239, 68, 68, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.liquid-glass-pill-question {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.3);
+  color: #facc15;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 12px rgba(234, 179, 8, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* Focused state - brighter, lifted */
@@ -218,18 +304,29 @@ body {
 
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.5),
-    0 0 60px rgba(var(--god-color-rgb), 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 
   border-radius: 16px;
 }
 
-/* Light variant for nav bars */
+/* Light variant for nav bars - transparent, no effects */
 .liquid-glass-light {
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
-  background: rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  /* intentionally empty - seamless with background */
+}
+
+/* Text treatment for liquid glass surfaces */
+.liquid-glass-text {
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 12px rgba(255, 255, 255, 0.08);
+  font-weight: 500;
+}
+
+.liquid-glass-text-muted {
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 400;
 }
 
 /* Liquid glass ready states */
@@ -290,6 +387,54 @@ body {
   transform-origin: top center;
 }
 
+/* ============================================
+   SUMMON & BANISH ANIMATIONS
+   ============================================ */
+
+/* Divine arrival glow - plays on summon */
+@keyframes divine-summon {
+  0% {
+    box-shadow:
+      0 0 0 rgba(var(--god-color-rgb), 0),
+      inset 0 0 0 rgba(var(--god-color-rgb), 0);
+  }
+  30% {
+    box-shadow:
+      0 0 40px rgba(var(--god-color-rgb), 0.6),
+      0 0 80px rgba(var(--god-color-rgb), 0.3),
+      inset 0 0 20px rgba(var(--god-color-rgb), 0.2);
+  }
+  100% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      0 0 20px rgba(var(--god-color-rgb), 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      inset 0 2px 10px rgba(var(--god-color-rgb), 0.15);
+  }
+}
+
+.summon-glow {
+  animation: divine-summon 0.5s ease-out forwards;
+}
+
+/* Banish dissolve - optional CSS fallback */
+@keyframes divine-banish {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85) translateY(30px);
+    filter: blur(12px);
+  }
+}
+
+.banish-dissolve {
+  animation: divine-banish 0.25s ease-in forwards;
+}
+
 /* View Transitions */
 ::view-transition-old(root),
 ::view-transition-new(root) {
@@ -343,132 +488,122 @@ body {
 .wallpaper .blob-1 {
   width: 50vmax;
   height: 50vmax;
-  background: var(--blob-1, #8b5cf6);
-  animation: blob-1 40s ease-in-out infinite;
+  background: var(--blob-1, #505050);
+  animation: blob-1 120s ease-in-out infinite;
 }
 
 .wallpaper .blob-2 {
   width: 45vmax;
   height: 45vmax;
-  background: var(--blob-2, #6366f1);
-  animation: blob-2 45s ease-in-out infinite;
+  background: var(--blob-2, #404040);
+  animation: blob-2 135s ease-in-out infinite;
 }
 
 .wallpaper .blob-3 {
   width: 40vmax;
   height: 40vmax;
-  background: var(--blob-3, #a855f7);
-  animation: blob-3 35s ease-in-out infinite;
+  background: var(--blob-3, #606060);
+  animation: blob-3 105s ease-in-out infinite;
 }
 
 .wallpaper .blob-4 {
   width: 35vmax;
   height: 35vmax;
-  background: var(--blob-4, #ec4899);
-  animation: blob-4 50s ease-in-out infinite;
+  background: var(--blob-4, #383838);
+  animation: blob-4 150s ease-in-out infinite;
 }
 
 @keyframes blob-1 {
-  0%, 100% { top: -15%; left: -5%; transform: scale(1) translateZ(0); }
-  50% { top: 60%; left: 50%; transform: scale(1.1) translateZ(0); }
+  0%, 100% { top: -10%; left: 0%; transform: scale(1) translateZ(0); }
+  50% { top: 0%; left: 10%; transform: scale(1.03) translateZ(0); }
 }
 
 @keyframes blob-2 {
-  0%, 100% { top: 70%; left: 80%; transform: scale(1) translateZ(0); }
-  50% { top: 10%; left: 20%; transform: scale(0.9) translateZ(0); }
+  0%, 100% { top: 60%; left: 70%; transform: scale(1) translateZ(0); }
+  50% { top: 50%; left: 60%; transform: scale(0.97) translateZ(0); }
 }
 
 @keyframes blob-3 {
-  0%, 100% { top: 50%; left: -10%; transform: scale(1) translateZ(0); }
-  50% { top: -10%; left: 70%; transform: scale(1.1) translateZ(0); }
+  0%, 100% { top: 40%; left: -5%; transform: scale(1) translateZ(0); }
+  50% { top: 30%; left: 5%; transform: scale(1.02) translateZ(0); }
 }
 
 @keyframes blob-4 {
-  0%, 100% { top: 90%; left: 30%; transform: scale(1) translateZ(0); }
-  50% { top: 20%; left: 90%; transform: scale(0.95) translateZ(0); }
+  0%, 100% { top: 70%; left: 40%; transform: scale(1) translateZ(0); }
+  50% { top: 60%; left: 50%; transform: scale(0.98) translateZ(0); }
 }
 
 .wallpaper .blob-5 {
   width: 30vmax;
   height: 30vmax;
-  background: var(--blob-5, #818cf8);
-  animation: blob-5 55s ease-in-out infinite;
+  background: var(--blob-5, #484848);
+  animation: blob-5 165s ease-in-out infinite;
 }
 
 .wallpaper .blob-6 {
   width: 25vmax;
   height: 25vmax;
-  background: var(--blob-6, #c084fc);
-  animation: blob-6 60s ease-in-out infinite;
+  background: var(--blob-6, #585858);
+  animation: blob-6 180s ease-in-out infinite;
 }
 
 @keyframes blob-5 {
-  0%, 100% { top: 30%; left: 60%; transform: scale(1) translateZ(0); }
-  50% { top: 70%; left: 10%; transform: scale(1.15) translateZ(0); }
+  0%, 100% { top: 20%; left: 50%; transform: scale(1) translateZ(0); }
+  50% { top: 25%; left: 55%; transform: scale(1.02) translateZ(0); }
 }
 
 @keyframes blob-6 {
-  0%, 100% { top: 80%; left: 50%; transform: scale(1) translateZ(0); }
-  50% { top: 20%; left: 80%; transform: scale(0.9) translateZ(0); }
+  0%, 100% { top: 75%; left: 60%; transform: scale(1) translateZ(0); }
+  50% { top: 70%; left: 65%; transform: scale(0.98) translateZ(0); }
 }
 
-/* Theme-specific blob colors */
-.theme-erebus {
-  --wallpaper-base: #050506;
-  --blob-1: #8b5cf6;
-  --blob-2: #6366f1;
-  --blob-3: #a855f7;
-  --blob-4: #7c3aed;
-  --blob-5: #818cf8;
-  --blob-6: #c084fc;
+/* Theme-specific blob colors - all neutral grays */
+.theme-obsidian {
+  --wallpaper-base: #0a0a0a;
+  --blob-1: #404040;
+  --blob-2: #303030;
+  --blob-3: #505050;
+  --blob-4: #282828;
+  --blob-5: #383838;
+  --blob-6: #484848;
 }
 
-.theme-ichor {
-  --wallpaper-base: #0c0a08;
-  --blob-1: #f59e0b;
-  --blob-2: #d97706;
-  --blob-3: #fbbf24;
-  --blob-4: #b45309;
-  --blob-5: #f59e0b;
-  --blob-6: #fcd34d;
+.theme-charcoal {
+  --wallpaper-base: #121212;
+  --blob-1: #484848;
+  --blob-2: #383838;
+  --blob-3: #585858;
+  --blob-4: #303030;
+  --blob-5: #404040;
+  --blob-6: #505050;
 }
 
-.theme-aether {
-  --wallpaper-base: #06080a;
-  --blob-1: #38bdf8;
-  --blob-2: #0ea5e9;
-  --blob-3: #7dd3fc;
-  --blob-4: #0284c7;
-  --blob-5: #38bdf8;
-  --blob-6: #bae6fd;
+.theme-slate {
+  --wallpaper-base: #161616;
+  --blob-1: #505050;
+  --blob-2: #404040;
+  --blob-3: #606060;
+  --blob-4: #383838;
+  --blob-5: #484848;
+  --blob-6: #585858;
 }
 
-.theme-morpheus {
-  --wallpaper-base: #08060c;
-  --blob-1: #a855f7;
-  --blob-2: #9333ea;
-  --blob-3: #c084fc;
-  --blob-4: #7c3aed;
-  --blob-5: #a855f7;
-  --blob-6: #d8b4fe;
+.theme-graphite {
+  --wallpaper-base: #1c1c1c;
+  --blob-1: #585858;
+  --blob-2: #484848;
+  --blob-3: #686868;
+  --blob-4: #404040;
+  --blob-5: #505050;
+  --blob-6: #606060;
 }
 
-.theme-adamant {
-  --wallpaper-base: #08080a;
-  --blob-1: #64748b;
-  --blob-2: #475569;
-  --blob-3: #94a3b8;
-  --blob-4: #334155;
-  --blob-5: #64748b;
-  --blob-6: #cbd5e1;
-}
-
-.theme-divine-void {
-  --wallpaper-base: #0a0a0f;
-  --blob-1: #8b5cf6;
-  --blob-2: #6366f1;
-  --blob-3: #a78bfa;
-  --blob-4: #4f46e5;
-  --blob-5: #818cf8;
-  --blob-6: #c4b5fd;
+.theme-ash {
+  --wallpaper-base: #202020;
+  --blob-1: #606060;
+  --blob-2: #505050;
+  --blob-3: #707070;
+  --blob-4: #484848;
+  --blob-5: #585858;
+  --blob-6: #686868;
 }

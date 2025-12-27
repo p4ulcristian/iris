@@ -1,6 +1,43 @@
 import { useState, useRef, useEffect } from 'react'
 import { useStore } from '../store'
-import { THEMES } from '../themes/generated/themes'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  faCircle,
+  faKeyboard,
+  faEarListen,
+  faVolumeHigh,
+  faCommentDots,
+  faChevronDown,
+  faXmark,
+  faPlus,
+  faBolt,
+  faSun,
+  faSkull,
+  faScaleBalanced,
+  faHammer,
+  faTree,
+  faWater,
+  faBuildingColumns,
+  faCity,
+  faWineGlass,
+  faCompass,
+  faEye
+} from '@fortawesome/free-solid-svg-icons'
+
+const REALM_ICONS = {
+  'Olympus': faBolt,
+  'Elysium': faSun,
+  'Tartarus': faSkull,
+  'Agora': faScaleBalanced,
+  'Forge': faHammer,
+  'Grove': faTree,
+  'Styx': faWater,
+  'Temple': faBuildingColumns,
+  'Acropolis': faCity,
+  'Nectar Hall': faWineGlass,
+  'Labyrinth': faCompass,
+  'Oracle': faEye
+}
 
 function Spinner() {
   return (
@@ -8,60 +45,9 @@ function Spinner() {
   )
 }
 
-function ServiceIndicator({ name, serviceKey, active, loading, icon, onToggle }) {
-  const isDisabled = loading
-
-  return (
-    <button
-      onClick={() => !isDisabled && onToggle(serviceKey, active)}
-      disabled={isDisabled}
-      className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
-        loading
-          ? 'text-yellow-400 cursor-wait'
-          : active
-            ? 'text-green-400 hover:bg-green-400/10'
-            : 'text-text-tertiary hover:bg-bg-tertiary'
-      }`}
-      title={
-        loading
-          ? `${name}: Starting...`
-          : `${name}: ${active ? 'Online - Click to stop' : 'Offline - Click to start'}`
-      }
-    >
-      {loading ? (
-        <Spinner />
-      ) : (
-        <span className={active ? '' : 'opacity-50'}>{icon}</span>
-      )}
-      <span className={active ? '' : loading ? '' : 'line-through opacity-50'}>{name}</span>
-    </button>
-  )
-}
-
-
-function DevToggle() {
-  const devPanelOpen = useStore(s => s.devPanelOpen)
-  const toggleDevPanel = useStore(s => s.toggleDevPanel)
-
-  return (
-    <button
-      onClick={toggleDevPanel}
-      className={`px-2 py-0.5 rounded text-xs transition-colors ${
-        devPanelOpen
-          ? 'text-accent bg-accent/10'
-          : 'text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary'
-      }`}
-      title="Toggle Dev Panel (Ctrl+D)"
-    >
-      Dev
-    </button>
-  )
-}
-
-function ThemePicker({ send }) {
+function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
-  const theme = useStore(s => s.theme)
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -75,55 +61,76 @@ function ThemePicker({ send }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  const currentTheme = THEMES.find(t => t.id === theme) || THEMES[0]
+  const serviceList = [
+    { name: 'Wake', key: 'wake', icon: faKeyboard },
+    { name: 'Hear', key: 'hear', icon: faEarListen },
+    { name: 'Speak', key: 'speak', icon: faVolumeHigh },
+    { name: 'Express', key: 'express', icon: faCommentDots },
+  ]
 
-  const handleSelect = (themeId) => {
-    send({ event: 'theme:set', theme: themeId })
-    setOpen(false)
-  }
+  const activeCount = serviceList.filter(s => services[s.key]).length
 
   return (
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-0.5 rounded text-xs hover:bg-bg-tertiary transition-colors"
-        title="Change theme"
+        className="w-8 h-8 flex items-center justify-center liquid-glass-pill liquid-glass-text-muted transition-all"
+        title={`Services (${activeCount}/4)`}
       >
-        <span
-          className="w-3 h-3 rounded-full border border-white/20"
-          style={{ backgroundColor: currentTheme.accent }}
+        <FontAwesomeIcon
+          icon={faCircle}
+          className={`text-[8px] ${connected ? 'text-green-500' : 'text-red-500'}`}
         />
-        <span>{currentTheme.label}</span>
-        <span className="text-text-tertiary">▾</span>
       </button>
 
       {open && (
-        <div className="absolute bottom-full right-0 mb-1 min-w-[140px] bg-bg-secondary border border-border rounded shadow-lg py-1 z-50">
-          {THEMES.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => handleSelect(t.id)}
-              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-colors ${
-                t.id === theme
-                  ? 'bg-bg-tertiary text-text-primary'
-                  : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
-              }`}
-            >
-              <span
-                className="w-3 h-3 rounded-full border border-white/20"
-                style={{ backgroundColor: t.accent }}
-              />
-              <span>{t.label}</span>
-              {t.id === theme && <span className="ml-auto">✓</span>}
-            </button>
-          ))}
+        <div className="absolute left-full bottom-0 ml-1 min-w-[160px] liquid-glass rounded-lg shadow-lg py-1 z-50">
+          {serviceList.map((service) => {
+            const isActive = services[service.key]
+            const isLoading = servicesLoading[service.key]
+
+            return (
+              <button
+                key={service.key}
+                onClick={() => !isLoading && onToggle(service.key, isActive)}
+                disabled={isLoading}
+                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-all ${
+                  isLoading
+                    ? 'text-yellow-400 cursor-wait'
+                    : isActive
+                      ? 'liquid-glass-text hover:bg-white/5'
+                      : 'liquid-glass-text-muted hover:bg-white/5'
+                }`}
+              >
+                {isLoading ? (
+                  <Spinner />
+                ) : (
+                  <FontAwesomeIcon
+                    icon={service.icon}
+                    className={`text-[10px] w-3 ${isActive ? 'text-green-400' : 'opacity-50'}`}
+                  />
+                )}
+                <span className={isActive ? '' : isLoading ? '' : 'opacity-60'}>{service.name}</span>
+                {isActive && !isLoading && <span className="ml-auto text-green-400">✓</span>}
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
-export default function StatusBar({ connected, send }) {
+export default function StatusBar({
+  connected,
+  send,
+  tabs,
+  activeTabId,
+  onTabSelect,
+  onTabClose,
+  onTabNew,
+  getEntitiesForTab
+}) {
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
@@ -154,62 +161,67 @@ export default function StatusBar({ connected, send }) {
   }
 
   return (
-    <footer className="flex items-center h-8 px-4 liquid-glass-light border-t border-white/10 text-xs text-text-secondary">
-      {/* Connection status */}
-      <div className="flex items-center gap-1.5">
-        <span className={connected ? 'text-green-500' : 'text-red-500'}>
-          {connected ? '●' : '○'}
-        </span>
-        <span>{connected ? 'Connected' : 'Disconnected'}</span>
-      </div>
+    <aside className="flex flex-col items-center w-10 pt-8 pb-2 liquid-glass-light gap-1 z-20 overflow-visible">
+      {/* Tabs */}
+      <div className="flex flex-col items-center gap-1 overflow-visible">
+        {tabs?.map((tab, idx) => {
+          const isActive = activeTabId === tab.id
+          const realmIcon = REALM_ICONS[tab.name]
 
-      {/* Services */}
-      <div className="flex items-center gap-1 ml-4 border-l border-border pl-4">
-        <ServiceIndicator
-          name="Wake"
-          serviceKey="wake"
-          active={services.wake}
-          loading={servicesLoading.wake}
-          icon="⌨️"
-          onToggle={handleServiceToggle}
-        />
-        <ServiceIndicator
-          name="Hear"
-          serviceKey="hear"
-          active={services.hear}
-          loading={servicesLoading.hear}
-          icon="👂"
-          onToggle={handleServiceToggle}
-        />
-        <ServiceIndicator
-          name="Speak"
-          serviceKey="speak"
-          active={services.speak}
-          loading={servicesLoading.speak}
-          icon="🔊"
-          onToggle={handleServiceToggle}
-        />
-        <ServiceIndicator
-          name="Express"
-          serviceKey="express"
-          active={services.express}
-          loading={servicesLoading.express}
-          icon="💬"
-          onToggle={handleServiceToggle}
-        />
+          return (
+            <button
+              key={tab.id}
+              onClick={() => onTabSelect(tab.id)}
+              className={`
+                group relative w-8 h-8 flex items-center justify-center transition-all
+                ${isActive
+                  ? 'liquid-glass-pill liquid-glass-text'
+                  : 'liquid-glass-text-muted hover:bg-white/5 rounded-lg'
+                }
+              `}
+              title={`${tab.name} (Alt+${idx + 1})`}
+            >
+              {realmIcon && (
+                <FontAwesomeIcon
+                  icon={realmIcon}
+                  className={`text-xs ${isActive ? 'text-accent' : 'opacity-50'}`}
+                />
+              )}
+              {tabs.length > 1 && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onTabClose(tab.id)
+                  }}
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all cursor-pointer"
+                >
+                  <FontAwesomeIcon icon={faXmark} className="text-[10px]" />
+                </span>
+              )}
+            </button>
+          )
+        })}
+
+        {/* Add tab button */}
+        <button
+          onClick={onTabNew}
+          className="w-8 h-8 flex items-center justify-center liquid-glass-text-muted hover:bg-white/10 rounded-lg transition-all"
+          title="New tab (Alt+N)"
+        >
+          <FontAwesomeIcon icon={faPlus} className="text-xs" />
+        </button>
       </div>
 
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Theme picker */}
-      <ThemePicker send={send} />
-
-      {/* Divider */}
-      <div className="w-px h-4 bg-border mx-2" />
-
-      {/* Dev panel toggle */}
-      <DevToggle />
-    </footer>
+      {/* Services dropdown */}
+      <ServicesDropdown
+        connected={connected}
+        services={services}
+        servicesLoading={servicesLoading}
+        onToggle={handleServiceToggle}
+      />
+    </aside>
   )
 }

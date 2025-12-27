@@ -43,6 +43,9 @@ const initialState = {
   // Git projects
   gitProjects: [],
 
+  // Cemetery - fallen gods
+  cemetery: [],
+
   // Settings
   settings: {},
 }
@@ -321,6 +324,11 @@ export const useStore = create(
         // Sync git projects
         if (serverState.gitProjects !== undefined) {
           state.gitProjects = serverState.gitProjects
+        }
+
+        // Sync cemetery
+        if (serverState.cemetery !== undefined) {
+          state.cemetery = serverState.cemetery
         }
 
         // Sync settings
