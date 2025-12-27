@@ -71,7 +71,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
   const socketPath = getSocketPath(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId } = options
+  const { resumeSessionId, startPrompt, userName } = options
 
   if (socketExists(godKey)) {
     if (resumeSessionId) {
@@ -100,7 +100,16 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   } else {
     // Build init prompt with god identity
     const identity = `You are ${name}. Voice: ${god.voice}.`
-    const initPrompt = task ? `${task}\n\n${identity}` : identity
+
+    // Combine: startPrompt (if any) + task + identity
+    let initPrompt = ''
+    if (startPrompt) {
+      initPrompt += startPrompt + '\n\n'
+    }
+    if (task) {
+      initPrompt += task + '\n\n'
+    }
+    initPrompt += identity
 
     // Build command - use $'...' syntax for real newlines
     const escapedPrompt = initPrompt.replace(/\\/g, '\\\\').replace(/'/g, "\\'")

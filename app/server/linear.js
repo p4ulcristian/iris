@@ -141,6 +141,111 @@ export async function getIssue(id) {
   return issue
 }
 
+export async function getTeams() {
+  const query = `
+    query Teams {
+      teams {
+        nodes {
+          id
+          name
+          key
+        }
+      }
+    }
+  `
+  const data = await graphql(query)
+  return data.teams.nodes
+}
+
+export async function getStates(teamId) {
+  const query = `
+    query WorkflowStates($teamId: String!) {
+      team(id: $teamId) {
+        states {
+          nodes {
+            id
+            name
+            type
+            color
+            position
+          }
+        }
+      }
+    }
+  `
+  const data = await graphql(query, { teamId })
+  return data.team.states.nodes.sort((a, b) => a.position - b.position)
+}
+
+export async function updateIssueStatus(issueId, stateId) {
+  const mutation = `
+    mutation UpdateIssue($issueId: String!, $stateId: String!) {
+      issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+        success
+        issue {
+          id
+          state {
+            id
+            name
+            type
+          }
+        }
+      }
+    }
+  `
+  const data = await graphql(mutation, { issueId, stateId })
+  return data.issueUpdate
+}
+
+export async function createIssue({ title, teamId, description, priority }) {
+  const mutation = `
+    mutation CreateIssue($title: String!, $teamId: String!, $description: String, $priority: Int) {
+      issueCreate(input: {
+        title: $title
+        teamId: $teamId
+        description: $description
+        priority: $priority
+      }) {
+        success
+        issue {
+          id
+          identifier
+          title
+          url
+          state {
+            id
+            name
+            type
+          }
+        }
+      }
+    }
+  `
+  const data = await graphql(mutation, { title, teamId, description, priority })
+  return data.issueCreate
+}
+
+export async function addComment(issueId, body) {
+  const mutation = `
+    mutation AddComment($issueId: String!, $body: String!) {
+      commentCreate(input: { issueId: $issueId, body: $body }) {
+        success
+        comment {
+          id
+          body
+          createdAt
+          user {
+            id
+            name
+          }
+        }
+      }
+    }
+  `
+  const data = await graphql(mutation, { issueId, body })
+  return data.commentCreate
+}
+
 export function isConfigured() {
   return !!getApiKey()
 }

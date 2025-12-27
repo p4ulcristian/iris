@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
@@ -134,6 +134,12 @@ ipcMain.handle('select-folder', async () => {
     title: 'Select Project Folder'
   })
   return result.canceled ? null : result.filePaths[0]
+})
+
+ipcMain.handle('open-external', async (_, url) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    await shell.openExternal(url)
+  }
 })
 
 app.whenReady().then(() => {

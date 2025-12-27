@@ -7,7 +7,10 @@ import {
   faEyeSlash,
   faCheck,
   faExternalLink,
-  faPalette
+  faPalette,
+  faCalendar,
+  faLink,
+  faUnlink
 } from '@fortawesome/free-solid-svg-icons'
 
 function ThemePicker({ send }) {
@@ -45,12 +48,187 @@ function ThemePicker({ send }) {
 
 function SettingCard({ title, description, children }) {
   return (
-    <div className="bg-black/20 border border-white/10 rounded-xl p-4">
+    <div className="bg-black/20 border border-white/10 rounded-xl p-4 border-l-2 border-l-[#C0C0C0]">
       <h3 className="text-sm font-medium text-text-primary mb-1">{title}</h3>
       {description && (
         <p className="text-xs text-text-tertiary mb-3">{description}</p>
       )}
       {children}
+    </div>
+  )
+}
+
+function TextInput({ label, value, onSave, placeholder, helpText, multiline = false }) {
+  const [inputValue, setInputValue] = useState(value || '')
+  const [saved, setSaved] = useState(false)
+  const hasChanged = inputValue !== (value || '')
+
+  useEffect(() => {
+    setInputValue(value || '')
+  }, [value])
+
+  const handleSave = () => {
+    if (hasChanged) {
+      onSave(inputValue)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !multiline) {
+      handleSave()
+    }
+  }
+
+  const inputClass = `w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent/50 ${multiline ? 'min-h-[100px] resize-y' : ''}`
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-xs text-text-secondary">{label}</label>
+      <div className="flex gap-2">
+        <div className="flex-1">
+          {multiline ? (
+            <textarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder={placeholder}
+              className={inputClass}
+            />
+          ) : (
+            <input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className={inputClass}
+            />
+          )}
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={!hasChanged}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors self-start ${
+            saved
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+              : hasChanged
+                ? 'bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30'
+                : 'bg-black/30 text-text-tertiary border border-white/10 cursor-not-allowed'
+          }`}
+        >
+          {saved ? (
+            <>
+              <FontAwesomeIcon icon={faCheck} className="mr-1" />
+              Saved
+            </>
+          ) : (
+            'Save'
+          )}
+        </button>
+      </div>
+      {helpText && (
+        <p className="text-xs text-text-tertiary">{helpText}</p>
+      )}
+    </div>
+  )
+}
+
+function GoogleCalendarConnect({ send, settings }) {
+  const [connecting, setConnecting] = useState(false)
+  const calendarSettings = settings?.googleCalendar || {}
+  const isConnected = calendarSettings.connected
+  const hasCredentials = settings?.hasGoogleClientId && settings?.hasGoogleClientSecret
+
+  useEffect(() => {
+    // Listen for auth URL response
+    const handleMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.event === 'calendar:auth:url') {
+          // Open OAuth URL in external browser
+          window.open(data.url, '_blank')
+          setConnecting(false)
+        } else if (data.event === 'calendar:error') {
+          console.error('Calendar error:', data.error)
+          setConnecting(false)
+        }
+      } catch (e) {}
+    }
+
+    if (window.__irisWs) {
+      window.__irisWs.addEventListener('message', handleMessage)
+      return () => window.__irisWs.removeEventListener('message', handleMessage)
+    }
+  }, [])
+
+  const handleConnect = () => {
+    setConnecting(true)
+    send({ event: 'calendar:auth:start' })
+  }
+
+  const handleDisconnect = () => {
+    send({ event: 'calendar:disconnect' })
+  }
+
+  const handleSaveClientId = (value) => {
+    send({ event: 'settings:update', key: 'googleClientId', value })
+  }
+
+  const handleSaveClientSecret = (value) => {
+    send({ event: 'settings:update', key: 'googleClientSecret', value })
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <ApiKeyInput
+        label="Client ID"
+        maskedValue={settings?.googleClientId}
+        hasValue={settings?.hasGoogleClientId}
+        onSave={handleSaveClientId}
+        helpUrl="https://console.cloud.google.com/apis/credentials"
+        helpText="Get OAuth credentials from Google Cloud Console"
+      />
+      <ApiKeyInput
+        label="Client Secret"
+        maskedValue={settings?.googleClientSecret}
+        hasValue={settings?.hasGoogleClientSecret}
+        onSave={handleSaveClientSecret}
+      />
+
+      <div className="pt-2 border-t border-white/10">
+        {isConnected ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              <span className="text-sm text-text-primary">
+                Connected as <strong>{calendarSettings.email}</strong>
+              </span>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              className="px-3 py-1.5 rounded-lg text-sm bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors flex items-center gap-2"
+            >
+              <FontAwesomeIcon icon={faUnlink} />
+              Disconnect
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-text-tertiary">
+              {hasCredentials ? 'Ready to connect' : 'Enter credentials above first'}
+            </span>
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !hasCredentials}
+              className="px-3 py-1.5 rounded-lg text-sm bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FontAwesomeIcon icon={faLink} />
+              {connecting ? 'Opening...' : 'Connect'}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -121,15 +299,13 @@ function ApiKeyInput({ label, value, maskedValue, hasValue, onSave, helpUrl, hel
         </button>
       </div>
       {helpUrl && (
-        <a
-          href={helpUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-accent hover:underline flex items-center gap-1"
+        <button
+          onClick={() => window.iris?.openExternal(helpUrl)}
+          className="text-xs text-accent hover:underline flex items-center gap-1 text-left"
         >
           {helpText || 'Get your API key'}
           <FontAwesomeIcon icon={faExternalLink} className="text-[10px]" />
-        </a>
+        </button>
       )}
     </div>
   )
@@ -142,6 +318,14 @@ export default function SettingsView({ send }) {
     send({ event: 'settings:update', key: 'linearApiKey', value })
   }
 
+  const handleSaveUserName = (value) => {
+    send({ event: 'settings:update', key: 'userName', value })
+  }
+
+  const handleSaveStartPrompt = (value) => {
+    send({ event: 'settings:update', key: 'startPrompt', value })
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-2xl mx-auto">
@@ -149,6 +333,41 @@ export default function SettingsView({ send }) {
         <div className="mb-6">
           <h1 className="text-xl font-medium text-text-primary">Settings</h1>
           <p className="text-sm text-text-tertiary">Configure Iris integrations and preferences</p>
+        </div>
+
+        {/* Gods section */}
+        <div className="mb-8">
+          <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider mb-3">
+            Gods
+          </h2>
+          <div className="flex flex-col gap-4">
+            <SettingCard
+              title="Your Name"
+              description="How gods will address you"
+            >
+              <TextInput
+                label="Name"
+                value={settings.userName}
+                onSave={handleSaveUserName}
+                placeholder="Paul"
+                helpText="Gods will use this name when speaking to you"
+              />
+            </SettingCard>
+
+            <SettingCard
+              title="Start Prompt"
+              description="Additional instructions prepended when spawning gods"
+            >
+              <TextInput
+                label="Custom instructions"
+                value={settings.startPrompt}
+                onSave={handleSaveStartPrompt}
+                placeholder="Be concise. Always verify before making changes..."
+                helpText="This text is added to every god's initial prompt"
+                multiline
+              />
+            </SettingCard>
+          </div>
         </div>
 
         {/* Appearance section */}
@@ -184,6 +403,13 @@ export default function SettingsView({ send }) {
                 helpUrl="https://linear.app/settings/api"
                 helpText="Get your Linear API key"
               />
+            </SettingCard>
+
+            <SettingCard
+              title="Google Calendar"
+              description="Connect to Google Calendar to view and create events"
+            >
+              <GoogleCalendarConnect send={send} settings={settings} />
             </SettingCard>
           </div>
         </div>

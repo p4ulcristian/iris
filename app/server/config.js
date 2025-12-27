@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export const WS_PORT = 9999
+export const OAUTH_PORT = 9998
 export const DATA_DIR = path.join(os.homedir(), '.local/share/iris')
 export const SOCKET_DIR = path.join(DATA_DIR, 'sockets')
 export const STATE_FILE = path.join(DATA_DIR, 'state.json')

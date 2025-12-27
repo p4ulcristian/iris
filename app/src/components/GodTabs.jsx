@@ -41,7 +41,7 @@ export default function GodTabs({ gods, activeGod, onSelect, onClose, onSummon, 
                 e.stopPropagation()
                 onClose(god.name)
               }}
-              className="w-4 h-4 flex items-center justify-center text-text-secondary text-sm opacity-0 hover:opacity-100 hover:bg-white/10 hover:text-red-500 rounded transition-all group-hover:opacity-100"
+              className="w-4 h-4 flex items-center justify-center text-text-secondary text-sm opacity-0 hover:opacity-100 hover:bg-white/10 hover:text-red-500 rounded transition-all group-hover:opacity-100 cursor-pointer"
               title="Banish"
             >
               ×

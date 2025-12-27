@@ -13,13 +13,14 @@ import GitView from './components/GitView'
 import LinearView from './components/LinearView'
 import SettingsView from './components/SettingsView'
 import CemeteryView from './components/CemeteryView'
+import CalendarView from './components/CalendarView'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus, faCalendar } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from './assets/icons/claude.png'
@@ -228,7 +229,7 @@ export default function App() {
     send({ event: 'entity:spawn', type, ...data })
   }, [send])
 
-  // Kill current tab (with confirmation)
+  // Kill current tab (with confirmation if not empty)
   const handleKillTab = useCallback((tabId = activeTabId) => {
     const tab = tabs.find(t => t.id === tabId)
     if (!tab) return
@@ -237,6 +238,12 @@ export default function App() {
 
     if (tabs.length === 1 && tabEntities.length === 0) {
       return // Don't close last empty tab
+    }
+
+    // Empty tab - close immediately without confirmation
+    if (tabEntities.length === 0) {
+      send({ event: 'tab:remove', tabId })
+      return
     }
 
     const godCount = tabEntities.filter(e => e.type === 'god' || e.type === 'terminal').length
@@ -596,6 +603,9 @@ export default function App() {
                           {entity.type === 'cemetery' && (
                             <CemeteryView send={send} />
                           )}
+                          {entity.type === 'calendar' && (
+                            <CalendarView send={send} />
+                          )}
                         </EntityCard>
                       )}
                     </motion.div>
@@ -676,6 +686,14 @@ export default function App() {
                   title="Linear"
                 >
                   <img src={linearIcon} alt="Linear" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('calendar')}
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Calendar"
+                >
+                  <FontAwesomeIcon icon={faCalendar} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
                   <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button

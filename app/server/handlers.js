@@ -8,6 +8,7 @@ import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuff
 import { listSessions } from './history.js'
 import * as git from './git.js'
 import * as linear from './linear.js'
+import * as calendar from './calendar.js'
 
 // Entity type definitions with display info
 const ENTITY_TYPES = {
@@ -17,6 +18,7 @@ const ENTITY_TYPES = {
   git: { icon: '⚙️', label: 'Git' },
   history: { icon: '📜', label: 'History' },
   linear: { icon: '✓', label: 'Linear' },
+  calendar: { icon: '📅', label: 'Calendar' },
   settings: { icon: '⚙️', label: 'Settings' },
   cemetery: { icon: '🪦', label: 'Cemetery' }
 }
@@ -67,7 +69,20 @@ export function handleMessage(ws, msg, projectRoot) {
   switch (event) {
     // God lifecycle
     case 'god:spawn': {
-      const god = createGodSession(data.name, data.task, projectRoot)
+      // If no name provided, pick a random available god from pantheon
+      let godName = data.name
+      if (!godName) {
+        const pantheonNames = Object.keys(PANTHEON)
+        const usedNames = new Set(Object.keys(appState.entities).map(n => n.toLowerCase()))
+        const available = pantheonNames.filter(n => !usedNames.has(n))
+        godName = available.length > 0
+          ? available[Math.floor(Math.random() * available.length)]
+          : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
+      }
+      const god = createGodSession(godName, data.task, projectRoot, {
+        startPrompt: appState.settings?.startPrompt,
+        userName: appState.settings?.userName
+      })
       if (god && !god.exists) {
         const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[god.name] = {
@@ -733,6 +748,239 @@ export function handleMessage(ws, msg, projectRoot) {
         }))
       }).catch(err => {
         ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:teams:fetch': {
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({ event: 'linear:error', error: 'LINEAR_API_KEY not configured' }))
+        break
+      }
+
+      linear.getTeams().then(teams => {
+        ws.send(JSON.stringify({ event: 'linear:teams:response', teams }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:states:fetch': {
+      const { teamId } = data
+      if (!teamId) break
+
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({ event: 'linear:error', error: 'LINEAR_API_KEY not configured' }))
+        break
+      }
+
+      linear.getStates(teamId).then(states => {
+        ws.send(JSON.stringify({ event: 'linear:states:response', teamId, states }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:issue:update-status': {
+      const { issueId, stateId } = data
+      if (!issueId || !stateId) break
+
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({ event: 'linear:error', error: 'LINEAR_API_KEY not configured' }))
+        break
+      }
+
+      linear.updateIssueStatus(issueId, stateId).then(result => {
+        ws.send(JSON.stringify({ event: 'linear:issue:updated', ...result }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:issue:create': {
+      const { title, teamId, description, priority } = data
+      if (!title || !teamId) break
+
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({ event: 'linear:error', error: 'LINEAR_API_KEY not configured' }))
+        break
+      }
+
+      linear.createIssue({ title, teamId, description, priority }).then(result => {
+        ws.send(JSON.stringify({ event: 'linear:issue:created', ...result }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'linear:comment:create': {
+      const { issueId, body } = data
+      if (!issueId || !body) break
+
+      if (!linear.isConfigured()) {
+        ws.send(JSON.stringify({ event: 'linear:error', error: 'LINEAR_API_KEY not configured' }))
+        break
+      }
+
+      linear.addComment(issueId, body).then(result => {
+        ws.send(JSON.stringify({ event: 'linear:comment:created', issueId, ...result }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'linear:error', error: err.message }))
+      })
+      break
+    }
+
+    // Calendar management
+    case 'calendar:status': {
+      const info = calendar.getConnectionInfo()
+      ws.send(JSON.stringify({ event: 'calendar:status:response', ...info }))
+      break
+    }
+
+    case 'calendar:auth:start': {
+      if (!calendar.isConfigured()) {
+        ws.send(JSON.stringify({
+          event: 'calendar:error',
+          error: 'Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.'
+        }))
+        break
+      }
+
+      try {
+        const authUrl = calendar.getAuthUrl()
+        ws.send(JSON.stringify({ event: 'calendar:auth:url', url: authUrl }))
+      } catch (err) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      }
+      break
+    }
+
+    case 'calendar:auth:callback': {
+      const { code } = data
+      if (!code) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'No authorization code provided' }))
+        break
+      }
+
+      calendar.handleAuthCallback(code).then(result => {
+        ws.send(JSON.stringify({ event: 'calendar:auth:success', ...result }))
+        broadcastState()
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:disconnect': {
+      calendar.disconnect()
+      ws.send(JSON.stringify({ event: 'calendar:disconnected' }))
+      broadcastState()
+      break
+    }
+
+    case 'calendar:events:fetch': {
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({
+          event: 'calendar:error',
+          error: 'Google Calendar not connected. Connect in Settings.'
+        }))
+        break
+      }
+
+      const { timeMin, timeMax, calendarId } = data
+      calendar.listEvents(timeMin, timeMax, calendarId).then(events => {
+        ws.send(JSON.stringify({ event: 'calendar:events:response', events }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:event:get': {
+      const { eventId, calendarId } = data
+      if (!eventId) break
+
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Google Calendar not connected' }))
+        break
+      }
+
+      calendar.getEvent(eventId, calendarId).then(event => {
+        ws.send(JSON.stringify({ event: 'calendar:event:response', calendarEvent: event }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:event:create': {
+      const { summary, start, end, description, location, calendarId } = data
+      if (!summary || !start) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Summary and start time required' }))
+        break
+      }
+
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Google Calendar not connected' }))
+        break
+      }
+
+      calendar.createEvent({ summary, start, end, description, location }, calendarId).then(event => {
+        ws.send(JSON.stringify({ event: 'calendar:event:created', calendarEvent: event }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:event:update': {
+      const { eventId, updates, calendarId } = data
+      if (!eventId) break
+
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Google Calendar not connected' }))
+        break
+      }
+
+      calendar.updateEvent(eventId, updates, calendarId).then(event => {
+        ws.send(JSON.stringify({ event: 'calendar:event:updated', calendarEvent: event }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:event:delete': {
+      const { eventId, calendarId } = data
+      if (!eventId) break
+
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Google Calendar not connected' }))
+        break
+      }
+
+      calendar.deleteEvent(eventId, calendarId).then(() => {
+        ws.send(JSON.stringify({ event: 'calendar:event:deleted', eventId }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
+      })
+      break
+    }
+
+    case 'calendar:calendars:fetch': {
+      if (!calendar.isConnected()) {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: 'Google Calendar not connected' }))
+        break
+      }
+
+      calendar.listCalendars().then(calendars => {
+        ws.send(JSON.stringify({ event: 'calendar:calendars:response', calendars }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ event: 'calendar:error', error: err.message }))
       })
       break
     }

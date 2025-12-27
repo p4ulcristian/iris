@@ -6,5 +6,7 @@ contextBridge.exposeInMainWorld('iris', {
   windowControl: (action) => ipcRenderer.send('window-control', action),
   isFullscreen: () => ipcRenderer.invoke('window-is-fullscreen'),
   // File dialogs
-  selectFolder: () => ipcRenderer.invoke('select-folder')
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+  // External links
+  openExternal: (url) => ipcRenderer.invoke('open-external', url)
 })

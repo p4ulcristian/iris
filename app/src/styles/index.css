@@ -224,12 +224,6 @@ body {
   );
   background-size: 200% 100%;
   animation: task-card-shimmer 2.5s ease-in-out infinite;
-
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.3),
-    0 0 30px rgba(var(--god-color-rgb), 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 2px 15px rgba(var(--god-color-rgb), 0.2);
 }
 
 /* Reduced motion support */

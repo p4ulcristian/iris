@@ -9,15 +9,19 @@ import {
   faArrowDown,
   faMinus,
   faExternalLink,
-  faFilter
+  faFilter,
+  faPlus,
+  faBolt,
+  faPaperPlane,
+  faChevronDown,
+  faTimes
 } from '@fortawesome/free-solid-svg-icons'
 
 const STATUS_CONFIG = {
   'backlog': { color: 'text-gray-400', bg: 'bg-gray-500/20', label: 'Backlog' },
-  'todo': { color: 'text-gray-400', bg: 'bg-gray-500/20', label: 'Todo' },
-  'in_progress': { color: 'text-yellow-400', bg: 'bg-yellow-500/20', label: 'In Progress' },
-  'in review': { color: 'text-blue-400', bg: 'bg-blue-500/20', label: 'In Review' },
-  'done': { color: 'text-green-400', bg: 'bg-green-500/20', label: 'Done' },
+  'unstarted': { color: 'text-gray-400', bg: 'bg-gray-500/20', label: 'Todo' },
+  'started': { color: 'text-yellow-400', bg: 'bg-yellow-500/20', label: 'In Progress' },
+  'completed': { color: 'text-green-400', bg: 'bg-green-500/20', label: 'Done' },
   'canceled': { color: 'text-red-400', bg: 'bg-red-500/20', label: 'Canceled' },
   'cancelled': { color: 'text-red-400', bg: 'bg-red-500/20', label: 'Cancelled' },
 }
@@ -31,8 +35,8 @@ const PRIORITY_CONFIG = {
 }
 
 function IssueCard({ issue, isSelected, onSelect }) {
-  const statusKey = issue.state?.type?.toLowerCase() || issue.state?.name?.toLowerCase() || 'todo'
-  const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG['todo']
+  const statusKey = issue.state?.type?.toLowerCase() || 'unstarted'
+  const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG['unstarted']
   const priorityConfig = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG[0]
 
   return (
@@ -71,7 +75,157 @@ function IssueCard({ issue, isSelected, onSelect }) {
   )
 }
 
-function IssueDetails({ issue }) {
+function StatusDropdown({ issue, states, onUpdate, loading }) {
+  const [open, setOpen] = useState(false)
+  const currentState = issue.state
+
+  if (!states || states.length === 0) {
+    return (
+      <span className="px-2 py-0.5 text-xs rounded bg-gray-500/20 text-gray-400">
+        {currentState?.name || 'Unknown'}
+      </span>
+    )
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        disabled={loading}
+        className="flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-black/30 border border-white/10 hover:border-white/20 transition-colors disabled:opacity-50"
+        style={{ color: currentState?.color || '#888' }}
+      >
+        {currentState?.name || 'Unknown'}
+        <FontAwesomeIcon icon={faChevronDown} className="text-[10px] opacity-50" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 z-20 bg-bg-secondary border border-white/10 rounded-lg shadow-xl min-w-[140px] py-1">
+            {states.map(state => (
+              <button
+                key={state.id}
+                onClick={() => {
+                  onUpdate(state.id)
+                  setOpen(false)
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors ${
+                  state.id === currentState?.id ? 'bg-white/10' : ''
+                }`}
+                style={{ color: state.color || '#888' }}
+              >
+                {state.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function CommentInput({ issueId, send, onCommentAdded }) {
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!body.trim() || sending) return
+
+    setSending(true)
+    send({ event: 'linear:comment:create', issueId, body: body.trim() })
+    // Reset will happen when we get the response
+  }
+
+  // Listen for comment created
+  useEffect(() => {
+    const handleMessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.event === 'linear:comment:created' && msg.issueId === issueId) {
+          setBody('')
+          setSending(false)
+          if (onCommentAdded) onCommentAdded(msg.comment)
+        }
+        if (msg.event === 'linear:error') {
+          setSending(false)
+        }
+      } catch {}
+    }
+
+    const ws = window.__irisWs
+    if (ws) {
+      ws.addEventListener('message', handleMessage)
+      return () => ws.removeEventListener('message', handleMessage)
+    }
+  }, [issueId, onCommentAdded])
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2">
+      <input
+        type="text"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Add a comment..."
+        className="flex-1 px-3 py-1.5 text-sm bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-accent/50 text-text-primary placeholder:text-text-tertiary"
+        disabled={sending}
+      />
+      <button
+        type="submit"
+        disabled={!body.trim() || sending}
+        className="px-3 py-1.5 bg-accent/20 text-accent border border-accent/30 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <FontAwesomeIcon icon={faPaperPlane} className={sending ? 'animate-pulse' : ''} />
+      </button>
+    </form>
+  )
+}
+
+function IssueDetails({ issue, states, send, onStatusUpdate, onAssignToGod }) {
+  const [comments, setComments] = useState([])
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+
+  // Update comments when issue changes
+  useEffect(() => {
+    if (issue?.comments) {
+      setComments(issue.comments)
+    } else {
+      setComments([])
+    }
+  }, [issue?.id, issue?.comments])
+
+  const handleCommentAdded = useCallback((comment) => {
+    setComments(prev => [...prev, comment])
+  }, [])
+
+  const handleStatusUpdate = useCallback((stateId) => {
+    setUpdatingStatus(true)
+    send({ event: 'linear:issue:update-status', issueId: issue.id, stateId })
+  }, [issue?.id, send])
+
+  // Listen for status update response
+  useEffect(() => {
+    const handleMessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.event === 'linear:issue:updated') {
+          setUpdatingStatus(false)
+          if (onStatusUpdate) onStatusUpdate(msg.issue)
+        }
+        if (msg.event === 'linear:error') {
+          setUpdatingStatus(false)
+        }
+      } catch {}
+    }
+
+    const ws = window.__irisWs
+    if (ws) {
+      ws.addEventListener('message', handleMessage)
+      return () => ws.removeEventListener('message', handleMessage)
+    }
+  }, [onStatusUpdate])
+
   if (!issue) {
     return (
       <div className="h-full flex items-center justify-center text-text-tertiary">
@@ -80,8 +234,6 @@ function IssueDetails({ issue }) {
     )
   }
 
-  const statusKey = issue.state?.type?.toLowerCase() || issue.state?.name?.toLowerCase() || 'todo'
-  const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG['todo']
   const priorityConfig = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG[0]
 
   return (
@@ -101,17 +253,29 @@ function IssueDetails({ issue }) {
               <FontAwesomeIcon icon={faExternalLink} className="text-xs" />
             </a>
           )}
+          <div className="flex-1" />
+          <button
+            onClick={() => onAssignToGod(issue)}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/30 transition-colors cursor-pointer"
+            title="Spawn a god with this issue"
+          >
+            <FontAwesomeIcon icon={faBolt} />
+            Assign to God
+          </button>
         </div>
         <h2 className="text-lg text-text-primary font-medium">{issue.title}</h2>
       </div>
 
       {/* Meta */}
-      <div className="px-4 py-3 border-b border-border flex flex-wrap gap-3">
+      <div className="px-4 py-3 border-b border-border flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-tertiary">Status:</span>
-          <span className={`px-2 py-0.5 text-xs rounded ${statusConfig.bg} ${statusConfig.color}`}>
-            {issue.state?.name || statusConfig.label}
-          </span>
+          <StatusDropdown
+            issue={issue}
+            states={states}
+            onUpdate={handleStatusUpdate}
+            loading={updatingStatus}
+          />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-tertiary">Priority:</span>
@@ -163,12 +327,34 @@ function IssueDetails({ issue }) {
       {/* Description */}
       <div className="flex-1 overflow-auto px-4 py-3">
         {issue.description ? (
-          <div className="text-sm text-text-secondary whitespace-pre-wrap">
+          <div className="text-sm text-text-secondary whitespace-pre-wrap mb-4">
             {issue.description}
           </div>
         ) : (
-          <div className="text-sm text-text-tertiary italic">
+          <div className="text-sm text-text-tertiary italic mb-4">
             No description
+          </div>
+        )}
+
+        {/* Comments */}
+        {comments.length > 0 && (
+          <div className="border-t border-border pt-3 mt-3">
+            <h3 className="text-xs text-text-tertiary uppercase tracking-wide mb-2">Comments</h3>
+            <div className="space-y-2">
+              {comments.map(comment => (
+                <div key={comment.id} className="bg-black/20 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-text-primary font-medium">{comment.user?.name || 'Unknown'}</span>
+                    <span className="text-xs text-text-tertiary">
+                      {new Date(comment.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="text-sm text-text-secondary whitespace-pre-wrap">
+                    {comment.body}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -180,6 +366,139 @@ function IssueDetails({ issue }) {
           <code className="text-xs text-accent font-mono">{issue.branchName}</code>
         </div>
       )}
+
+      {/* Comment input */}
+      <div className="px-4 py-3 border-t border-border bg-black/10">
+        <CommentInput issueId={issue.id} send={send} onCommentAdded={handleCommentAdded} />
+      </div>
+    </div>
+  )
+}
+
+function CreateIssueModal({ teams, send, onClose, onCreated }) {
+  const [title, setTitle] = useState('')
+  const [teamId, setTeamId] = useState(teams[0]?.id || '')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState(0)
+  const [creating, setCreating] = useState(false)
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!title.trim() || !teamId || creating) return
+
+    setCreating(true)
+    send({
+      event: 'linear:issue:create',
+      title: title.trim(),
+      teamId,
+      description: description.trim() || undefined,
+      priority: priority || undefined
+    })
+  }
+
+  // Listen for issue created
+  useEffect(() => {
+    const handleMessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.event === 'linear:issue:created') {
+          setCreating(false)
+          if (onCreated) onCreated(msg.issue)
+          onClose()
+        }
+        if (msg.event === 'linear:error') {
+          setCreating(false)
+        }
+      } catch {}
+    }
+
+    const ws = window.__irisWs
+    if (ws) {
+      ws.addEventListener('message', handleMessage)
+      return () => ws.removeEventListener('message', handleMessage)
+    }
+  }, [onClose, onCreated])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-bg-secondary border border-white/10 rounded-xl shadow-2xl w-full max-w-lg mx-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="text-lg text-text-primary font-medium">New Issue</h2>
+          <button onClick={onClose} className="text-text-tertiary hover:text-text-primary transition-colors">
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <div>
+            <label className="block text-xs text-text-tertiary mb-1">Title *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Issue title"
+              className="w-full px-3 py-2 text-sm bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-accent/50 text-text-primary placeholder:text-text-tertiary"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-text-tertiary mb-1">Team *</label>
+            <select
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              className="w-full px-3 py-2 text-sm bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-accent/50 text-text-primary"
+            >
+              {teams.map(team => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-text-tertiary mb-1">Priority</label>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(Number(e.target.value))}
+              className="w-full px-3 py-2 text-sm bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-accent/50 text-text-primary"
+            >
+              <option value={0}>No priority</option>
+              <option value={1}>Urgent</option>
+              <option value={2}>High</option>
+              <option value={3}>Medium</option>
+              <option value={4}>Low</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-text-tertiary mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional description..."
+              rows={4}
+              className="w-full px-3 py-2 text-sm bg-black/30 border border-white/10 rounded-lg focus:outline-none focus:border-accent/50 text-text-primary placeholder:text-text-tertiary resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!title.trim() || !teamId || creating}
+              className="px-4 py-2 text-sm bg-accent/20 text-accent border border-accent/30 rounded-lg hover:bg-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creating ? 'Creating...' : 'Create Issue'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -190,10 +509,14 @@ export default function LinearView({ send }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('active') // 'all' | 'active' | 'done'
+  const [teams, setTeams] = useState([])
+  const [states, setStates] = useState({}) // teamId -> states[]
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
-  // Fetch issues on mount
+  // Fetch issues and teams on mount
   useEffect(() => {
     fetchIssues()
+    fetchTeams()
   }, [])
 
   const fetchIssues = useCallback(() => {
@@ -201,6 +524,16 @@ export default function LinearView({ send }) {
     setError(null)
     send({ event: 'linear:issues:fetch', assignee: 'me' })
   }, [send])
+
+  const fetchTeams = useCallback(() => {
+    send({ event: 'linear:teams:fetch' })
+  }, [send])
+
+  const fetchStates = useCallback((teamId) => {
+    if (!states[teamId]) {
+      send({ event: 'linear:states:fetch', teamId })
+    }
+  }, [send, states])
 
   // Handle WebSocket messages
   useEffect(() => {
@@ -215,6 +548,18 @@ export default function LinearView({ send }) {
 
         if (msg.event === 'linear:issue:response') {
           setSelectedIssue(msg.issue)
+          // Fetch states for this issue's team
+          if (msg.issue?.team?.id) {
+            fetchStates(msg.issue.team.id)
+          }
+        }
+
+        if (msg.event === 'linear:teams:response') {
+          setTeams(msg.teams || [])
+        }
+
+        if (msg.event === 'linear:states:response') {
+          setStates(prev => ({ ...prev, [msg.teamId]: msg.states }))
         }
 
         if (msg.event === 'linear:error') {
@@ -229,13 +574,32 @@ export default function LinearView({ send }) {
       ws.addEventListener('message', handleMessage)
       return () => ws.removeEventListener('message', handleMessage)
     }
-  }, [])
+  }, [fetchStates])
 
   const handleSelectIssue = useCallback((issue) => {
     setSelectedIssue(issue)
-    // Optionally fetch full details
     send({ event: 'linear:issue:get', id: issue.id })
   }, [send])
+
+  const handleStatusUpdate = useCallback((updatedIssue) => {
+    // Update the issue in the list
+    setIssues(prev => prev.map(i =>
+      i.id === updatedIssue.id ? { ...i, state: updatedIssue.state } : i
+    ))
+    // Update selected issue
+    setSelectedIssue(prev => prev ? { ...prev, state: updatedIssue.state } : prev)
+  }, [])
+
+  const handleAssignToGod = useCallback((issue) => {
+    // Format task for the god
+    const task = `[${issue.identifier}] ${issue.title}${issue.description ? `\n\n${issue.description}` : ''}`
+    send({ event: 'god:spawn', task })
+  }, [send])
+
+  const handleIssueCreated = useCallback((issue) => {
+    // Refresh the list
+    fetchIssues()
+  }, [fetchIssues])
 
   // Filter issues
   const filteredIssues = issues.filter(issue => {
@@ -249,8 +613,11 @@ export default function LinearView({ send }) {
     return true
   })
 
+  // Get states for selected issue's team
+  const currentStates = selectedIssue?.team?.id ? states[selectedIssue.team.id] : []
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col p-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-4">
         <div className="flex items-center gap-2">
@@ -286,6 +653,14 @@ export default function LinearView({ send }) {
           </button>
         </div>
         <div className="flex-1" />
+        <button
+          onClick={() => setShowCreateModal(true)}
+          disabled={teams.length === 0}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors disabled:opacity-50"
+        >
+          <FontAwesomeIcon icon={faPlus} />
+          New Issue
+        </button>
         <button
           onClick={fetchIssues}
           disabled={loading}
@@ -330,9 +705,25 @@ export default function LinearView({ send }) {
 
         {/* Right side - issue details */}
         <div className="flex-1 bg-black/20 border border-white/10 rounded-xl overflow-hidden">
-          <IssueDetails issue={selectedIssue} />
+          <IssueDetails
+            issue={selectedIssue}
+            states={currentStates}
+            send={send}
+            onStatusUpdate={handleStatusUpdate}
+            onAssignToGod={handleAssignToGod}
+          />
         </div>
       </div>
+
+      {/* Create issue modal */}
+      {showCreateModal && (
+        <CreateIssueModal
+          teams={teams}
+          send={send}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={handleIssueCreated}
+        />
+      )}
     </div>
   )
 }

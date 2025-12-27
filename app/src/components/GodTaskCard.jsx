@@ -1,35 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical } from '@fortawesome/free-solid-svg-icons'
-
-// 3D Tilt hook - tracks mouse position and applies perspective transform
-function use3DTilt(ref, maxRotation = 12) {
-  const [transform, setTransform] = useState('')
-
-  const handleMouseMove = useCallback((e) => {
-    if (!ref.current) return
-    const rect = ref.current.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-    const mouseX = e.clientX - centerX
-    const mouseY = e.clientY - centerY
-    // Normalize to -1 to 1 range
-    const normalizedX = mouseX / (rect.width / 2)
-    const normalizedY = mouseY / (rect.height / 2)
-    // Clamp and invert for natural feel
-    const rotateY = Math.max(-maxRotation, Math.min(maxRotation, normalizedX * maxRotation))
-    const rotateX = Math.max(-maxRotation, Math.min(maxRotation, -normalizedY * maxRotation))
-    setTransform(`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`)
-  }, [ref, maxRotation])
-
-  const handleMouseLeave = useCallback(() => {
-    setTransform('')
-  }, [])
-
-  return { transform, handleMouseMove, handleMouseLeave }
-}
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
@@ -95,11 +68,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const [isSummoning, setIsSummoning] = useState(true)
   const moveMenuRef = useRef(null)
-  const cardRef = useRef(null)
   const dragControls = useDragControls()
-
-  // 3D tilt effect on hover
-  const { transform: tiltTransform, handleMouseMove, handleMouseLeave } = use3DTilt(cardRef, 8)
 
   // Clear summon glow after animation completes
   useEffect(() => {
@@ -166,9 +135,6 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
         '--god-color-rgb': hexToRgbCss(entityColor),
         borderRadius: '12px 16px 16px 12px',
         borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
-        opacity: isActive ? 1 : 0.5,
-        filter: isActive ? 'none' : 'saturate(0.6)',
-        transition: 'opacity 0.2s ease, border-color 0.2s ease, filter 0.2s ease'
       }}
       // Summon animation - divine arrival from above
       initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
@@ -217,7 +183,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
               e.stopPropagation()
               setShowMoveMenu(!showMoveMenu)
             }}
-            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all"
+            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
             title="Move to tab"
           >
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />
@@ -265,7 +231,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
             e.stopPropagation()
             onClose()
           }}
-          className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all"
+          className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
           title="Banish"
         >
           <FontAwesomeIcon icon={faXmark} size="xs" />

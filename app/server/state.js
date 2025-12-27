@@ -27,7 +27,9 @@ export const appState = {
   gitProjects: [],        // [{path, name}]
   cemetery: [],           // Fallen gods: [{id, name, color, voice, mission, title, banishedAt, tabName, sessionId}]
   settings: {             // App settings (API keys, etc.)
-    linearApiKey: ''
+    linearApiKey: '',
+    userName: '',
+    startPrompt: ''
   }
 }
 
@@ -135,6 +137,12 @@ export function applySettingsToEnv() {
   if (appState.settings?.linearApiKey) {
     process.env.LINEAR_API_KEY = appState.settings.linearApiKey
   }
+  if (appState.settings?.googleClientId) {
+    process.env.GOOGLE_CLIENT_ID = appState.settings.googleClientId
+  }
+  if (appState.settings?.googleClientSecret) {
+    process.env.GOOGLE_CLIENT_SECRET = appState.settings.googleClientSecret
+  }
 }
 
 // Mask sensitive values for client
@@ -207,7 +215,17 @@ export function getStateForBroadcast() {
     cemetery: appState.cemetery || [],
     settings: {
       linearApiKey: maskApiKey(appState.settings?.linearApiKey),
-      hasLinearApiKey: !!appState.settings?.linearApiKey
+      hasLinearApiKey: !!appState.settings?.linearApiKey,
+      userName: appState.settings?.userName || '',
+      startPrompt: appState.settings?.startPrompt || '',
+      googleClientId: maskApiKey(appState.settings?.googleClientId),
+      hasGoogleClientId: !!appState.settings?.googleClientId,
+      googleClientSecret: maskApiKey(appState.settings?.googleClientSecret),
+      hasGoogleClientSecret: !!appState.settings?.googleClientSecret,
+      googleCalendar: {
+        connected: !!appState.settings?.googleCalendar?.refresh_token,
+        email: appState.settings?.googleCalendar?.email || null
+      }
     }
   }
 }
