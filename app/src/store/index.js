@@ -9,8 +9,8 @@ const initialState = {
   activeTabId: 1,
   tabCounter: 1,
 
-  // Gods - stored globally, with tabId reference
-  gods: {},  // { [godName]: { name, color, status, tabId } }
+  // Entities - all types: gods, terminals, browsers, git, etc.
+  entities: {},  // { [entityId]: { id, type, name, color, status, tabId, ... } }
 
   // Services status
   services: {
@@ -27,18 +27,14 @@ const initialState = {
   },
 
   // UI state (client-only)
-  focusedGod: null,
-  fullscreenGod: null,
+  focusedEntity: null,
+  fullscreenEntity: null,
   layoutMode: 'auto',
   devPanelOpen: false,
 
-  // Synced view state
-  view: 'work',           // 'work' | 'history' | 'git' | 'browser'
-  workLayout: 'focus',    // Focus mode is the only layout
-
   // Synced from server
   theme: 'divine-void',  // Will be overwritten by state:sync
-  godColors: {},  // { godName: color } - from server based on current theme
+  godColors: {},  // { godName: color } - god palette
 
   // Connection
   connected: false,
@@ -46,9 +42,6 @@ const initialState = {
 
   // Git projects
   gitProjects: [],
-
-  // Browser
-  browserUrl: null,
 
   // Settings
   settings: {},
@@ -68,15 +61,15 @@ export const useStore = create(
         const tabName = (typeof name === 'string' && name) ? name : `Tab ${newId}`
         state.tabs.push({ id: newId, name: tabName })
         state.activeTabId = newId
-        state.focusedGod = null
-        state.fullscreenGod = null
+        state.focusedEntity = null
+        state.fullscreenEntity = null
       }),
 
       closeTab: (tabId) => set((state) => {
-        // Get gods in this tab and remove them
-        Object.keys(state.gods).forEach(godName => {
-          if (state.gods[godName].tabId === tabId) {
-            delete state.gods[godName]
+        // Get entities in this tab and remove them
+        Object.keys(state.entities).forEach(id => {
+          if (state.entities[id].tabId === tabId) {
+            delete state.entities[id]
           }
         })
 
@@ -93,8 +86,8 @@ export const useStore = create(
           state.activeTabId = state.tabs[0].id
         }
 
-        state.focusedGod = null
-        state.fullscreenGod = null
+        state.focusedEntity = null
+        state.fullscreenEntity = null
       }),
 
       renameTab: (tabId, name) => set((state) => {
@@ -104,8 +97,8 @@ export const useStore = create(
 
       switchTab: (tabId) => set((state) => {
         state.activeTabId = tabId
-        state.focusedGod = null
-        state.fullscreenGod = null
+        state.focusedEntity = null
+        state.fullscreenEntity = null
       }),
 
       nextTab: () => set((state) => {
@@ -126,61 +119,62 @@ export const useStore = create(
         }
       }),
 
-      // ============ GODS ============
+      // ============ ENTITIES ============
 
-      addGod: (god) => set((state) => {
-        const name = god.name
+      addEntity: (entity) => set((state) => {
+        const id = entity.id
         // Don't add if already exists
-        if (state.gods[name]) return
+        if (state.entities[id]) return
 
-        const godKey = name.toLowerCase()
-        state.gods[name] = {
-          name,
-          color: god.color || '#888',
-          voice: god.voice || godKey,
-          status: god.status || 'working',
-          tabId: state.activeTabId,  // Assign to current tab
+        state.entities[id] = {
+          id,
+          type: entity.type || 'god',
+          name: entity.name || id,
+          color: entity.color || '#888',
+          voice: entity.voice,
+          status: entity.status || 'working',
+          tabId: state.activeTabId,
         }
-        state.focusedGod = name
+        state.focusedEntity = id
       }),
 
-      removeGod: (godName) => set((state) => {
-        const wasFullscreen = state.fullscreenGod === godName
-        const wasFocused = state.focusedGod === godName
-        const tabId = state.gods[godName]?.tabId
+      removeEntity: (entityId) => set((state) => {
+        const wasFullscreen = state.fullscreenEntity === entityId
+        const wasFocused = state.focusedEntity === entityId
+        const tabId = state.entities[entityId]?.tabId
 
-        delete state.gods[godName]
+        delete state.entities[entityId]
 
-        if (wasFullscreen) state.fullscreenGod = null
+        if (wasFullscreen) state.fullscreenEntity = null
         if (wasFocused) {
-          // Auto-select another god from the same tab
-          const remainingGods = Object.values(state.gods).filter(g => g.tabId === tabId)
-          state.focusedGod = remainingGods.length > 0 ? remainingGods[0].name : null
+          // Auto-select another entity from the same tab
+          const remaining = Object.values(state.entities).filter(e => e.tabId === tabId)
+          state.focusedEntity = remaining.length > 0 ? remaining[0].id : null
         }
       }),
 
-      updateGodStatus: (godName, status) => set((state) => {
-        if (state.gods[godName]) {
-          state.gods[godName].status = status
+      updateEntityStatus: (entityId, status) => set((state) => {
+        if (state.entities[entityId]) {
+          state.entities[entityId].status = status
         }
       }),
 
-      moveGodToTab: (godName, tabId) => set((state) => {
-        if (state.gods[godName]) {
-          state.gods[godName].tabId = tabId
+      moveEntityToTab: (entityId, tabId) => set((state) => {
+        if (state.entities[entityId]) {
+          state.entities[entityId].tabId = tabId
         }
       }),
 
       // ============ UI ============
 
-      setFocusedGod: (godName) => set((state) => {
-        state.focusedGod = godName
+      setFocusedEntity: (entityId) => set((state) => {
+        state.focusedEntity = entityId
       }),
 
-      toggleFullscreen: (godName) => set((state) => {
-        const target = godName || state.focusedGod
+      toggleFullscreen: (entityId) => set((state) => {
+        const target = entityId || state.focusedEntity
         if (!target) return
-        state.fullscreenGod = state.fullscreenGod === target ? null : target
+        state.fullscreenEntity = state.fullscreenEntity === target ? null : target
       }),
 
       setLayoutMode: (mode) => set((state) => {
@@ -195,19 +189,6 @@ export const useStore = create(
 
       toggleDevPanel: () => set((state) => {
         state.devPanelOpen = !state.devPanelOpen
-      }),
-
-      setView: (view) => set((state) => {
-        state.view = view
-      }),
-
-      setWorkLayout: (layout) => set((state) => {
-        state.workLayout = layout
-      }),
-
-      enterFocusMode: (godName) => set((state) => {
-        state.workLayout = 'focus'
-        state.focusedGod = godName
       }),
 
       // ============ CONNECTION ============
@@ -240,32 +221,55 @@ export const useStore = create(
         return state.tabs.find(t => t.id === state.activeTabId) || state.tabs[0]
       },
 
-      // Get gods for active tab (sorted by order)
+      // Get entities for active tab (sorted by order)
+      getActiveEntities: () => {
+        const state = get()
+        return Object.values(state.entities)
+          .filter(e => e.tabId === state.activeTabId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
+      // Get entities for a specific tab (sorted by order)
+      getEntitiesForTab: (tabId) => {
+        const state = get()
+        return Object.values(state.entities)
+          .filter(e => e.tabId === tabId)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
+      // Get all entity IDs (for checking what exists)
+      getAllEntityIds: () => {
+        return Object.keys(get().entities)
+      },
+
+      // Get ALL entities across all tabs (for persistent rendering)
+      getAllEntities: () => {
+        const state = get()
+        return Object.values(state.entities)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
+      // Get entities by type
+      getEntitiesByType: (type) => {
+        const state = get()
+        return Object.values(state.entities)
+          .filter(e => e.type === type)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
+      // Get gods (for backwards compatibility and god-specific logic)
       getActiveGods: () => {
         const state = get()
-        return Object.values(state.gods)
-          .filter(g => g.tabId === state.activeTabId)
+        return Object.values(state.entities)
+          .filter(e => e.tabId === state.activeTabId && (e.type === 'god' || e.type === 'terminal'))
           .sort((a, b) => (a.order || 0) - (b.order || 0))
       },
 
-      // Get gods for a specific tab (sorted by order)
-      getGodsForTab: (tabId) => {
-        const state = get()
-        return Object.values(state.gods)
-          .filter(g => g.tabId === tabId)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
-      },
-
-      // Get all god names (for checking availability)
+      // Get all god names (for summon modal)
       getAllGodNames: () => {
-        return Object.keys(get().gods)
-      },
-
-      // Get ALL gods across all tabs (for persistent rendering)
-      getAllGods: () => {
-        const state = get()
-        return Object.values(state.gods)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
+        return Object.values(get().entities)
+          .filter(e => e.type === 'god')
+          .map(e => e.id)
       },
 
       // ============ SYNC FROM SERVER ============
@@ -276,24 +280,30 @@ export const useStore = create(
         state.activeTabId = serverState.activeTabId
         state.tabCounter = serverState.tabCounter
 
-        // Replace gods - merge with server data
-        const newGods = {}
-        serverState.gods.forEach(god => {
-          newGods[god.name] = {
-            name: god.name,
-            displayName: god.displayName || null,
-            color: god.color,
-            voice: god.voice,
-            title: god.title || null,
-            status: god.status || null,
-            mission: god.mission || null,
-            readyState: god.readyState || 'working',
-            tabId: god.tabId,
-            order: god.order,
-            spawnedAt: god.spawnedAt || null
-          }
-        })
-        state.gods = newGods
+        // Replace entities - build from server data
+        const newEntities = {}
+        if (serverState.entities) {
+          serverState.entities.forEach(entity => {
+            newEntities[entity.id] = {
+              id: entity.id,
+              type: entity.type || 'god',
+              name: entity.name || entity.id,
+              color: entity.color,
+              voice: entity.voice,
+              title: entity.title || null,
+              status: entity.status || null,
+              mission: entity.mission || null,
+              readyState: entity.readyState || 'working',
+              tabId: entity.tabId,
+              order: entity.order,
+              spawnedAt: entity.spawnedAt || null,
+              // View-specific data
+              url: entity.url || null,
+              project: entity.project || null
+            }
+          })
+        }
+        state.entities = newEntities
 
         // Sync theme and godColors
         if (serverState.theme) {
@@ -303,15 +313,9 @@ export const useStore = create(
           state.godColors = serverState.godColors
         }
 
-        // Sync view, workLayout and focusedGod from server
-        if (serverState.view !== undefined) {
-          state.view = serverState.view
-        }
-        if (serverState.workLayout !== undefined) {
-          state.workLayout = serverState.workLayout
-        }
-        if (serverState.focusedGod !== undefined) {
-          state.focusedGod = serverState.focusedGod
+        // Sync focusedEntity from server
+        if (serverState.focusedEntity !== undefined) {
+          state.focusedEntity = serverState.focusedEntity
         }
 
         // Sync git projects
@@ -319,21 +323,32 @@ export const useStore = create(
           state.gitProjects = serverState.gitProjects
         }
 
-        // Sync browser URL
-        if (serverState.browserUrl !== undefined) {
-          state.browserUrl = serverState.browserUrl
-        }
-
         // Sync settings
         if (serverState.settings !== undefined) {
           state.settings = serverState.settings
         }
 
-        // Clear fullscreen if god no longer exists (fullscreen is still client-only)
-        if (state.fullscreenGod && !newGods[state.fullscreenGod]) {
-          state.fullscreenGod = null
+        // Clear fullscreen if entity no longer exists (fullscreen is still client-only)
+        if (state.fullscreenEntity && !newEntities[state.fullscreenEntity]) {
+          state.fullscreenEntity = null
         }
       }),
+
+      // Add getGodsForTab for backwards compatibility
+      getGodsForTab: (tabId) => {
+        const state = get()
+        return Object.values(state.entities)
+          .filter(e => e.tabId === tabId && (e.type === 'god' || e.type === 'terminal'))
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
+
+      // Get all gods across all tabs (for persistent terminal rendering)
+      getAllGods: () => {
+        const state = get()
+        return Object.values(state.entities)
+          .filter(e => e.type === 'god' || e.type === 'terminal')
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+      },
     })),
     { name: 'iris-store' }
   )

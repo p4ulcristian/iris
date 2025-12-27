@@ -5,7 +5,7 @@ import GodCard from './components/GodCard'
 import GodTaskCard from './components/GodTaskCard'
 import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
-import SummonModal from './components/SummonModal'
+import EntityPickerModal from './components/EntityPickerModal'
 import DevPanel from './components/DevPanel'
 import HistoryView from './components/HistoryView'
 import BrowserView from './components/BrowserView'
@@ -25,32 +25,33 @@ export default function App() {
   // Get state and actions from store
   const tabs = useStore(s => s.tabs)
   const activeTabId = useStore(s => s.activeTabId)
-  const gods = useStore(s => s.gods)
-  const focusedGod = useStore(s => s.focusedGod)
-  const fullscreenGod = useStore(s => s.fullscreenGod)
+  const entities = useStore(s => s.entities)
+  const focusedEntity = useStore(s => s.focusedEntity)
+  const fullscreenEntity = useStore(s => s.fullscreenEntity)
   const layoutMode = useStore(s => s.layoutMode)
-  const view = useStore(s => s.view)
-  const workLayout = useStore(s => s.workLayout)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const theme = useStore(s => s.theme)
   const godColors = useStore(s => s.godColors)
 
-  // Actions (local UI state only - fullscreen and layoutMode are still client-only)
-  const updateGodStatus = useStore(s => s.updateGodStatus)
+  // Actions
+  const updateEntityStatus = useStore(s => s.updateEntityStatus)
   const toggleFullscreen = useStore(s => s.toggleFullscreen)
   const rotateLayout = useStore(s => s.rotateLayout)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
   const setServices = useStore(s => s.setServices)
   const toggleDevPanel = useStore(s => s.toggleDevPanel)
+  const getActiveEntities = useStore(s => s.getActiveEntities)
   const getActiveGods = useStore(s => s.getActiveGods)
+  const getEntitiesForTab = useStore(s => s.getEntitiesForTab)
   const getGodsForTab = useStore(s => s.getGodsForTab)
   const getAllGodNames = useStore(s => s.getAllGodNames)
   const getAllGods = useStore(s => s.getAllGods)
+  const getAllEntities = useStore(s => s.getAllEntities)
   const syncState = useStore(s => s.syncState)
 
   const [confirmModal, setConfirmModal] = useState(null)
-  const [summonModalOpen, setSummonModalOpen] = useState(false)
+  const [entityPickerOpen, setEntityPickerOpen] = useState(false)
 
   // Update connection status in store
   useEffect(() => {
@@ -65,9 +66,6 @@ export default function App() {
 
     switch (event) {
       case 'state:sync': {
-        // Only trigger view transition for major layout changes (not focus changes)
-        const majorChange = data.view !== view || data.workLayout !== workLayout
-
         const doSync = () => {
           syncState(data)
           if (data.services) {
@@ -76,7 +74,8 @@ export default function App() {
           setInitialLoadDone(true)
         }
 
-        if (majorChange && initialLoadDone) {
+        // View transition for focus changes
+        if (initialLoadDone && data.focusedEntity !== focusedEntity) {
           withViewTransition(doSync)
         } else {
           doSync()
@@ -90,23 +89,29 @@ export default function App() {
         }
         break
 
+      case 'entity:set-status':
       case 'god:set-status':
-        updateGodStatus(data.godName || data.name, data.status)
+        updateEntityStatus(data.entityId || data.godName || data.name, data.status)
         break
     }
-  }, [lastMessage, syncState, updateGodStatus, setInitialLoadDone, setServices, view, workLayout, focusedGod, initialLoadDone])
+  }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone])
 
-  // Get gods for active tab
-  const activeGods = getActiveGods()
+  // Get entities for active tab
+  const activeEntities = getActiveEntities()
+  const activeGods = getActiveGods()  // Gods/terminals only (for terminal rendering)
 
-  // Dispatch refit event when god count changes (for terminal resizing)
+  // Get focused entity object
+  const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
+  const focusedEntityType = focusedEntityObj?.type || 'god'
+
+  // Dispatch refit event when entity count changes (for terminal resizing)
   useEffect(() => {
     // Small delay to let layout settle
     const timeout = setTimeout(() => {
       window.dispatchEvent(new Event('iris:refit'))
     }, 100)
     return () => clearTimeout(timeout)
-  }, [activeGods.length])
+  }, [activeEntities.length])
 
   // Dispatch refit on window resize
   useEffect(() => {
@@ -125,13 +130,13 @@ export default function App() {
   }, [])
 
   // Summon a new god
-  const handleSummon = useCallback((name, task = '') => {
+  const handleSummonGod = useCallback((name, task = '') => {
     send({
       event: 'god:spawn',
       name,
       task
     })
-    setSummonModalOpen(false)
+    setEntityPickerOpen(false)
   }, [send])
 
   // Spawn a raw terminal (no Claude)
@@ -141,74 +146,78 @@ export default function App() {
     })
   }, [send])
 
-  // Kill a god (with confirmation)
-  const handleKillGod = useCallback((godName) => {
-    setConfirmModal({
-      title: `Banish ${godName}?`,
-      message: 'This will terminate the god session.',
-      confirmText: 'Banish',
-      danger: true,
-      onConfirm: () => {
-        send({ event: 'god:kill', godName })
-        setConfirmModal(null)
-      }
-    })
+  // Kill an entity (with confirmation for gods/terminals)
+  const handleKillEntity = useCallback((entityId) => {
+    const entity = entities[entityId]
+    const isGodOrTerminal = entity?.type === 'god' || entity?.type === 'terminal'
+    const displayName = entity?.name || entityId
+
+    if (isGodOrTerminal) {
+      setConfirmModal({
+        title: `Banish ${displayName}?`,
+        message: 'This will terminate the session.',
+        confirmText: 'Banish',
+        danger: true,
+        onConfirm: () => {
+          send({ event: 'entity:kill', entityId })
+          setConfirmModal(null)
+        }
+      })
+    } else {
+      // View entities can be closed without confirmation
+      send({ event: 'entity:kill', entityId })
+    }
+  }, [send, entities])
+
+  // Set focused entity (server event)
+  const handleSetFocus = useCallback((entityId) => {
+    send({ event: 'focus:set', entityId })
   }, [send])
 
-  // Enter focus mode for a god
-  const handleEnterFocus = useCallback((godName) => {
-    send({ event: 'workLayout:set', layout: 'focus', focusedGod: godName })
-  }, [send])
-
-  // Change main view
-  const handleViewChange = useCallback((newView) => {
-    send({ event: 'view:set', view: newView })
-  }, [send])
-
-  // Set focused god (server event)
-  const handleSetFocus = useCallback((godName) => {
-    send({ event: 'focus:set', godName })
-  }, [send])
-
-  // Reorder gods via drag and drop
-  const handleGodReorder = useCallback((newOrder) => {
-    // newOrder is array of god objects, extract names in new order
-    const orderedNames = newOrder.map(g => g.name)
-    send({ event: 'gods:reorder', order: orderedNames })
+  // Reorder entities via drag and drop
+  const handleEntityReorder = useCallback((newOrder) => {
+    // newOrder is array of entity objects, extract IDs in new order
+    const orderedIds = newOrder.map(e => e.id)
+    send({ event: 'entities:reorder', order: orderedIds })
   }, [send])
 
   // Toggle fullscreen with view transition
-  const handleToggleFullscreen = useCallback((godName) => {
-    withViewTransition(() => toggleFullscreen(godName))
+  const handleToggleFullscreen = useCallback((entityId) => {
+    withViewTransition(() => toggleFullscreen(entityId))
   }, [toggleFullscreen])
+
+  // Spawn a view entity
+  const handleSpawnEntity = useCallback((type, data = {}) => {
+    send({ event: 'entity:spawn', type, ...data })
+  }, [send])
 
   // Kill current tab (with confirmation)
   const handleKillTab = useCallback((tabId = activeTabId) => {
     const tab = tabs.find(t => t.id === tabId)
     if (!tab) return
 
-    const tabGods = getGodsForTab(tabId)
+    const tabEntities = getEntitiesForTab(tabId)
 
-    if (tabs.length === 1 && tabGods.length === 0) {
+    if (tabs.length === 1 && tabEntities.length === 0) {
       return // Don't close last empty tab
     }
 
+    const godCount = tabEntities.filter(e => e.type === 'god' || e.type === 'terminal').length
+
     setConfirmModal({
       title: `Close "${tab.name}"?`,
-      message: tabGods.length > 0
-        ? `This will banish ${tabGods.length} god${tabGods.length > 1 ? 's' : ''}.`
+      message: godCount > 0
+        ? `This will banish ${godCount} session${godCount > 1 ? 's' : ''}.`
         : 'This tab will be closed.',
       confirmText: 'Close',
       danger: true,
       onConfirm: () => {
-        // Kill all gods in this tab
-        tabGods.forEach(g => send({ event: 'god:kill', godName: g.name }))
-        // Tell server to remove tab (server will broadcast state:sync)
+        // Server handles killing all entities in tab
         send({ event: 'tab:remove', tabId })
         setConfirmModal(null)
       }
     })
-  }, [tabs, activeTabId, send, getGodsForTab])
+  }, [tabs, activeTabId, send, getEntitiesForTab])
 
   // Calculate grid classes based on layout mode, god count, and screen width
   const getGridClass = (count) => {
@@ -234,20 +243,20 @@ export default function App() {
     const handleKeyDown = (e) => {
       const key = e.key.toLowerCase()
 
-      // Check if this is one of our app shortcuts (Escape only works outside xterm)
+      // Check if this is one of our app shortcuts
       const isAppShortcut = (
         (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)) ||
-        (e.altKey && (['n', 'k', ',', '.', 'w', 'h', 'g', 'b', 'l', 's'].includes(key) || (e.key >= '1' && e.key <= '9')))
+        (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Ctrl+N: Open summon modal
+      // Ctrl+N: Open entity picker modal
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
-        setSummonModalOpen(true)
+        setEntityPickerOpen(true)
         return
       }
 
@@ -259,52 +268,14 @@ export default function App() {
         return
       }
 
-      // Alt+W/H/G/B: Switch views
-      if (e.altKey && key === 'w') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('work')
-        return
-      }
-      if (e.altKey && key === 'h') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('history')
-        return
-      }
-      if (e.altKey && key === 'g') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('git')
-        return
-      }
-      if (e.altKey && key === 'b') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('browser')
-        return
-      }
-      if (e.altKey && key === 'l') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('linear')
-        return
-      }
-      if (e.altKey && key === 's') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleViewChange('settings')
-        return
-      }
-
-      // Ctrl+K: Kill focused god
+      // Ctrl+K: Kill focused entity
       if (e.ctrlKey && e.key === 'k') {
         e.preventDefault()
         e.stopPropagation()
-        if (focusedGod) {
-          handleKillGod(focusedGod)
-        } else if (activeGods.length === 1) {
-          handleKillGod(activeGods[0].name)
+        if (focusedEntity) {
+          handleKillEntity(focusedEntity)
+        } else if (activeEntities.length === 1) {
+          handleKillEntity(activeEntities[0].id)
         }
         return
       }
@@ -380,12 +351,12 @@ export default function App() {
 
       // Escape: Exit fullscreen, then clear focus
       if (e.key === 'Escape') {
-        if (fullscreenGod) {
+        if (fullscreenEntity) {
           e.preventDefault()
           e.stopPropagation()
           handleToggleFullscreen()
           return
-        } else if (focusedGod) {
+        } else if (focusedEntity) {
           handleSetFocus(null)
         }
       }
@@ -394,76 +365,46 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSpawnTerminal, handleKillGod, handleKillTab, handleToggleFullscreen,
-    rotateLayout, focusedGod, fullscreenGod, view, workLayout, activeGods,
-    toggleDevPanel, handleSetFocus, handleViewChange, send, tabs, activeTabId
+    handleSpawnTerminal, handleKillEntity, handleKillTab, handleToggleFullscreen,
+    rotateLayout, focusedEntity, fullscreenEntity, activeEntities,
+    toggleDevPanel, handleSetFocus, send, tabs, activeTabId
   ])
 
-  // Get ALL gods for persistent rendering
+  // Get ALL gods for persistent terminal rendering
   const allGods = getAllGods()
 
-  // Get gods to display in the visible grid (active tab or fullscreen)
-  const displayGods = fullscreenGod
-    ? activeGods.filter(g => g.name === fullscreenGod)
-    : activeGods
-
-  // Get hidden gods (on other tabs) - these stay mounted but invisible
+  // Get hidden gods (on other tabs) - terminals stay mounted but invisible
   const hiddenGods = allGods.filter(g => g.tabId !== activeTabId)
 
-  // Get wallpaper color from focused god
-  const wallpaperColor = focusedGod ? godColors[focusedGod.toLowerCase()] : null
-
-  // Stack depth animation helpers
-  const getStackPosition = (godName, focusedGod, gods) => {
-    const focusedIdx = gods.findIndex(g => g.name === focusedGod)
-    const godIdx = gods.findIndex(g => g.name === godName)
-    return godIdx - focusedIdx  // 0 = focused, positive = behind
+  // Stack depth animation helpers for god/terminal cards
+  const getStackPosition = (entityId, focusedId, entities) => {
+    const focusedIdx = entities.findIndex(e => e.id === focusedId)
+    const entityIdx = entities.findIndex(e => e.id === entityId)
+    return entityIdx - focusedIdx  // 0 = focused, positive = behind
   }
 
   const getStackStyle = (position) => {
-    // Focused - center stage
     if (position === 0) {
-      return {
-        x: '0%',
-        opacity: 1,
-        zIndex: 10,
-        pointerEvents: 'auto',
-      }
+      return { x: '0%', opacity: 1, zIndex: 10, pointerEvents: 'auto' }
     }
-
-    // Cards before focused - slide off to the left
     if (position < 0) {
-      return {
-        x: '-100%',
-        opacity: 0,
-        zIndex: 0,
-        pointerEvents: 'none',
-      }
+      return { x: '-100%', opacity: 0, zIndex: 0, pointerEvents: 'none' }
     }
-
-    // Cards after focused - slide off to the right
-    return {
-      x: '100%',
-      opacity: 0,
-      zIndex: 0,
-      pointerEvents: 'none',
-    }
+    return { x: '100%', opacity: 0, zIndex: 0, pointerEvents: 'none' }
   }
+
+  // Get effective focused entity (ensure it's in active tab)
+  const effectiveFocusedEntity = (focusedEntity && activeEntities.some(e => e.id === focusedEntity))
+    ? focusedEntity
+    : activeEntities[0]?.id || null
+
+  const effectiveFocusedEntityObj = effectiveFocusedEntity ? entities[effectiveFocusedEntity] : null
+  const effectiveFocusedType = effectiveFocusedEntityObj?.type || null
 
   return (
     <div className={`flex flex-col h-screen theme-${theme}`}>
-      {/* Animated wallpaper - enhanced for liquid glass */}
-      <div
-        className="wallpaper transition-all duration-1000"
-        style={wallpaperColor ? {
-          '--blob-1': wallpaperColor,
-          '--blob-2': `color-mix(in srgb, ${wallpaperColor} 70%, #000)`,
-          '--blob-3': `color-mix(in srgb, ${wallpaperColor} 50%, #fff)`,
-          '--blob-4': `color-mix(in srgb, ${wallpaperColor} 80%, #000)`,
-          '--blob-5': `color-mix(in srgb, ${wallpaperColor} 60%, #fff)`,
-          '--blob-6': `color-mix(in srgb, ${wallpaperColor} 40%, #000)`
-        } : undefined}
-      >
+      {/* Animated wallpaper - uses theme colors */}
+      <div className="wallpaper">
         <div className="blob blob-1" />
         <div className="blob blob-2" />
         <div className="blob blob-3" />
@@ -479,90 +420,106 @@ export default function App() {
         onSelect={(tabId) => send({ event: 'tab:select', tabId })}
         onClose={handleKillTab}
         onNew={() => send({ event: 'tab:add' })}
+        onOpenSummon={() => setEntityPickerOpen(true)}
         connected={connected}
-        getGodsForTab={getGodsForTab}
-        currentView={view}
-        onViewChange={handleViewChange}
+        getEntitiesForTab={getEntitiesForTab}
       />
 
       {/* Main content area */}
       <main className="flex-1 min-h-0 overflow-visible p-4">
-        {/* Work View */}
-        {view === 'work' && (
-          activeGods.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-              <p className="text-base">No gods summoned</p>
-              <p className="text-sm opacity-70">
-                Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to summon
-              </p>
-            </div>
-          ) : (
-          /* Focus mode: main god + sidebar */
-          (() => {
-            // Auto-select first god if focusedGod is not set or not in active tab
-            const effectiveFocusedGod = (focusedGod && activeGods.some(g => g.name === focusedGod))
-              ? focusedGod
-              : activeGods[0].name
-            return (
+        {activeEntities.length === 0 ? (
+          /* Empty state */
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
+            <p className="text-base">No entities</p>
+            <p className="text-sm opacity-70">
+              Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
+            </p>
+          </div>
+        ) : (
+          /* Main layout: focused entity + sidebar */
           <div className="flex gap-4 h-full">
-            {/* Main focused god - 2:1 ratio with sidebar */}
-            {/* All gods stay mounted to preserve terminal output; only focused one visible */}
+            {/* Main focused entity area */}
             <div className="flex-[2] min-w-0 relative">
-              {activeGods.map(god => {
-                const position = getStackPosition(god.name, effectiveFocusedGod, activeGods)
-                const style = getStackStyle(position)
+              {/* Render based on focused entity type */}
+              {(effectiveFocusedType === 'god' || effectiveFocusedType === 'terminal') && (
+                /* God/Terminal: stack animation with terminals */
+                activeGods.filter(g => g.tabId === activeTabId).map(god => {
+                  const position = getStackPosition(god.id, effectiveFocusedEntity, activeGods.filter(g => g.tabId === activeTabId))
+                  const style = getStackStyle(position)
 
-                return (
-                  <motion.div
-                    key={god.name}
-                    className="absolute inset-0"
-                    animate={{
-                      x: style.x,
-                      opacity: style.opacity,
-                      zIndex: style.zIndex,
-                    }}
-                    transition={{
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 35,
-                    }}
-                    style={{
-                      pointerEvents: style.pointerEvents,
-                    }}
-                  >
-                    <GodCard
-                      god={god}
-                      isFocused={position === 0}
-                      onFocus={() => handleEnterFocus(god.name)}
-                      onDoubleClick={() => {}}
-                    />
-                  </motion.div>
-                )
-              })}
+                  return (
+                    <motion.div
+                      key={god.id}
+                      className="absolute inset-0"
+                      animate={{
+                        x: style.x,
+                        opacity: style.opacity,
+                        zIndex: style.zIndex,
+                      }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 500,
+                        damping: 35,
+                      }}
+                      style={{ pointerEvents: style.pointerEvents }}
+                    >
+                      <GodCard
+                        god={god}
+                        isFocused={position === 0}
+                        onFocus={() => handleSetFocus(god.id)}
+                        onDoubleClick={() => {}}
+                      />
+                    </motion.div>
+                  )
+                })
+              )}
+
+              {effectiveFocusedType === 'browser' && (
+                <div className="h-full relative">
+                  <BrowserView entityId={effectiveFocusedEntity} />
+                </div>
+              )}
+
+              {effectiveFocusedType === 'history' && (
+                <HistoryView send={send} />
+              )}
+
+              {effectiveFocusedType === 'git' && (
+                <GitView send={send} />
+              )}
+
+              {effectiveFocusedType === 'linear' && (
+                <LinearView send={send} />
+              )}
+
+              {effectiveFocusedType === 'settings' && (
+                <SettingsView send={send} />
+              )}
             </div>
-            {/* Sidebar with all gods as task cards */}
+
+            {/* Sidebar with all entities as task cards */}
             <div className="w-80 flex flex-col overflow-y-auto overflow-x-visible">
               <Reorder.Group
                 axis="y"
-                values={activeGods}
-                onReorder={handleGodReorder}
+                values={activeEntities}
+                onReorder={handleEntityReorder}
                 className="flex flex-col gap-4"
               >
-                {activeGods.map(god => (
+                {activeEntities.map(entity => (
                   <GodTaskCard
-                    key={god.name}
-                    god={god}
-                    isActive={god.name === effectiveFocusedGod}
-                    onClick={() => handleEnterFocus(god.name)}
-                    onClose={() => handleKillGod(god.name)}
+                    key={entity.id}
+                    entity={entity}
+                    isActive={entity.id === effectiveFocusedEntity}
+                    onClick={() => handleSetFocus(entity.id)}
+                    onClose={() => handleKillEntity(entity.id)}
                     tabs={tabs}
                     activeTabId={activeTabId}
-                    onMoveToTab={(godName, tabId) => {
-                      send({ event: 'god:move', godName, tabId })
+                    onMoveToTab={(entityId, tabId) => {
+                      send({ event: 'entity:move', entityId, tabId })
                       send({ event: 'tab:select', tabId })
                     }}
-                    onMoveToNewTab={(godName) => {
-                      send({ event: 'god:move-to-new-tab', godName })
+                    onMoveToNewTab={(entityId) => {
+                      send({ event: 'entity:move-to-new-tab', entityId })
                     }}
                   />
                 ))}
@@ -570,9 +527,9 @@ export default function App() {
               {/* Action buttons */}
               <div className="flex gap-2 mt-4">
                 <button
-                  onClick={() => setSummonModalOpen(true)}
+                  onClick={() => setEntityPickerOpen(true)}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Summon god (Ctrl+N)"
+                  title="Add entity (Ctrl+N)"
                 >
                   <FontAwesomeIcon icon={faUserPlus} />
                 </button>
@@ -593,42 +550,13 @@ export default function App() {
               </div>
             </div>
           </div>
-            )
-          })()
-        ))}
-
-        {/* History View */}
-        {view === 'history' && (
-          <HistoryView send={send} />
-        )}
-
-        {/* Git View */}
-        {view === 'git' && (
-          <GitView send={send} />
-        )}
-
-        {/* Linear View */}
-        {view === 'linear' && (
-          <LinearView send={send} />
-        )}
-
-        {/* Settings View */}
-        {view === 'settings' && (
-          <SettingsView send={send} />
-        )}
-
-        {/* Browser View */}
-        {view === 'browser' && (
-          <div className="h-full relative">
-            <BrowserView />
-          </div>
         )}
       </main>
 
       {/* Hidden gods container - keeps terminals alive when on other tabs */}
       <div className="fixed -left-[9999px] -top-[9999px] w-[800px] h-[600px] overflow-hidden pointer-events-none" aria-hidden="true">
         {hiddenGods.map(god => (
-          <div key={god.name} className="w-full h-full">
+          <div key={god.id} className="w-full h-full">
             <GodCard
               god={god}
               isFocused={false}
@@ -651,12 +579,13 @@ export default function App() {
         onCancel={() => setConfirmModal(null)}
       />
 
-      {/* Summon modal */}
-      <SummonModal
-        isOpen={summonModalOpen}
+      {/* Entity picker modal */}
+      <EntityPickerModal
+        isOpen={entityPickerOpen}
         usedGodNames={getAllGodNames()}
-        onSummon={handleSummon}
-        onCancel={() => setSummonModalOpen(false)}
+        onSpawnGod={handleSummonGod}
+        onSpawnEntity={handleSpawnEntity}
+        onCancel={() => setEntityPickerOpen(false)}
       />
 
       {/* Status bar */}

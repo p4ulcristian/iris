@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faExpand, faCompress } from '@fortawesome/free-solid-svg-icons'
-import ViewNav from './ViewNav'
 
 export default function TabBar({
   tabs,
@@ -9,10 +8,9 @@ export default function TabBar({
   onSelect,
   onClose,
   onNew,
+  onOpenSummon,
   connected,
-  getGodsForTab,
-  currentView,
-  onViewChange
+  getEntitiesForTab
 }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -52,7 +50,7 @@ export default function TabBar({
       {/* Tabs */}
       <div className="flex items-center gap-1 px-2 overflow-x-auto">
         {tabs.map((tab, idx) => {
-          const tabGodCount = getGodsForTab ? getGodsForTab(tab.id).length : 0
+          const entityCount = getEntitiesForTab ? getEntitiesForTab(tab.id).length : 0
           return (
           <button
             key={tab.id}
@@ -67,8 +65,8 @@ export default function TabBar({
           >
             <span>{tab.name}</span>
             <span className="text-xs text-text-secondary opacity-50">Alt+{idx + 1}</span>
-            {tabGodCount > 0 && (
-              <span className="text-xs text-text-secondary">({tabGodCount})</span>
+            {entityCount > 0 && (
+              <span className="text-xs text-text-secondary">({entityCount})</span>
             )}
             {tabs.length > 1 && (
               <span
@@ -85,11 +83,11 @@ export default function TabBar({
           )
         })}
 
-        {/* New tab button */}
+        {/* Add entity button */}
         <button
-          onClick={onNew}
+          onClick={onOpenSummon}
           className="h-7 w-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"
-          title="New tab (Alt+N)"
+          title="Add entity (Ctrl+N)"
         >
           +
         </button>
@@ -99,12 +97,6 @@ export default function TabBar({
 
       {/* Right side controls */}
       <div className="flex items-center gap-3 px-3">
-        <ViewNav
-          currentView={currentView}
-          onViewChange={onViewChange}
-          disabled={!connected}
-        />
-
         <button
           onClick={toggleFullscreen}
           className="w-7 h-7 flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"

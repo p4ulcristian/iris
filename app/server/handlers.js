@@ -1,11 +1,22 @@
 import { SERVICES, REALMS } from './config.js'
-import { appState, saveState, broadcastState, broadcast, applySettingsToEnv } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
 import { listSessions } from './history.js'
 import * as git from './git.js'
 import * as linear from './linear.js'
+
+// Entity type definitions with display info
+const ENTITY_TYPES = {
+  god: { icon: '⚡', label: 'God' },
+  terminal: { icon: '🖥️', label: 'Terminal' },
+  browser: { icon: '🌐', label: 'Browser' },
+  git: { icon: '⚙️', label: 'Git' },
+  history: { icon: '📜', label: 'History' },
+  linear: { icon: '✓', label: 'Linear' },
+  settings: { icon: '⚙️', label: 'Settings' }
+}
 
 function getRandomRealmName() {
   const usedNames = new Set(appState.tabs.map(t => t.name))
@@ -32,17 +43,18 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'god:spawn': {
       const god = createGodSession(data.name, data.task, projectRoot)
       if (god && !god.exists) {
-        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[god.name] = {
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+        appState.entities[god.name] = {
+          id: god.name,
+          type: 'god',
+          name: god.name,
           tabId: appState.activeTabId,
-          order: godsInTab.length,
+          order: entitiesInTab.length,
           mission: god.mission || null,
           spawnedAt: Date.now()
         }
-        // Auto-focus new god in focus mode
-        if (appState.workLayout === 'focus') {
-          appState.focusedGod = god.name
-        }
+        // Auto-focus new god
+        appState.focusedEntity = god.name
         saveState()
         broadcastState()
       } else if (god?.exists) {
@@ -59,18 +71,18 @@ export function handleMessage(ws, msg, projectRoot) {
         cwd: data.cwd
       }, projectRoot)
       if (terminal && !terminal.exists) {
-        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[terminal.name] = {
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+        appState.entities[terminal.name] = {
+          id: terminal.name,
+          type: 'terminal',
+          name: terminal.displayName || terminal.name,
           tabId: appState.activeTabId,
-          order: godsInTab.length,
+          order: entitiesInTab.length,
           spawnedAt: Date.now(),
-          displayName: terminal.displayName,
           color: terminal.color
         }
-        // Auto-focus new terminal in focus mode
-        if (appState.workLayout === 'focus') {
-          appState.focusedGod = terminal.name
-        }
+        // Auto-focus new terminal
+        appState.focusedEntity = terminal.name
         saveState()
         broadcastState()
       } else if (terminal?.exists) {
@@ -79,22 +91,30 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:kill': {
-      const godName = data.godName || data.name
-      if (ptyProcesses.has(godName)) {
-        const entry = ptyProcesses.get(godName)
-        entry.proc.kill()
-        ptyProcesses.delete(godName)
+    case 'god:kill':
+    case 'entity:kill': {
+      const entityId = data.entityId || data.godName || data.name
+      const entity = appState.entities[entityId]
+
+      // For god/terminal types, clean up PTY
+      if (entity?.type === 'god' || entity?.type === 'terminal') {
+        if (ptyProcesses.has(entityId)) {
+          const entry = ptyProcesses.get(entityId)
+          entry.proc.kill()
+          ptyProcesses.delete(entityId)
+        }
+        killGodSession(entityId)
+        clearOutputBuffer(entityId)
       }
-      killGodSession(godName)
-      clearOutputBuffer(godName)
-      delete appState.gods[godName]
-      if (appState.focusedGod === godName) {
-        // Find another god in the same tab to focus
-        const remainingGods = Object.entries(appState.gods)
-          .filter(([_, g]) => g.tabId === appState.activeTabId)
+
+      delete appState.entities[entityId]
+
+      if (appState.focusedEntity === entityId) {
+        // Find another entity in the same tab to focus
+        const remaining = Object.entries(appState.entities)
+          .filter(([_, e]) => e.tabId === appState.activeTabId)
           .sort((a, b) => a[1].order - b[1].order)
-        appState.focusedGod = remainingGods.length > 0 ? remainingGods[0][0] : null
+        appState.focusedEntity = remaining.length > 0 ? remaining[0][0] : null
       }
       saveState()
       broadcastState()
@@ -107,46 +127,50 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:set-title': {
-      const godName = data.godName
+    case 'god:set-title':
+    case 'entity:set-title': {
+      const entityId = data.entityId || data.godName
       const title = data.title
-      if (godName && appState.gods[godName]) {
-        appState.gods[godName].title = title
+      if (entityId && appState.entities[entityId]) {
+        appState.entities[entityId].title = title
         saveState()
         broadcastState()
       }
       break
     }
 
-    case 'god:set-status': {
-      const godName = data.godName
+    case 'god:set-status':
+    case 'entity:set-status': {
+      const entityId = data.entityId || data.godName
       const status = data.status
-      if (godName && appState.gods[godName]) {
-        appState.gods[godName].status = status
+      if (entityId && appState.entities[entityId]) {
+        appState.entities[entityId].status = status
         saveState()
         broadcastState()
       }
       break
     }
 
-    case 'god:set-ready': {
-      const godName = data.godName
+    case 'god:set-ready':
+    case 'entity:set-ready': {
+      const entityId = data.entityId || data.godName
       const readyState = data.readyState
-      if (godName && appState.gods[godName]) {
-        appState.gods[godName].readyState = readyState
+      if (entityId && appState.entities[entityId]) {
+        appState.entities[entityId].readyState = readyState
         saveState()
         broadcastState()
       }
       break
     }
 
-    case 'god:peek': {
-      const godName = data.godName
+    case 'god:peek':
+    case 'entity:peek': {
+      const entityId = data.entityId || data.godName
       const lines = data.lines || 50
-      const output = getOutputBuffer(godName, lines)
+      const output = getOutputBuffer(entityId, lines)
       ws.send(JSON.stringify({
-        event: 'god:peek:response',
-        godName,
+        event: 'entity:peek:response',
+        entityId,
         output,
         lines: output.split('\n').length
       }))
@@ -181,14 +205,15 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'pty:input': {
-      // Reset readyState when user types to a god
-      if (appState.gods[data.godName]?.readyState &&
-          appState.gods[data.godName].readyState !== 'working') {
-        appState.gods[data.godName].readyState = 'working'
+      const entityId = data.entityId || data.godName
+      // Reset readyState when user types to an entity
+      if (appState.entities[entityId]?.readyState &&
+          appState.entities[entityId].readyState !== 'working') {
+        appState.entities[entityId].readyState = 'working'
         saveState()
         broadcastState()
       }
-      sendToPty(data.godName, data.data)
+      sendToPty(entityId, data.data)
       break
     }
 
@@ -210,9 +235,24 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'tab:remove': {
       const tabId = data.tabId
-      Object.keys(appState.gods).forEach(name => {
-        if (appState.gods[name].tabId === tabId) delete appState.gods[name]
+
+      // Remove all entities in this tab (and clean up PTYs for god/terminal types)
+      Object.keys(appState.entities).forEach(id => {
+        const entity = appState.entities[id]
+        if (entity.tabId === tabId) {
+          if (entity.type === 'god' || entity.type === 'terminal') {
+            if (ptyProcesses.has(id)) {
+              const entry = ptyProcesses.get(id)
+              entry.proc.kill()
+              ptyProcesses.delete(id)
+            }
+            killGodSession(id)
+            clearOutputBuffer(id)
+          }
+          delete appState.entities[id]
+        }
       })
+
       appState.tabs = appState.tabs.filter(t => t.id !== tabId)
       if (appState.tabs.length === 0) {
         appState.tabs = [{ id: 1, name: 'Olympus' }]
@@ -221,6 +261,15 @@ export function handleMessage(ws, msg, projectRoot) {
       } else if (appState.activeTabId === tabId) {
         appState.activeTabId = appState.tabs[0].id
       }
+
+      // Reset focusedEntity if it was in removed tab
+      if (appState.focusedEntity && !appState.entities[appState.focusedEntity]) {
+        const remaining = Object.entries(appState.entities)
+          .filter(([_, e]) => e.tabId === appState.activeTabId)
+          .sort((a, b) => a[1].order - b[1].order)
+        appState.focusedEntity = remaining.length > 0 ? remaining[0][0] : null
+      }
+
       saveState()
       broadcastState()
       break
@@ -229,13 +278,13 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'tab:select': {
       appState.activeTabId = data.tabId
 
-      // Ensure focusedGod is in new tab
-      const godsInTab = Object.keys(appState.gods)
-        .filter(name => appState.gods[name].tabId === data.tabId)
-        .sort((a, b) => appState.gods[a].order - appState.gods[b].order)
+      // Ensure focusedEntity is in new tab
+      const entitiesInTab = Object.keys(appState.entities)
+        .filter(id => appState.entities[id].tabId === data.tabId)
+        .sort((a, b) => appState.entities[a].order - appState.entities[b].order)
 
-      if (!godsInTab.includes(appState.focusedGod)) {
-        appState.focusedGod = godsInTab[0] || null
+      if (!entitiesInTab.includes(appState.focusedEntity)) {
+        appState.focusedEntity = entitiesInTab[0] || null
       }
 
       saveState()
@@ -251,14 +300,16 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:move': {
-      if (appState.gods[data.godName]) {
-        appState.gods[data.godName].tabId = data.tabId
-        const godsInTab = Object.entries(appState.gods)
-          .filter(([_, g]) => g.tabId === data.tabId)
+    case 'god:move':
+    case 'entity:move': {
+      const entityId = data.entityId || data.godName
+      if (appState.entities[entityId]) {
+        appState.entities[entityId].tabId = data.tabId
+        const entitiesInTab = Object.entries(appState.entities)
+          .filter(([_, e]) => e.tabId === data.tabId)
           .sort((a, b) => a[1].order - b[1].order)
-        godsInTab.forEach(([name, _], idx) => {
-          appState.gods[name].order = idx
+        entitiesInTab.forEach(([id, _], idx) => {
+          appState.entities[id].order = idx
         })
       }
       saveState()
@@ -266,15 +317,18 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'god:move-to-new-tab': {
+    case 'god:move-to-new-tab':
+    case 'entity:move-to-new-tab': {
+      const entityId = data.entityId || data.godName
       appState.tabCounter++
       const newTab = { id: appState.tabCounter, name: getRandomRealmName() }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
-      if (appState.gods[data.godName]) {
-        appState.gods[data.godName].tabId = newTab.id
-        appState.gods[data.godName].order = 0
+      if (appState.entities[entityId]) {
+        appState.entities[entityId].tabId = newTab.id
+        appState.entities[entityId].order = 0
       }
+      appState.focusedEntity = entityId
       saveState()
       broadcastState()
       break
@@ -287,69 +341,66 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'view:set': {
-      const validViews = ['work', 'history', 'git', 'browser', 'linear', 'settings']
-      if (validViews.includes(data.view)) {
-        appState.view = data.view
-        saveState()
-        broadcastState()
+    // Spawn a view entity (browser, git, history, linear, settings)
+    case 'entity:spawn': {
+      const type = data.type
+      if (!ENTITY_TYPES[type] || type === 'god' || type === 'terminal') {
+        // Use god:spawn or terminal:spawn for those
+        break
       }
-      break
-    }
 
-    case 'browser:navigate': {
-      const url = data.url
-      if (url) {
-        // Switch to browser view and set URL
-        appState.view = 'browser'
-        appState.browserUrl = url
-        saveState()
-        broadcastState()
+      const entityId = generateEntityId(type)
+      const num = getNextEntityNumber(type)
+      const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+
+      appState.entities[entityId] = {
+        id: entityId,
+        type,
+        name: data.name || `${ENTITY_TYPES[type].label}-${num}`,
+        tabId: appState.activeTabId,
+        order: entitiesInTab.length,
+        spawnedAt: Date.now(),
+        // Type-specific data
+        url: data.url || null,
+        project: data.project || null
       }
-      break
-    }
 
-    case 'workLayout:set': {
-      appState.workLayout = data.layout || 'focus'
-
-      // Get all gods including sockets not yet in appState.gods
-      const allGods = listGodSockets()
-      allGods.forEach(sock => {
-        if (!appState.gods[sock.name]) {
-          appState.gods[sock.name] = { tabId: appState.activeTabId, order: 0 }
-        }
-      })
-
-      // Auto-focus: use provided god, or first god in active tab
-      const godsInTab = Object.keys(appState.gods)
-        .filter(name => appState.gods[name].tabId === appState.activeTabId)
-        .sort((a, b) => (appState.gods[a].order || 0) - (appState.gods[b].order || 0))
-
-      appState.focusedGod = data.focusedGod && godsInTab.includes(data.focusedGod)
-        ? data.focusedGod
-        : godsInTab[0] || null
-
+      appState.focusedEntity = entityId
       saveState()
       broadcastState()
+      break
+    }
+
+    // Update browser entity URL
+    case 'browser:navigate': {
+      const entityId = data.entityId
+      const url = data.url
+      if (entityId && url && appState.entities[entityId]?.type === 'browser') {
+        appState.entities[entityId].url = url
+        saveState()
+        broadcastState()
+      }
       break
     }
 
     case 'focus:set': {
-      appState.focusedGod = data.godName || null
+      const entityId = data.entityId || data.godName
+      appState.focusedEntity = entityId || null
       saveState()
       broadcastState()
       break
     }
 
-    case 'gods:reorder': {
-      // data.order: array of god names in new order
+    case 'gods:reorder':
+    case 'entities:reorder': {
+      // data.order: array of entity IDs in new order
       const { order } = data
       if (!Array.isArray(order)) break
 
-      // Update order values for each god in the array
-      order.forEach((name, idx) => {
-        if (appState.gods[name]) {
-          appState.gods[name].order = idx
+      // Update order values for each entity in the array
+      order.forEach((id, idx) => {
+        if (appState.entities[id]) {
+          appState.entities[id].order = idx
         }
       })
 
@@ -365,18 +416,17 @@ export function handleMessage(ws, msg, projectRoot) {
         color: '#57A143'  // nvim green
       }, projectRoot)
       if (terminal && !terminal.exists) {
-        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[terminal.name] = {
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+        appState.entities[terminal.name] = {
+          id: terminal.name,
+          type: 'terminal',
+          name: terminal.displayName || terminal.name,
           tabId: appState.activeTabId,
-          order: godsInTab.length,
+          order: entitiesInTab.length,
           spawnedAt: Date.now(),
-          displayName: terminal.displayName,
           color: terminal.color
         }
-        // Auto-focus new nvim in focus mode
-        if (appState.workLayout === 'focus') {
-          appState.focusedGod = terminal.name
-        }
+        appState.focusedEntity = terminal.name
         saveState()
         broadcastState()
       } else if (terminal?.exists) {
@@ -399,17 +449,17 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'history:resume': {
       const god = createGodSession(data.name, '', projectRoot, { resumeSessionId: data.sessionId })
       if (god && !god.exists) {
-        const godsInTab = Object.values(appState.gods).filter(g => g.tabId === appState.activeTabId)
-        appState.gods[god.name] = {
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+        appState.entities[god.name] = {
+          id: god.name,
+          type: 'god',
+          name: god.name,
           tabId: appState.activeTabId,
-          order: godsInTab.length,
+          order: entitiesInTab.length,
           mission: data.summary || null,
           spawnedAt: Date.now()
         }
-        // Auto-focus resumed god in focus mode
-        if (appState.workLayout === 'focus') {
-          appState.focusedGod = god.name
-        }
+        appState.focusedEntity = god.name
         saveState()
         broadcastState()
       } else if (god?.exists) {

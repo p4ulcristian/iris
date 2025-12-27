@@ -26,8 +26,8 @@ function formatElapsed(ms) {
   }
 }
 
-export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
-  const { name, displayName, color, title, status, mission, readyState, spawnedAt } = god
+export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
+  const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const moveMenuRef = useRef(null)
@@ -58,9 +58,11 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
     return () => clearInterval(interval)
   }, [spawnedAt])
 
-  // Get god color from server - use custom color for terminals, theme color for gods
+  // Get entity color - theme color for gods, custom color for others
   const godColors = useStore(s => s.godColors)
-  const godColor = displayName ? color : (godColors[name.toLowerCase()] || color)
+  const entityColor = type === 'god'
+    ? (godColors[name?.toLowerCase()] || color || '#888')
+    : (color || '#888')
 
   // Title: the goal (set via focus skill) or initial mission
   const displayTitle = title || mission
@@ -80,16 +82,18 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
 
   return (
     <Reorder.Item
-      value={god}
+      value={entity}
       dragListener={true}
       dragControls={dragControls}
       onClick={onClick}
       className="group relative w-full cursor-grab active:cursor-grabbing overflow-hidden liquid-glass-god-tinted"
       style={{
-        '--god-color': godColor,
-        '--god-color-rgb': hexToRgbCss(godColor),
-        borderRadius: '12px',
-        borderLeft: `3px solid ${godColor}`
+        '--god-color': entityColor,
+        '--god-color-rgb': hexToRgbCss(entityColor),
+        borderRadius: '12px 16px 16px 12px',
+        borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
+        opacity: isActive ? 1 : 0.65,
+        transition: 'opacity 0.2s ease, border-color 0.2s ease'
       }}
       initial={false}
     >
@@ -127,7 +131,7 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
                       key={tab.id}
                       onClick={(e) => {
                         e.stopPropagation()
-                        onMoveToTab?.(name, tab.id)
+                        onMoveToTab?.(id, tab.id)
                         setShowMoveMenu(false)
                       }}
                       className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
@@ -142,7 +146,7 @@ export default function GodTaskCard({ god, isActive, onClick, onClose, tabs, act
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  onMoveToNewTab?.(name)
+                  onMoveToNewTab?.(id)
                   setShowMoveMenu(false)
                 }}
                 className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"

@@ -1,6 +1,6 @@
 import fs from 'fs'
 import { STATE_FILE } from './config.js'
-import { getThemeGodColors } from '../src/themes/generated/themes.js'
+import { GOD_COLORS } from '../src/themes/generated/palettes.js'
 import { listGodSockets } from './gods.js'
 
 // Broadcast function - set by index.js
@@ -16,17 +16,15 @@ export function broadcast(event, data = {}) {
 
 // App state (source of truth)
 export const appState = {
-  version: 1,
+  version: 2,
   tabs: [{ id: 1, name: 'Olympus' }],
   activeTabId: 1,
   tabCounter: 1,
-  gods: {},
+  entities: {},           // All entities: gods, terminals, browsers, git panels, etc.
+  entityCounter: 0,       // For generating unique IDs
   theme: 'divine-void',
-  view: 'work',           // 'work' | 'history' | 'git' | 'browser' | 'linear' | 'settings'
-  workLayout: 'focus',    // Focus mode is the only layout
-  focusedGod: null,
+  focusedEntity: null,    // ID of focused entity
   gitProjects: [],        // [{path, name}]
-  browserUrl: null,       // URL to navigate browser to
   settings: {             // App settings (API keys, etc.)
     linearApiKey: ''
   }
@@ -42,40 +40,77 @@ export function loadState() {
     console.error('Failed to load state:', e)
   }
 
-  // Merge with discovered sockets
+  // Migrate from old 'gods' format to 'entities'
+  // Also handles case where both exist (merge gods data into entities)
+  if (appState.gods) {
+    if (!appState.entities) {
+      appState.entities = {}
+    }
+    Object.entries(appState.gods).forEach(([name, godData]) => {
+      // Merge god data into entity, preferring gods data for tabId/order/mission etc.
+      appState.entities[name] = {
+        ...appState.entities[name],  // Keep any existing entity data
+        ...godData,                   // Override with gods data
+        id: name,
+        type: godData.displayName ? 'terminal' : 'god',
+        name: godData.displayName || name
+      }
+    })
+    delete appState.gods
+  }
+
+  // Migrate focusedGod to focusedEntity
+  if (appState.focusedGod !== undefined) {
+    appState.focusedEntity = appState.focusedGod
+    delete appState.focusedGod
+  }
+
+  // Remove old view/workLayout if present
+  delete appState.view
+  delete appState.workLayout
+
+  // Ensure entities object exists
+  if (!appState.entities) {
+    appState.entities = {}
+  }
+
+  // Ensure entityCounter exists
+  if (!appState.entityCounter) {
+    appState.entityCounter = 0
+  }
+
+  // Merge with discovered sockets (gods/terminals with active dtach sessions)
   const sockets = listGodSockets()
   const socketNames = new Set(sockets.map(s => s.name))
 
-  // Remove gods without sockets
-  Object.keys(appState.gods).forEach(name => {
-    if (!socketNames.has(name)) delete appState.gods[name]
-  })
-
-  // Add new sockets to Main tab
-  sockets.forEach(sock => {
-    if (!appState.gods[sock.name]) {
-      const godsInMain = Object.values(appState.gods).filter(g => g.tabId === 1)
-      appState.gods[sock.name] = { tabId: 1, order: godsInMain.length }
+  // Remove terminal-type entities without sockets
+  Object.keys(appState.entities).forEach(id => {
+    const entity = appState.entities[id]
+    if ((entity.type === 'god' || entity.type === 'terminal') && !socketNames.has(id)) {
+      delete appState.entities[id]
     }
   })
 
-  // Migrate viewMode -> workLayout if needed
-  if (appState.viewMode && !appState.workLayout) {
-    appState.workLayout = appState.viewMode
-    delete appState.viewMode
-  }
+  // Add new sockets to first tab
+  sockets.forEach(sock => {
+    if (!appState.entities[sock.name]) {
+      const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === 1)
+      appState.entities[sock.name] = {
+        id: sock.name,
+        type: 'god',
+        name: sock.name,
+        tabId: 1,
+        order: entitiesInTab.length
+      }
+    }
+  })
 
-  // Ensure view exists
-  if (!appState.view) {
-    appState.view = 'work'
-  }
+  // Validate focusedEntity - ensure it's in active tab
+  const entitiesInActiveTab = Object.keys(appState.entities)
+    .filter(id => appState.entities[id].tabId === appState.activeTabId)
 
-  // Validate focusedGod - ensure it's in active tab
-  const godsInActiveTab = Object.keys(appState.gods)
-    .filter(name => appState.gods[name].tabId === appState.activeTabId)
-
-  if (!godsInActiveTab.includes(appState.focusedGod)) {
-    appState.focusedGod = godsInActiveTab[0] || null
+  if (!entitiesInActiveTab.includes(appState.focusedEntity)) {
+    appState.focusedEntity = entitiesInActiveTab[0] || null
   }
 
   // Ensure settings object exists
@@ -111,41 +146,60 @@ export function saveState() {
 }
 
 export function getStateForBroadcast() {
-  const gods = listGodSockets().map(sock => {
-    const godState = appState.gods[sock.name] || {}
+  // Get socket info for gods/terminals
+  const sockets = listGodSockets()
+  const socketMap = Object.fromEntries(sockets.map(s => [s.name, s]))
+
+  // Build entities array from appState.entities
+  const entities = Object.values(appState.entities).map(entity => {
+    const sock = socketMap[entity.id]
+
+    // For god/terminal types, merge with socket info
+    if (entity.type === 'god' || entity.type === 'terminal') {
+      return {
+        id: entity.id,
+        type: entity.type,
+        name: entity.name || entity.id,
+        color: entity.color || sock?.color,
+        voice: sock?.voice,
+        tabId: entity.tabId || 1,
+        order: entity.order || 0,
+        title: entity.title || null,
+        status: entity.status || null,
+        mission: entity.mission || null,
+        readyState: entity.readyState || 'working',
+        spawnedAt: entity.spawnedAt || null
+      }
+    }
+
+    // For view entities (browser, git, etc.)
     return {
-      ...sock,
-      // Override color if stored in state (for terminals with custom colors)
-      color: godState.color || sock.color,
-      displayName: godState.displayName || null,
-      tabId: godState.tabId || 1,
-      order: godState.order || 0,
-      title: godState.title || null,
-      status: godState.status || null,
-      mission: godState.mission || null,
-      readyState: godState.readyState || 'working',
-      spawnedAt: godState.spawnedAt || null
+      id: entity.id,
+      type: entity.type,
+      name: entity.name,
+      tabId: entity.tabId || 1,
+      order: entity.order || 0,
+      spawnedAt: entity.spawnedAt || null,
+      // View-specific data
+      url: entity.url || null,        // for browser
+      project: entity.project || null  // for git
     }
   })
 
-  gods.sort((a, b) => a.order - b.order)
+  entities.sort((a, b) => a.order - b.order)
 
-  const godColors = getThemeGodColors(appState.theme)
+  const godColors = GOD_COLORS
   return {
     tabs: appState.tabs,
     activeTabId: appState.activeTabId,
     tabCounter: appState.tabCounter,
-    gods,
+    entities,
     theme: appState.theme,
     godColors,
-    view: appState.view,
-    workLayout: appState.workLayout,
-    focusedGod: appState.focusedGod,
+    focusedEntity: appState.focusedEntity,
     gitProjects: appState.gitProjects || [],
-    browserUrl: appState.browserUrl,
     settings: {
       linearApiKey: maskApiKey(appState.settings?.linearApiKey),
-      // Add hasLinearApiKey so UI knows if it's configured
       hasLinearApiKey: !!appState.settings?.linearApiKey
     }
   }
@@ -153,5 +207,22 @@ export function getStateForBroadcast() {
 
 export function broadcastState() {
   broadcast('state:sync', getStateForBroadcast())
+}
+
+// Generate a unique entity ID
+export function generateEntityId(type) {
+  appState.entityCounter++
+  return `${type}-${appState.entityCounter}`
+}
+
+// Get next number for auto-naming entities of a type
+export function getNextEntityNumber(type) {
+  const existing = Object.values(appState.entities)
+    .filter(e => e.type === type)
+    .map(e => {
+      const match = e.name?.match(new RegExp(`^${type}-(\\d+)$`, 'i'))
+      return match ? parseInt(match[1]) : 0
+    })
+  return existing.length > 0 ? Math.max(...existing) + 1 : 1
 }
 
