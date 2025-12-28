@@ -72,9 +72,96 @@ wss.on('connection', (ws) => {
 
 console.log(`WebSocket server on :${WS_PORT}`)
 
-// OAuth callback HTTP server
+// Helper: Read directory tree
+async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0) {
+  const stats = await fs.promises.stat(dirPath)
+  const name = path.basename(dirPath)
+
+  if (!stats.isDirectory()) {
+    return { name, path: dirPath, type: 'file' }
+  }
+
+  const node = { name, path: dirPath, type: 'directory', children: [] }
+
+  if (currentDepth >= maxDepth) return node
+
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+    // Sort: folders first, then files, alphabetically
+    entries.sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1
+      if (!a.isDirectory() && b.isDirectory()) return 1
+      return a.name.localeCompare(b.name)
+    })
+
+    // Filter hidden files and common ignores
+    const filtered = entries.filter(e =>
+      !e.name.startsWith('.') &&
+      !['node_modules', '__pycache__', 'dist', 'build', '.git'].includes(e.name)
+    )
+
+    for (const entry of filtered) {
+      const childPath = path.join(dirPath, entry.name)
+      if (entry.isDirectory()) {
+        node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1))
+      } else {
+        node.children.push({ name: entry.name, path: childPath, type: 'file' })
+      }
+    }
+  } catch (err) {
+    console.error('Error reading directory:', err)
+  }
+
+  return node
+}
+
+// HTTP server for OAuth and API
 const oauthServer = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${OAUTH_PORT}`)
+
+  // CORS headers for API
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200)
+    res.end()
+    return
+  }
+
+  // API: Get directory tree
+  if (url.pathname === '/api/files') {
+    const dirPath = url.searchParams.get('path') || process.env.HOME
+    try {
+      const tree = await readDirectoryTree(dirPath)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(tree))
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message }))
+    }
+    return
+  }
+
+  // API: Get file content
+  if (url.pathname === '/api/file') {
+    const filePath = url.searchParams.get('path')
+    if (!filePath) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' })
+      res.end('Missing path parameter')
+      return
+    }
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8')
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end(content)
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' })
+      res.end(err.message)
+    }
+    return
+  }
 
   if (url.pathname === '/oauth/google/callback') {
     const code = url.searchParams.get('code')

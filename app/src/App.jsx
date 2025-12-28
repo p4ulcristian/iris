@@ -14,6 +14,7 @@ import LinearView from './components/LinearView'
 import SettingsView from './components/SettingsView'
 import CemeteryView from './components/CemeteryView'
 import CalendarView from './components/CalendarView'
+import CodeView from './components/CodeView'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
@@ -606,6 +607,9 @@ export default function App() {
                             {entity.type === 'calendar' && (
                               <CalendarView send={send} />
                             )}
+                            {entity.type === 'code' && (
+                              <CodeView entityId={entity.id} />
+                            )}
                           </EntityCard>
                         )}
                       </motion.div>
@@ -697,6 +701,14 @@ export default function App() {
                   title="Calendar"
                 >
                   <FontAwesomeIcon icon={faCalendar} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                </button>
+                <button
+                  onClick={() => handleSpawnEntity('code')}
+                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Code viewer"
+                >
+                  <FontAwesomeIcon icon={faCode} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
                   <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
                 </button>
                 <button

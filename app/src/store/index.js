@@ -48,6 +48,12 @@ const initialState = {
 
   // Settings
   settings: {},
+
+  // Code highlights for code viewer
+  codeHighlights: {},
+
+  // Browser URL (from skill)
+  browserUrl: null,
 }
 
 // Store
@@ -334,6 +340,11 @@ export const useStore = create(
         // Sync settings
         if (serverState.settings !== undefined) {
           state.settings = serverState.settings
+        }
+
+        // Sync code highlights
+        if (serverState.codeHighlights !== undefined) {
+          state.codeHighlights = serverState.codeHighlights
         }
 
         // Clear fullscreen if entity no longer exists (fullscreen is still client-only)

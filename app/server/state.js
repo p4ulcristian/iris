@@ -226,7 +226,8 @@ export function getStateForBroadcast() {
         connected: !!appState.settings?.googleCalendar?.refresh_token,
         email: appState.settings?.googleCalendar?.email || null
       }
-    }
+    },
+    codeHighlights: appState.codeHighlights || {}
   }
 }
 

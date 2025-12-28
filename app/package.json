@@ -14,13 +14,14 @@
     "preview": "bunx --bun vite preview"
   },
   "dependencies": {
-    "googleapis": "^169.0.0",
     "@fortawesome/fontawesome-svg-core": "^7.1.0",
     "@fortawesome/free-solid-svg-icons": "^7.1.0",
     "@fortawesome/react-fontawesome": "^3.1.1",
+    "@monaco-editor/react": "^4.7.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^6.0.0",
     "framer-motion": "^12.23.26",
+    "googleapis": "^169.0.0",
     "immer": "^11.1.0",
     "js-yaml": "^4.1.1",
     "motion": "^12.0.0",

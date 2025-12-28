@@ -15,6 +15,7 @@ const ENTITY_TYPES = {
   god: { icon: '⚡', label: 'God' },
   terminal: { icon: '🖥️', label: 'Terminal' },
   browser: { icon: '🌐', label: 'Browser' },
+  code: { icon: '📝', label: 'Code' },
   git: { icon: '⚙️', label: 'Git' },
   history: { icon: '📜', label: 'History' },
   linear: { icon: '✓', label: 'Linear' },
@@ -1071,6 +1072,83 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'cemetery:clear': {
       appState.cemetery = []
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Code viewer management
+    case 'code:open': {
+      const { filePath, line, entityId } = data
+      if (!filePath) break
+
+      // Find or create a code entity
+      let codeEntity = entityId ? appState.entities[entityId] : null
+
+      if (!codeEntity) {
+        // Find first code entity in active tab
+        codeEntity = Object.values(appState.entities).find(
+          e => e.type === 'code' && e.tabId === appState.activeTabId
+        )
+      }
+
+      if (!codeEntity) {
+        // Create a new code entity
+        const newId = generateEntityId('code')
+        const num = getNextEntityNumber('code')
+        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
+
+        appState.entities[newId] = {
+          id: newId,
+          type: 'code',
+          name: `Code-${num}`,
+          tabId: appState.activeTabId,
+          order: entitiesInTab.length,
+          spawnedAt: Date.now()
+        }
+        codeEntity = appState.entities[newId]
+      }
+
+      // Broadcast file open event
+      broadcast('code:file:open', {
+        entityId: codeEntity.id,
+        filePath,
+        line: line || 1
+      })
+
+      appState.focusedEntity = codeEntity.id
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'code:highlight': {
+      const { filePath, highlights } = data
+      if (!filePath || !highlights) break
+
+      // Initialize code highlights in app state if needed
+      if (!appState.codeHighlights) {
+        appState.codeHighlights = {}
+      }
+
+      // Merge new highlights (or replace)
+      appState.codeHighlights[filePath] = highlights
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'code:highlight:clear': {
+      const { filePath } = data
+      if (!appState.codeHighlights) break
+
+      if (filePath) {
+        delete appState.codeHighlights[filePath]
+      } else {
+        appState.codeHighlights = {}
+      }
+
       saveState()
       broadcastState()
       break

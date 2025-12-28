@@ -20,6 +20,7 @@ python -m brain.skills.<skill> <args>
 | `run` | `python -m brain.skills.run "cmd"` | Run command in new terminal |
 | `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
 | `browse` | `python -m brain.skills.browse <url>` | Open URL in the Iris browser |
+| `code` | `python -m brain.skills.code <cmd>` | Open/highlight code in the code viewer |
 
 ## focus
 
@@ -89,9 +90,35 @@ python -m brain.skills.browse github.com           # Protocol added automaticall
 python -m brain.skills.browse https://example.com  # Full URL
 ```
 
+## code
+
+Open and highlight code in the Iris code viewer. Use this to show Paul specific code with annotations.
+
+**Open a file:**
+```bash
+python -m brain.skills.code open src/App.jsx           # Open file
+python -m brain.skills.code open src/App.jsx 42        # Open and jump to line 42
+```
+
+**Highlight lines:**
+```bash
+python -m brain.skills.code highlight src/App.jsx 10-20 yellow "Auth logic here"
+python -m brain.skills.code highlight src/App.jsx 5 red "Bug: missing null check"
+python -m brain.skills.code highlight src/App.jsx 10,15,20-25 green
+```
+
+Colors: yellow, red, green, blue, orange, purple, cyan
+
+**Clear highlights:**
+```bash
+python -m brain.skills.code clear                  # Clear all
+python -m brain.skills.code clear src/App.jsx      # Clear specific file
+```
+
 ## When to Use
 
 When Paul says "open in [tool]":
 - "Open in glow" -> `python -m brain.skills.glow /path/to/file.md`
 - "Edit in nvim" -> `python -m brain.skills.nvim /path/to/file`
 - "Open in browser" -> `python -m brain.skills.browse <url>`
+- "Show me the code" -> `python -m brain.skills.code open <file>`
