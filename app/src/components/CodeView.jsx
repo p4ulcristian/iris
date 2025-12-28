@@ -8,7 +8,8 @@ import {
   faXmark,
   faChevronRight,
   faChevronDown,
-  faRefresh
+  faRefresh,
+  faFolderTree
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
 import { API_URL } from '../config'
@@ -335,15 +336,27 @@ export default function CodeView({ entityId }) {
           </button>
         </div>
 
-        {/* Path input */}
+        {/* Path input with folder picker */}
         <div className="px-2 py-2 border-b border-white/10">
-          <input
-            type="text"
-            value={rootPath || ''}
-            onChange={(e) => loadDirectory(e.target.value)}
-            placeholder="Path..."
-            className="w-full px-2 py-1 bg-black/40 border border-white/10 rounded text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50"
-          />
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={rootPath || ''}
+              onChange={(e) => loadDirectory(e.target.value)}
+              placeholder="Path..."
+              className="flex-1 px-2 py-1 bg-black/40 border border-white/10 rounded text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50"
+            />
+            <button
+              onClick={async () => {
+                const path = await window.iris?.selectFolder()
+                if (path) loadDirectory(path)
+              }}
+              className="px-2 py-1 bg-accent/20 border border-accent/30 rounded text-accent hover:bg-accent/30 transition-colors"
+              title="Browse folder"
+            >
+              <FontAwesomeIcon icon={faFolderTree} className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         {/* Tree */}
