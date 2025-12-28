@@ -3,19 +3,14 @@
 
 // God primary colors
 export const GOD_COLORS = {
-  "zeus": "#FFD700",
-  "apollo": "#FFFF00",
+  "zeus": "#FFCC00",
+  "ares": "#FF3366",
   "artemis": "#00FF88",
-  "athena": "#0088FF",
-  "hermes": "#00FFFF",
-  "hades": "#555555",
-  "poseidon": "#0044CC",
-  "hera": "#FF00BB",
-  "ares": "#FF0000",
-  "hephaestus": "#FF6600",
-  "aphrodite": "#FFAACC",
-  "dionysus": "#AA00FF",
-  "demeter": "#00CC00"
+  "poseidon": "#0088FF",
+  "hermes": "#00DDFF",
+  "hera": "#FF44AA",
+  "hephaestus": "#FF6622",
+  "dionysus": "#AA44FF"
 }
 
 // Color utilities for runtime palette generation

@@ -2,17 +2,12 @@
 /* Do not edit directly - run: node scripts/generate-themes.js */
 
 @theme {
-  --color-god-zeus: #FFD700;
-  --color-god-apollo: #FFFF00;
+  --color-god-zeus: #FFCC00;
+  --color-god-ares: #FF3366;
   --color-god-artemis: #00FF88;
-  --color-god-athena: #0088FF;
-  --color-god-hermes: #00FFFF;
-  --color-god-hades: #555555;
-  --color-god-poseidon: #0044CC;
-  --color-god-hera: #FF00BB;
-  --color-god-ares: #FF0000;
-  --color-god-hephaestus: #FF6600;
-  --color-god-aphrodite: #FFAACC;
-  --color-god-dionysus: #AA00FF;
-  --color-god-demeter: #00CC00;
+  --color-god-poseidon: #0088FF;
+  --color-god-hermes: #00DDFF;
+  --color-god-hera: #FF44AA;
+  --color-god-hephaestus: #FF6622;
+  --color-god-dionysus: #AA44FF;
 }
