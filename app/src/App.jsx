@@ -652,7 +652,7 @@ export default function App() {
               {/* Action buttons - pinned to bottom */}
               <div className="grid grid-cols-5 gap-1.5 mt-3 flex-shrink-0">
                 <button
-                  onClick={handleSpawnRandomGod}
+                  onClick={() => setSummonModalOpen(true)}
                   className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title="New god (Ctrl+N)"
                 >

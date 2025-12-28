@@ -127,7 +127,8 @@ export function attachPty(godName, ws, cols, rows) {
   const clients = new Set([ws])
 
   // Spawn using Bun.Terminal
-  const proc = Bun.spawn(['dtach', '-a', socketPath], {
+  // Use -r winch to force SIGWINCH redraw method (needed for nvim and other TUI apps)
+  const proc = Bun.spawn(['dtach', '-a', socketPath, '-r', 'winch'], {
     terminal: {
       cols: cols || 120,
       rows: rows || 40,
