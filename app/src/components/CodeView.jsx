@@ -137,6 +137,9 @@ function EditorTab({ file, isActive, onClick, onClose }) {
       <span className="truncate text-sm text-text-primary">
         {file.name}
       </span>
+      {file.modified && (
+        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" title="Unsaved changes" />
+      )}
       <button
         onClick={(e) => {
           e.stopPropagation()
@@ -259,6 +262,43 @@ export default function CodeView({ entityId }) {
       setActiveFilePath(openFiles.find(f => f.path !== path)?.path || null)
     }
   }, [activeFilePath, openFiles])
+
+  // Save file to disk
+  const saveFile = useCallback(async (filePath) => {
+    const file = openFiles.find(f => f.path === filePath)
+    if (!file || !file.modified) return
+
+    try {
+      const response = await fetch(`${API_URL}/api/file/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, content: file.content })
+      })
+
+      if (response.ok) {
+        setOpenFiles(prev => prev.map(f =>
+          f.path === filePath ? { ...f, modified: false } : f
+        ))
+        console.log('File saved:', filePath)
+      } else {
+        console.error('Failed to save file:', await response.text())
+      }
+    } catch (err) {
+      console.error('Save error:', err)
+    }
+  }, [openFiles])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        if (activeFilePath) saveFile(activeFilePath)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeFilePath, saveFile])
 
   // Apply decorations for highlights
   useEffect(() => {
@@ -393,26 +433,33 @@ export default function CodeView({ entityId }) {
         )}
 
         {/* Editor */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 relative">
           {activeFile ? (
-            <Editor
-              height="100%"
-              language={getLanguage(activeFile.name)}
-              value={activeFile.content}
-              theme="vs-dark"
-              onMount={handleEditorMount}
-              options={{
-                readOnly: true,
-                minimap: { enabled: true },
-                fontSize: 13,
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                glyphMargin: true,
-                folding: true,
-                wordWrap: 'on'
-              }}
-            />
+            <div className="absolute inset-0">
+              <Editor
+                width="100%"
+                height="100%"
+                language={getLanguage(activeFile.name)}
+                value={activeFile.content}
+                theme="vs-dark"
+                onMount={handleEditorMount}
+                onChange={(value) => {
+                  setOpenFiles(prev => prev.map(f =>
+                    f.path === activeFilePath ? { ...f, content: value, modified: true } : f
+                  ))
+                }}
+                options={{
+                  minimap: { enabled: true },
+                  fontSize: 13,
+                  lineNumbers: 'on',
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  glyphMargin: true,
+                  folding: true,
+                  wordWrap: 'on'
+                }}
+              />
+            </div>
           ) : (
             <div className="h-full flex items-center justify-center text-text-tertiary">
               <div className="text-center">

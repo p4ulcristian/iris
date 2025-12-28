@@ -145,7 +145,7 @@ const oauthServer = http.createServer(async (req, res) => {
   }
 
   // API: Get file content
-  if (url.pathname === '/api/file') {
+  if (url.pathname === '/api/file' && req.method === 'GET') {
     const filePath = url.searchParams.get('path')
     if (!filePath) {
       res.writeHead(400, { 'Content-Type': 'text/plain' })
@@ -160,6 +160,29 @@ const oauthServer = http.createServer(async (req, res) => {
       res.writeHead(500, { 'Content-Type': 'text/plain' })
       res.end(err.message)
     }
+    return
+  }
+
+  // API: Save file content
+  if (url.pathname === '/api/file/save' && req.method === 'POST') {
+    let body = ''
+    req.on('data', chunk => { body += chunk })
+    req.on('end', async () => {
+      try {
+        const { path: filePath, content } = JSON.parse(body)
+        if (!filePath || content === undefined) {
+          res.writeHead(400, { 'Content-Type': 'text/plain' })
+          res.end('Missing path or content')
+          return
+        }
+        await fs.promises.writeFile(filePath, content, 'utf-8')
+        res.writeHead(200, { 'Content-Type': 'text/plain' })
+        res.end('OK')
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' })
+        res.end(err.message)
+      }
+    })
     return
   }
 
