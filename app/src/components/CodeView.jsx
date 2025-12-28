@@ -348,8 +348,8 @@ export default function CodeView({ entityId }) {
             />
             <button
               onClick={async () => {
-                const path = await window.iris?.selectFolder()
-                if (path) loadDirectory(path)
+                const selectedPath = await window.iris?.selectFolder()
+                if (selectedPath) loadDirectory(selectedPath)
               }}
               className="px-2 py-1 bg-accent/20 border border-accent/30 rounded text-accent hover:bg-accent/30 transition-colors"
               title="Browse folder"
