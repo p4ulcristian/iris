@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
@@ -34,9 +34,10 @@ function formatElapsed(ms) {
 }
 
 // Get type icon component
-function TypeIcon({ type }) {
-  const iconClass = "w-4 h-4 object-contain"
+function TypeIcon({ type, size = 'sm' }) {
+  const iconClass = size === 'sm' ? "w-4 h-4 object-contain" : "w-5 h-5 object-contain"
   const faIconClass = "text-white/70"
+  const faSize = size === 'sm' ? 'sm' : 'lg'
 
   switch (type) {
     case 'god':
@@ -50,31 +51,31 @@ function TypeIcon({ type }) {
     case 'browser':
       return <img src={browserIcon} alt="Browser" className={iconClass} />
     case 'terminal':
-      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
+      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size={faSize} />
     case 'history':
-      return <FontAwesomeIcon icon={faClockRotateLeft} className={faIconClass} size="sm" />
+      return <FontAwesomeIcon icon={faClockRotateLeft} className={faIconClass} size={faSize} />
     case 'settings':
-      return <FontAwesomeIcon icon={faGear} className={faIconClass} size="sm" />
+      return <FontAwesomeIcon icon={faGear} className={faIconClass} size={faSize} />
     case 'cemetery':
-      return <FontAwesomeIcon icon={faSkull} className={faIconClass} size="sm" />
+      return <FontAwesomeIcon icon={faSkull} className={faIconClass} size={faSize} />
+    case 'code':
+      return <FontAwesomeIcon icon={faCode} className={faIconClass} size={faSize} />
+    case 'calendar':
+      return <FontAwesomeIcon icon={faCalendar} className={faIconClass} size={faSize} />
+    case 'oracle':
+      return <span className={size === 'sm' ? 'text-sm' : 'text-lg'}>🔮</span>
     default:
-      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size="sm" />
+      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size={faSize} />
   }
 }
 
 export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
+
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
-  const [isSummoning, setIsSummoning] = useState(true)
   const moveMenuRef = useRef(null)
   const dragControls = useDragControls()
-
-  // Clear summon glow after animation completes
-  useEffect(() => {
-    const timer = setTimeout(() => setIsSummoning(false), 500)
-    return () => clearTimeout(timer)
-  }, [])
 
   // Get other tabs (tabs we can move to)
   const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
@@ -129,36 +130,19 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
       dragListener={false}
       dragControls={dragControls}
       onClick={onClick}
-      className={`group relative w-full cursor-pointer overflow-hidden liquid-glass-god-tinted ${isSummoning ? 'summon-glow' : ''}`}
+      className="group relative cursor-pointer overflow-hidden liquid-glass-god-tinted"
       style={{
         '--god-color': entityColor,
         '--god-color-rgb': hexToRgbCss(entityColor),
         borderRadius: '12px 16px 16px 12px',
         borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
       }}
-      // Summon animation - divine arrival from above
-      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
+      // Only animate opacity/filter for active state changes (no position animations)
       animate={{
-        opacity: isActive ? 1 : 0.5,
-        y: 0,
-        scale: 1,
-        filter: isActive ? 'blur(0px)' : 'saturate(0.6) blur(0px)'
+        opacity: isActive ? 1 : 0.6,
+        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
       }}
-      // Banish animation - dissolve downward
-      exit={{
-        opacity: 0,
-        y: 30,
-        scale: 0.85,
-        filter: 'blur(12px)',
-        transition: { duration: 0.25, ease: 'easeIn' }
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 400,
-        damping: 25,
-        mass: 0.8
-      }}
-      layout
+      transition={{ duration: 0.15 }}
     >
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">

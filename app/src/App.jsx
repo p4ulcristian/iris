@@ -15,13 +15,14 @@ import SettingsView from './components/SettingsView'
 import CemeteryView from './components/CemeteryView'
 import CalendarView from './components/CalendarView'
 import CodeView from './components/CodeView'
+import OracleView from './components/OracleView'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus, faCalendar } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus, faCalendar, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from './assets/icons/claude.png'
@@ -63,6 +64,99 @@ export default function App() {
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
+
+  // Sidebar responsive breakpoint
+  const SIDEBAR_BREAKPOINT = 900
+
+  // Initialize sidebar state based on window size
+  const getInitialSidebarState = () => typeof window !== 'undefined' && window.innerWidth < SIDEBAR_BREAKPOINT
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarState)
+  const [sidebarShowCards, setSidebarShowCards] = useState(() => !getInitialSidebarState())
+  const [sidebarShowIcons, setSidebarShowIcons] = useState(getInitialSidebarState)
+  const [sidebarShowButtons, setSidebarShowButtons] = useState(() => !getInitialSidebarState())
+  const [sidebarAutoMode, setSidebarAutoMode] = useState(true) // Track if user manually toggled
+
+  // Sidebar animation timing (in ms)
+  const CARDS_DURATION = 200
+  const ICONS_DURATION = 200
+  const WIDTH_DURATION = 150
+  const BUTTON_DURATION = 150
+
+  // Track if animation is in progress to prevent ResizeObserver interference
+  const sidebarAnimatingRef = useRef(false)
+
+  // Handle sidebar toggle with sequenced animation
+  const handleSidebarToggle = useCallback((auto = false) => {
+    // If manual toggle, disable auto mode
+    if (!auto) {
+      setSidebarAutoMode(false)
+    }
+
+    // Prevent re-triggering during animation
+    if (sidebarAnimatingRef.current) return
+    sidebarAnimatingRef.current = true
+
+    if (!sidebarCollapsed) {
+      // CLOSING: buttons slide left → cards slide up → icons slide up → width collapses
+      setSidebarShowButtons(false)
+      setTimeout(() => {
+        setSidebarShowCards(false)
+        setTimeout(() => {
+          setSidebarShowIcons(true)
+          setTimeout(() => {
+            setSidebarCollapsed(true)
+            sidebarAnimatingRef.current = false
+          }, ICONS_DURATION)
+        }, CARDS_DURATION)
+      }, BUTTON_DURATION)
+    } else {
+      // OPENING: width expands → icons slide down → cards slide down → buttons slide in
+      setSidebarCollapsed(false)
+      setTimeout(() => {
+        setSidebarShowIcons(false)
+        setTimeout(() => {
+          setSidebarShowCards(true)
+          setTimeout(() => {
+            setSidebarShowButtons(true)
+            sidebarAnimatingRef.current = false
+          }, CARDS_DURATION)
+        }, ICONS_DURATION)
+      }, WIDTH_DURATION)
+    }
+  }, [sidebarCollapsed])
+
+  // Auto-collapse sidebar based on container size (works with dev tools too)
+  const mainContainerRef = useRef(null)
+  const sidebarObserverRef = useRef(null)
+
+  useEffect(() => {
+    if (!sidebarAutoMode || !mainContainerRef.current) return
+
+    let resizeTimeout
+    const handleResize = (entries) => {
+      clearTimeout(resizeTimeout)
+      resizeTimeout = setTimeout(() => {
+        // Skip if animation is in progress
+        if (sidebarAnimatingRef.current) return
+
+        const width = entries[0]?.contentRect?.width || window.innerWidth
+        const shouldCollapse = width < SIDEBAR_BREAKPOINT
+        if (shouldCollapse !== sidebarCollapsed) {
+          handleSidebarToggle(true) // true = auto toggle
+        }
+      }, 150) // Debounce
+    }
+
+    sidebarObserverRef.current = new ResizeObserver(handleResize)
+    sidebarObserverRef.current.observe(mainContainerRef.current)
+
+    return () => {
+      clearTimeout(resizeTimeout)
+      if (sidebarObserverRef.current) {
+        sidebarObserverRef.current.disconnect()
+      }
+    }
+  }, [sidebarAutoMode, sidebarCollapsed, handleSidebarToggle])
 
   // Refs for keyboard handlers (avoid stale closures)
   const tabsRef = useRef(tabs)
@@ -139,6 +233,11 @@ export default function App() {
       case 'entity:set-status':
       case 'god:set-status':
         updateEntityStatus(data.entityId || data.godName || data.name, data.status)
+        break
+
+      case 'code:file:open':
+        // Dispatch window event for CodeView to handle
+        window.dispatchEvent(new CustomEvent('iris:code:open', { detail: data }))
         break
     }
   }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone])
@@ -290,7 +389,7 @@ export default function App() {
 
       // Check if this is one of our app shortcuts
       const isAppShortcut = (
-        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'arrowup', 'arrowdown'].includes(key)) ||
+        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'b', 'arrowup', 'arrowdown'].includes(key)) ||
         (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
@@ -302,6 +401,14 @@ export default function App() {
         e.preventDefault()
         e.stopPropagation()
         setSummonModalOpen(true)
+        return
+      }
+
+      // Ctrl+B: Toggle sidebar
+      if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault()
+        e.stopPropagation()
+        handleSidebarToggle()
         return
       }
 
@@ -460,7 +567,7 @@ export default function App() {
   }, [
     handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, handleToggleFullscreen,
     rotateLayout, focusedEntity, fullscreenEntity, activeEntities,
-    toggleDevPanel, handleSetFocus, send, tabs, activeTabId
+    toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
 
   // Get ALL gods for persistent terminal rendering
@@ -513,7 +620,7 @@ export default function App() {
       </div>
 
       {/* Main layout: sidebar + content */}
-      <div className="flex flex-1 min-h-0">
+      <div ref={mainContainerRef} className="flex flex-1 min-h-0">
         {/* Left sidebar (tabs + services) */}
         <StatusBar
           connected={connected}
@@ -610,6 +717,9 @@ export default function App() {
                             {entity.type === 'code' && (
                               <CodeView entityId={entity.id} />
                             )}
+                            {entity.type === 'oracle' && (
+                              <OracleView entityId={entity.id} />
+                            )}
                           </EntityCard>
                         )}
                       </motion.div>
@@ -620,131 +730,231 @@ export default function App() {
             </div>
 
             {/* Sidebar with all entities as task cards */}
-            <div className="w-80 flex flex-col overflow-x-visible">
-              {/* Scrollable task cards area */}
-              <div className="flex-1 overflow-y-auto overflow-x-visible">
-                {activeEntities.length > 0 && (
-                  <Reorder.Group
-                    axis="y"
-                    values={activeEntities}
-                    onReorder={handleEntityReorder}
-                    className="flex flex-col gap-4"
-                  >
-                    <AnimatePresence mode="popLayout">
-                      {activeEntities.map(entity => (
-                        <GodTaskCard
-                          key={entity.id}
-                          entity={entity}
-                          isActive={entity.id === effectiveFocusedEntity}
-                          onClick={() => handleSetFocus(entity.id)}
-                          onClose={() => handleKillEntity(entity.id)}
-                          tabs={tabs}
-                          activeTabId={activeTabId}
-                          onMoveToTab={(entityId, tabId) => {
-                            send({ event: 'entity:move', entityId, tabId })
-                            send({ event: 'tab:select', tabId })
-                          }}
-                          onMoveToNewTab={(entityId) => {
-                            send({ event: 'entity:move-to-new-tab', entityId })
-                          }}
-                        />
-                      ))}
-                    </AnimatePresence>
-                  </Reorder.Group>
-                )}
+            <motion.div
+              className="flex flex-col overflow-hidden relative"
+              animate={{
+                width: sidebarCollapsed ? 40 : 288
+              }}
+              transition={{
+                duration: WIDTH_DURATION / 1000,
+                ease: 'easeInOut'
+              }}
+            >
+              {/* Two card sets with choreographed animations */}
+              <div className="flex-1 relative overflow-hidden">
+                {/* Full task cards - slide up to exit, slide down to enter */}
+                <AnimatePresence>
+                  {sidebarShowCards && (
+                    <motion.div
+                      key="cards"
+                      className="absolute inset-0 overflow-y-auto overflow-x-visible"
+                      initial={{ y: '-100%' }}
+                      animate={{ y: 0 }}
+                      exit={{ y: '-100%' }}
+                      transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
+                    >
+                      {activeEntities.length > 0 && (
+                        <Reorder.Group
+                          axis="y"
+                          values={activeEntities}
+                          onReorder={handleEntityReorder}
+                          className="flex flex-col gap-4"
+                        >
+                          {activeEntities.map((entity) => (
+                            <GodTaskCard
+                              key={entity.id}
+                              entity={entity}
+                              isActive={entity.id === effectiveFocusedEntity}
+                              onClick={() => handleSetFocus(entity.id)}
+                              onClose={() => handleKillEntity(entity.id)}
+                              tabs={tabs}
+                              activeTabId={activeTabId}
+                              onMoveToTab={(entityId, tabId) => {
+                                send({ event: 'entity:move', entityId, tabId })
+                                send({ event: 'tab:select', tabId })
+                              }}
+                              onMoveToNewTab={(entityId) => {
+                                send({ event: 'entity:move-to-new-tab', entityId })
+                              }}
+                            />
+                          ))}
+                        </Reorder.Group>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Icon strip - slide up from bottom to enter, slide down to exit */}
+                <AnimatePresence>
+                  {sidebarShowIcons && (
+                    <motion.div
+                      key="icons"
+                      className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col gap-1.5"
+                      initial={{ y: '100%' }}
+                      animate={{ y: 0 }}
+                      exit={{ y: '100%' }}
+                      transition={{ duration: ICONS_DURATION / 1000, ease: 'easeInOut' }}
+                    >
+                      {activeEntities.map((entity) => {
+                        const entityColor = entity.type === 'god'
+                          ? (godColors[entity.name?.toLowerCase()] || entity.color || '#888')
+                          : (entity.color || '#888')
+                        return (
+                          <motion.button
+                            key={entity.id}
+                            onClick={() => handleSetFocus(entity.id)}
+                            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-all hover:bg-white/10"
+                            style={{
+                              backgroundColor: entity.id === effectiveFocusedEntity ? `${entityColor}33` : 'transparent',
+                              border: `2px solid ${entity.id === effectiveFocusedEntity ? entityColor : 'transparent'}`
+                            }}
+                            title={entity.displayName || entity.name}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            {entity.type === 'god' && <img src={claudeIcon} alt="Claude" className="w-4 h-4 object-contain" />}
+                            {entity.type === 'terminal' && <FontAwesomeIcon icon={faTerminal} className="text-white/70 text-sm" />}
+                            {entity.type === 'nvim' && <img src={nvimIcon} alt="Nvim" className="w-4 h-4 object-contain" />}
+                            {entity.type === 'browser' && <img src={browserIcon} alt="Browser" className="w-4 h-4 object-contain" />}
+                            {entity.type === 'linear' && <img src={linearIcon} alt="Linear" className="w-4 h-4 object-contain" />}
+                            {entity.type === 'git' && <img src={gitIcon} alt="Git" className="w-4 h-4 object-contain" />}
+                            {entity.type === 'code' && <FontAwesomeIcon icon={faCode} className="text-white/70 text-sm" />}
+                            {entity.type === 'calendar' && <FontAwesomeIcon icon={faCalendar} className="text-white/70 text-sm" />}
+                            {entity.type === 'history' && <FontAwesomeIcon icon={faClockRotateLeft} className="text-white/70 text-sm" />}
+                            {entity.type === 'settings' && <FontAwesomeIcon icon={faGear} className="text-white/70 text-sm" />}
+                            {entity.type === 'cemetery' && <FontAwesomeIcon icon={faSkull} className="text-white/70 text-sm" />}
+                            {entity.type === 'oracle' && <span className="text-sm">🔮</span>}
+                          </motion.button>
+                        )
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-              {/* Action buttons - pinned to bottom */}
-              <div className="grid grid-cols-5 gap-1.5 mt-3 flex-shrink-0">
+              {/* Action buttons with collapse handle - pinned to bottom */}
+              <div className="flex gap-1.5 mt-3 flex-shrink-0 items-end">
+                {/* Collapse handle */}
                 <button
-                  onClick={() => setSummonModalOpen(true)}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="New god (Ctrl+N)"
+                  onClick={handleSidebarToggle}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 border border-white/20 text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
-                  <img src={claudeIcon} alt="Claude" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                  <FontAwesomeIcon
+                    icon={sidebarCollapsed ? faChevronLeft : faChevronRight}
+                    className="text-sm"
+                  />
                 </button>
-                <button
-                  onClick={handleSpawnTerminal}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="New terminal (Ctrl+R)"
-                >
-                  <FontAwesomeIcon icon={faTerminal} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => send({ event: 'nvim:spawn' })}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="New nvim"
-                >
-                  <img src={nvimIcon} alt="Nvim" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('browser')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="New browser"
-                >
-                  <img src={browserIcon} alt="Browser" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('linear')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Linear"
-                >
-                  <img src={linearIcon} alt="Linear" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('calendar')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Calendar"
-                >
-                  <FontAwesomeIcon icon={faCalendar} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('code')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Code viewer"
-                >
-                  <FontAwesomeIcon icon={faCode} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('git')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Git"
-                >
-                  <img src={gitIcon} alt="Git" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('history')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="History"
-                >
-                  <FontAwesomeIcon icon={faClockRotateLeft} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('settings')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Settings"
-                >
-                  <FontAwesomeIcon icon={faGear} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
-                <button
-                  onClick={() => handleSpawnEntity('cemetery')}
-                  className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title="Cemetery"
-                >
-                  <FontAwesomeIcon icon={faSkull} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
-                  <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                </button>
+                {/* Buttons grid - hidden when collapsed */}
+                <AnimatePresence>
+                  {sidebarShowButtons && (
+                    <motion.div
+                      className="grid grid-cols-5 gap-1.5 flex-1"
+                      initial={{ x: '100%' }}
+                      animate={{ x: 0 }}
+                      exit={{ x: '100%' }}
+                      transition={{ duration: BUTTON_DURATION / 1000, ease: 'easeInOut' }}
+                    >
+                      <button
+                        onClick={() => setSummonModalOpen(true)}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="New god (Ctrl+N)"
+                      >
+                        <img src={claudeIcon} alt="Claude" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={handleSpawnTerminal}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="New terminal (Ctrl+R)"
+                      >
+                        <FontAwesomeIcon icon={faTerminal} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => send({ event: 'nvim:spawn' })}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="New nvim"
+                      >
+                        <img src={nvimIcon} alt="Nvim" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('browser')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="New browser"
+                      >
+                        <img src={browserIcon} alt="Browser" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('linear')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Linear"
+                      >
+                        <img src={linearIcon} alt="Linear" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('calendar')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Calendar"
+                      >
+                        <FontAwesomeIcon icon={faCalendar} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('code')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Code viewer"
+                      >
+                        <FontAwesomeIcon icon={faCode} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('git')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Git"
+                      >
+                        <img src={gitIcon} alt="Git" className="w-3.5 h-3.5 object-contain group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('history')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="History"
+                      >
+                        <FontAwesomeIcon icon={faClockRotateLeft} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('settings')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Settings"
+                      >
+                        <FontAwesomeIcon icon={faGear} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('cemetery')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Cemetery"
+                      >
+                        <FontAwesomeIcon icon={faSkull} className="text-sm group-hover:opacity-0 transition-opacity duration-150" />
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                      <button
+                        onClick={() => handleSpawnEntity('oracle')}
+                        className="group relative flex items-center justify-center p-2 rounded-lg bg-black/40 border border-white/20 text-white/80 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                        title="Oracle (Local LLM)"
+                      >
+                        <span className="text-sm group-hover:opacity-0 transition-opacity duration-150">🔮</span>
+                        <FontAwesomeIcon icon={faPlus} className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
+            </motion.div>
           </div>
       </main>
       </div>

@@ -161,11 +161,14 @@ export default function CodeView({ entityId }) {
   const [expandedFolders, setExpandedFolders] = useState(new Set())
   const [highlights, setHighlights] = useState({}) // {filePath: [{line, endLine, color, note}]}
   const [loading, setLoading] = useState(false)
+  const [pendingFileHandled, setPendingFileHandled] = useState(null)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
 
   const codeHighlights = useStore(s => s.codeHighlights)
+  const entities = useStore(s => s.entities)
+  const entity = entities[entityId]
 
   // Apply highlights from store
   useEffect(() => {
@@ -217,29 +220,46 @@ export default function CodeView({ entityId }) {
     }
   }, [openFiles])
 
+  // Load pending file from entity (for newly created code entities)
+  useEffect(() => {
+    if (!entity?.pendingFile) return
+    // Skip if we already handled this pending file
+    if (pendingFileHandled === entity.pendingFile) return
+
+    setPendingFileHandled(entity.pendingFile)
+    loadFile({ path: entity.pendingFile, name: entity.pendingFile.split('/').pop() })
+
+    // Jump to line if specified
+    if (entity.pendingLine) {
+      setTimeout(() => {
+        editorRef.current?.revealLineInCenter(entity.pendingLine)
+        editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
+      }, 200)
+    }
+  }, [entity?.pendingFile, entity?.pendingLine, loadFile, pendingFileHandled])
+
   // Listen for file open events (from gods)
   useEffect(() => {
-    const handleMessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.event === 'code:file:open' && data.entityId === entityId) {
-          // Load the file
-          loadFile({ path: data.filePath, name: data.filePath.split('/').pop() })
-          // Jump to line if specified
-          if (data.line && editorRef.current) {
-            setTimeout(() => {
-              editorRef.current?.revealLineInCenter(data.line)
-              editorRef.current?.setPosition({ lineNumber: data.line, column: 1 })
-            }, 100)
-          }
-        }
-      } catch (e) {
-        // Not JSON or other error
+    const handleCodeOpen = (event) => {
+      const data = event.detail
+      if (!data) return
+
+      // Accept if this is the target entity, or if no entityId specified (use any code viewer)
+      if (data.entityId && data.entityId !== entityId) return
+
+      // Load the file
+      loadFile({ path: data.filePath, name: data.filePath.split('/').pop() })
+      // Jump to line if specified
+      if (data.line && editorRef.current) {
+        setTimeout(() => {
+          editorRef.current?.revealLineInCenter(data.line)
+          editorRef.current?.setPosition({ lineNumber: data.line, column: 1 })
+        }, 100)
       }
     }
 
-    window.addEventListener('iris:code:open', handleMessage)
-    return () => window.removeEventListener('iris:code:open', handleMessage)
+    window.addEventListener('iris:code:open', handleCodeOpen)
+    return () => window.removeEventListener('iris:code:open', handleCodeOpen)
   }, [entityId, loadFile])
 
   // Toggle folder expansion

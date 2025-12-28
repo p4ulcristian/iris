@@ -97,13 +97,18 @@ export function loadState() {
   // Add new sockets to first tab
   sockets.forEach(sock => {
     if (!appState.entities[sock.name]) {
-      const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === 1)
+      // Calculate next order inline (getNextOrder may not be available during load)
+      const ordersInTab = Object.values(appState.entities)
+        .filter(e => e.tabId === 1)
+        .map(e => e.order ?? 0)
+      const nextOrder = ordersInTab.length > 0 ? Math.max(...ordersInTab) + 1 : 0
+
       appState.entities[sock.name] = {
         id: sock.name,
         type: 'god',
         name: sock.name,
         tabId: 1,
-        order: entitiesInTab.length
+        order: nextOrder
       }
     }
   })
@@ -196,7 +201,9 @@ export function getStateForBroadcast() {
       spawnedAt: entity.spawnedAt || null,
       // View-specific data
       url: entity.url || null,        // for browser
-      project: entity.project || null  // for git
+      project: entity.project || null,  // for git
+      pendingFile: entity.pendingFile || null,  // for code
+      pendingLine: entity.pendingLine || null   // for code
     }
   })
 
@@ -239,6 +246,27 @@ export function broadcastState() {
 export function generateEntityId(type) {
   appState.entityCounter++
   return `${type}-${appState.entityCounter}`
+}
+
+// Normalize order values for all entities in a tab (0, 1, 2, ...)
+// Call this after any mutation that could leave gaps or duplicates
+export function normalizeTabOrder(tabId) {
+  const entities = Object.values(appState.entities)
+    .filter(e => e.tabId === tabId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+  entities.forEach((entity, idx) => {
+    appState.entities[entity.id].order = idx
+  })
+}
+
+// Get the next order value for a new entity in a tab
+export function getNextOrder(tabId) {
+  const orders = Object.values(appState.entities)
+    .filter(e => e.tabId === tabId)
+    .map(e => e.order ?? 0)
+
+  return orders.length > 0 ? Math.max(...orders) + 1 : 0
 }
 
 // Get next number for auto-naming entities of a type

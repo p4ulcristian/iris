@@ -308,7 +308,9 @@ export const useStore = create(
               spawnedAt: entity.spawnedAt || null,
               // View-specific data
               url: entity.url || null,
-              project: entity.project || null
+              project: entity.project || null,
+              pendingFile: entity.pendingFile || null,
+              pendingLine: entity.pendingLine || null
             }
           })
         }

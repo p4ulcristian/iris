@@ -21,6 +21,7 @@ python -m brain.skills.<skill> <args>
 | `push` | `python -m brain.skills.push [IRO-XXX]` | Auto-commit and push staged changes |
 | `browse` | `python -m brain.skills.browse <url>` | Open URL in the Iris browser |
 | `code` | `python -m brain.skills.code <cmd>` | Open/highlight code in the code viewer |
+| `spawn` | `python -m brain.skills.spawn --god <name> "task"` | Summon another god to work on a task |
 
 ## focus
 
@@ -109,11 +110,35 @@ python -m brain.skills.code highlight src/App.jsx 10,15,20-25 green
 
 Colors: yellow, red, green, blue, orange, purple, cyan
 
+**Multiple colors:** Highlights stack! Call highlight multiple times with different colors:
+```bash
+python -m brain.skills.code clear src/App.jsx                    # Start fresh
+python -m brain.skills.code highlight src/App.jsx 10-20 yellow   # First section
+python -m brain.skills.code highlight src/App.jsx 30-40 blue     # Second section
+python -m brain.skills.code highlight src/App.jsx 50 red "Bug"   # Third section
+python -m brain.skills.code open src/App.jsx 30                  # Scroll to see blue section
+```
+
 **Clear highlights:**
 ```bash
 python -m brain.skills.code clear                  # Clear all
 python -m brain.skills.code clear src/App.jsx      # Clear specific file
 ```
+
+## spawn
+
+Summon another god to work on a task in parallel. Use this to delegate work.
+
+```bash
+python -m brain.skills.spawn --god zeus "refactor the auth module"
+python -m brain.skills.spawn --god artemis --project elevathor "fix the payment bug"
+python -m brain.skills.spawn --list  # Show available gods
+```
+
+Options:
+- `--god <name>` - Which god to summon (zeus, artemis, ares, etc.)
+- `--project <name>` - Set the project context
+- `"task"` - The task description (required)
 
 ## When to Use
 
@@ -122,3 +147,6 @@ When Paul says "open in [tool]":
 - "Edit in nvim" -> `python -m brain.skills.nvim /path/to/file`
 - "Open in browser" -> `python -m brain.skills.browse <url>`
 - "Show me the code" -> `python -m brain.skills.code open <file>`
+
+When Paul says "summon/spawn a god" or "delegate this":
+- `python -m brain.skills.spawn --god <name> "task description"`

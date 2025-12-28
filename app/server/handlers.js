@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
-import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
@@ -21,7 +21,8 @@ const ENTITY_TYPES = {
   linear: { icon: '✓', label: 'Linear' },
   calendar: { icon: '📅', label: 'Calendar' },
   settings: { icon: '⚙️', label: 'Settings' },
-  cemetery: { icon: '🪦', label: 'Cemetery' }
+  cemetery: { icon: '🪦', label: 'Cemetery' },
+  oracle: { icon: '🔮', label: 'Oracle' }
 }
 
 // Add a god to the cemetery before banishing
@@ -85,13 +86,12 @@ export function handleMessage(ws, msg, projectRoot) {
         userName: appState.settings?.userName
       })
       if (god && !god.exists) {
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[god.name] = {
           id: god.name,
           type: 'god',
           name: god.name,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           mission: god.mission || null,
           spawnedAt: Date.now(),
           sessionId: god.sessionId || null
@@ -114,13 +114,12 @@ export function handleMessage(ws, msg, projectRoot) {
         cwd: data.cwd
       }, projectRoot)
       if (terminal && !terminal.exists) {
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[terminal.name] = {
           id: terminal.name,
           type: 'terminal',
           name: terminal.displayName || terminal.name,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           spawnedAt: Date.now(),
           color: terminal.color
         }
@@ -138,6 +137,7 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'entity:kill': {
       const entityId = data.entityId || data.godName || data.name
       const entity = appState.entities[entityId]
+      const entityTabId = entity?.tabId
 
       // Add god to cemetery before banishing
       if (entity?.type === 'god') {
@@ -156,6 +156,11 @@ export function handleMessage(ws, msg, projectRoot) {
       }
 
       delete appState.entities[entityId]
+
+      // Normalize order for remaining entities in the tab
+      if (entityTabId) {
+        normalizeTabOrder(entityTabId)
+      }
 
       if (appState.focusedEntity === entityId) {
         // Find another entity in the same tab to focus
@@ -356,14 +361,18 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'god:move':
     case 'entity:move': {
       const entityId = data.entityId || data.godName
-      if (appState.entities[entityId]) {
-        appState.entities[entityId].tabId = data.tabId
-        const entitiesInTab = Object.entries(appState.entities)
-          .filter(([_, e]) => e.tabId === data.tabId)
-          .sort((a, b) => a[1].order - b[1].order)
-        entitiesInTab.forEach(([id, _], idx) => {
-          appState.entities[id].order = idx
-        })
+      const entity = appState.entities[entityId]
+      if (entity) {
+        const sourceTabId = entity.tabId
+        const destTabId = data.tabId
+
+        // Move to destination tab with next order
+        entity.tabId = destTabId
+        entity.order = getNextOrder(destTabId)
+
+        // Normalize both tabs
+        normalizeTabOrder(sourceTabId)
+        normalizeTabOrder(destTabId)
       }
       saveState()
       broadcastState()
@@ -373,13 +382,22 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'god:move-to-new-tab':
     case 'entity:move-to-new-tab': {
       const entityId = data.entityId || data.godName
+      const entity = appState.entities[entityId]
+      const sourceTabId = entity?.tabId
+
       appState.tabCounter++
       const newTab = { id: appState.tabCounter, name: getRandomRealmName() }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
-      if (appState.entities[entityId]) {
-        appState.entities[entityId].tabId = newTab.id
-        appState.entities[entityId].order = 0
+
+      if (entity) {
+        entity.tabId = newTab.id
+        entity.order = 0
+
+        // Normalize source tab after removal
+        if (sourceTabId) {
+          normalizeTabOrder(sourceTabId)
+        }
       }
       appState.focusedEntity = entityId
       saveState()
@@ -404,14 +422,13 @@ export function handleMessage(ws, msg, projectRoot) {
 
       const entityId = generateEntityId(type)
       const num = getNextEntityNumber(type)
-      const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
 
       appState.entities[entityId] = {
         id: entityId,
         type,
         name: data.name || `${ENTITY_TYPES[type].label}-${num}`,
         tabId: appState.activeTabId,
-        order: entitiesInTab.length,
+        order: getNextOrder(appState.activeTabId),
         spawnedAt: Date.now(),
         // Type-specific data
         url: data.url || null,
@@ -492,13 +509,12 @@ export function handleMessage(ws, msg, projectRoot) {
         color: '#57A143'  // nvim green
       }, projectRoot)
       if (terminal && !terminal.exists) {
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[terminal.name] = {
           id: terminal.name,
           type: 'terminal',
           name: terminal.displayName || terminal.name,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           spawnedAt: Date.now(),
           color: terminal.color
         }
@@ -525,13 +541,12 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'history:resume': {
       const god = createGodSession(data.name, '', projectRoot, { resumeSessionId: data.sessionId })
       if (god && !god.exists) {
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[god.name] = {
           id: god.name,
           type: 'god',
           name: god.name,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           mission: data.summary || null,
           spawnedAt: Date.now()
         }
@@ -1018,6 +1033,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
       // If there's an existing entity with this name, clean it up first
       const existingEntity = appState.entities[godName]
+      const existingTabId = existingEntity?.tabId
       if (existingEntity) {
         // Add current god to cemetery before replacing
         if (existingEntity.type === 'god') {
@@ -1031,18 +1047,22 @@ export function handleMessage(ws, msg, projectRoot) {
         }
         clearOutputBuffer(godName)
         delete appState.entities[godName]
+
+        // Normalize the tab where the existing entity was removed
+        if (existingTabId) {
+          normalizeTabOrder(existingTabId)
+        }
       }
 
       // Resume the session with the god's name
       const god = createGodSession(godName, '', projectRoot, { resumeSessionId: sessionId })
       if (god && !god.exists) {
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
         appState.entities[god.name] = {
           id: god.name,
           type: 'god',
           name: god.name,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           spawnedAt: Date.now(),
           mission: mission || null,
           title: title || null,
@@ -1084,6 +1104,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
       // Find or create a code entity
       let codeEntity = entityId ? appState.entities[entityId] : null
+      let isNewEntity = false
 
       if (!codeEntity) {
         // Find first code entity in active tab
@@ -1096,29 +1117,35 @@ export function handleMessage(ws, msg, projectRoot) {
         // Create a new code entity
         const newId = generateEntityId('code')
         const num = getNextEntityNumber('code')
-        const entitiesInTab = Object.values(appState.entities).filter(e => e.tabId === appState.activeTabId)
 
         appState.entities[newId] = {
           id: newId,
           type: 'code',
           name: `Code-${num}`,
           tabId: appState.activeTabId,
-          order: entitiesInTab.length,
+          order: getNextOrder(appState.activeTabId),
           spawnedAt: Date.now()
         }
         codeEntity = appState.entities[newId]
+        isNewEntity = true
       }
 
-      // Broadcast file open event
-      broadcast('code:file:open', {
-        entityId: codeEntity.id,
-        filePath,
-        line: line || 1
-      })
+      // Store pending file in entity (for new entities, CodeView will load on mount)
+      codeEntity.pendingFile = filePath
+      codeEntity.pendingLine = line || 1
 
       appState.focusedEntity = codeEntity.id
       saveState()
       broadcastState()
+
+      // For existing entities, also broadcast event (CodeView is already mounted)
+      if (!isNewEntity) {
+        broadcast('code:file:open', {
+          entityId: codeEntity.id,
+          filePath,
+          line: line || 1
+        })
+      }
       break
     }
 
@@ -1131,8 +1158,9 @@ export function handleMessage(ws, msg, projectRoot) {
         appState.codeHighlights = {}
       }
 
-      // Merge new highlights (or replace)
-      appState.codeHighlights[filePath] = highlights
+      // Merge new highlights with existing ones
+      const existing = appState.codeHighlights[filePath] || []
+      appState.codeHighlights[filePath] = [...existing, ...highlights]
 
       saveState()
       broadcastState()

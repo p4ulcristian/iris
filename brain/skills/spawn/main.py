@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from brain.skills.ws import spawn_terminal
+from brain.skills.ws import spawn_god as ws_spawn_god
 
 
 def get_iris_root() -> Path:
@@ -148,31 +148,8 @@ def spawn_god(
     uuid = generate_uuid(god_name)
     create_shadow(uuid, god_name, task, project)
 
-    # Get god's color and voice
-    fg_color = get_god_color(god_name, "fg")
-    voice = god_config.get("voice", god_name)
-
-    # Build the claude command
-    prompt = f"You are {god_name.capitalize()}. Voice: {voice}.\\n\\nAnnounce yourself and ask what Paul needs."
-    cmd = f'claude --dangerously-skip-permissions -p "{prompt}"'
-
-    # Determine working directory
-    cwd = str(get_iris_root())
-    if project:
-        project_path = get_project_path(project)
-        if project_path and project_path.exists():
-            cwd = str(project_path)
-
-    # Build terminal name
-    name = god_name.capitalize()
-
-    # Spawn via WebSocket
-    success = spawn_terminal(
-        command=cmd,
-        name=name,
-        color=fg_color,
-        cwd=cwd
-    )
+    # Spawn via WebSocket - server handles color, command, everything
+    success = ws_spawn_god(god_name.capitalize(), task)
 
     if not success:
         print(f"\033[31mFailed to spawn {god_name.capitalize()} - is Iris v2 running?\033[0m")
