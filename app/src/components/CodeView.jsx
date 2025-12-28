@@ -170,32 +170,6 @@ export default function CodeView({ entityId }) {
     }
   }, [codeHighlights])
 
-  // Listen for file open events (from gods)
-  useEffect(() => {
-    const handleMessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.event === 'code:file:open' && data.entityId === entityId) {
-          // Load the file
-          loadFile({ path: data.filePath, name: data.filePath.split('/').pop() })
-          // Jump to line if specified
-          if (data.line && editorRef.current) {
-            setTimeout(() => {
-              editorRef.current?.revealLineInCenter(data.line)
-              editorRef.current?.setPosition({ lineNumber: data.line, column: 1 })
-            }, 100)
-          }
-        }
-      } catch (e) {
-        // Not JSON or other error
-      }
-    }
-
-    // Listen to WebSocket messages through custom event (would need to wire this up)
-    window.addEventListener('iris:code:open', handleMessage)
-    return () => window.removeEventListener('iris:code:open', handleMessage)
-  }, [entityId, loadFile])
-
   // Load directory tree from server
   const loadDirectory = useCallback(async (dirPath) => {
     setLoading(true)
@@ -238,6 +212,31 @@ export default function CodeView({ entityId }) {
       console.error('Failed to load file:', err)
     }
   }, [openFiles])
+
+  // Listen for file open events (from gods)
+  useEffect(() => {
+    const handleMessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.event === 'code:file:open' && data.entityId === entityId) {
+          // Load the file
+          loadFile({ path: data.filePath, name: data.filePath.split('/').pop() })
+          // Jump to line if specified
+          if (data.line && editorRef.current) {
+            setTimeout(() => {
+              editorRef.current?.revealLineInCenter(data.line)
+              editorRef.current?.setPosition({ lineNumber: data.line, column: 1 })
+            }, 100)
+          }
+        }
+      } catch (e) {
+        // Not JSON or other error
+      }
+    }
+
+    window.addEventListener('iris:code:open', handleMessage)
+    return () => window.removeEventListener('iris:code:open', handleMessage)
+  }, [entityId, loadFile])
 
   // Toggle folder expansion
   const toggleFolder = useCallback((path) => {
