@@ -641,7 +641,7 @@ export default function App() {
       </div>
 
       {/* Main layout: sidebar + content */}
-      <div ref={mainContainerRef} className="flex flex-1 min-h-0">
+      <div ref={mainContainerRef} className="flex flex-1 min-h-0 p-3">
         {/* Left Wing (Realms + Powers) */}
         <LeftWing
           connected={connected}
@@ -776,7 +776,7 @@ export default function App() {
 
             {/* Sidebar with all entities as task cards */}
             <motion.div
-              className="flex flex-col overflow-hidden relative"
+              className="flex flex-col overflow-hidden relative pl-3"
               animate={{
                 width: sidebarCollapsed ? 40 : 288
               }}

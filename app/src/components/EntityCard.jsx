@@ -38,7 +38,7 @@ const EntityCard = forwardRef(function EntityCard({
       ref={ref}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className={`relative h-full min-h-0 overflow-hidden ${className}`}
+      className={`relative h-full min-h-0 overflow-hidden rounded-xl liquid-glass-god-tinted ${className}`}
       style={{
         '--god-color': entityColor,
         '--god-color-rgb': hexToRgbCss(entityColor),

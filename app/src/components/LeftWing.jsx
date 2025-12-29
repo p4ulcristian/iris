@@ -163,7 +163,7 @@ export default function LeftWing({
   }
 
   return (
-    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible">
+    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3">
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
         {tabs?.map((tab, idx) => {

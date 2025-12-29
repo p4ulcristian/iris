@@ -67,14 +67,18 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
   }
 
   // Update terminal theme when palette changes (theme switch)
+  const isGod = !entity.displayName
   useEffect(() => {
     if (termRef.current) {
       try {
-        termRef.current.options.theme = palette
+        const termTheme = isGod
+          ? { ...palette, cursor: 'transparent', cursorAccent: 'transparent' }
+          : palette
+        termRef.current.options.theme = termTheme
         termRef.current.refresh(0, termRef.current.rows - 1)
       } catch {}
     }
-  }, [palette])
+  }, [palette, isGod])
 
   // Resize when expected dimensions change (driven by parent's stable measurement)
   useEffect(() => {
@@ -137,13 +141,18 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
       expectedHeight || 600
     )
 
+    // Gods (no displayName) hide cursor, terminals show it
+    const termTheme = isGod
+      ? { ...palette, cursor: 'transparent', cursorAccent: 'transparent' }
+      : palette
+
     const term = new XTerm({
-      cursorBlink: true,
+      cursorBlink: !isGod,
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
       rows: initialRows,
       cols: initialCols,
-      theme: palette,
+      theme: termTheme,
       allowTransparency: true
     })
 

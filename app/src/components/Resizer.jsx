@@ -66,7 +66,7 @@ export default function Resizer({
     <div
       className={`
         flex-shrink-0
-        ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
+        ${isHorizontal ? 'w-3 cursor-col-resize' : 'h-3 cursor-row-resize'}
         ${isDragging ? 'bg-accent/50' : 'bg-transparent'}
         transition-colors
       `}
