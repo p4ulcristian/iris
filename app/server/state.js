@@ -169,12 +169,12 @@ export function loadState() {
     }
   })
 
-  // Ensure all entities are in a pane (add orphans to first pane of their tab)
+  // Ensure all entities are in a pane (create individual panes for orphans)
   Object.values(appState.entities).forEach(entity => {
     const tab = appState.tabs.find(t => t.id === entity.tabId)
     if (!tab) return
 
-    // Initialize layout if null
+    // Initialize layout if null - create pane for this entity
     if (!tab.layout) {
       tab.layout = layout.createPane([entity.id], entity.id)
       return
@@ -183,11 +183,9 @@ export function loadState() {
     // Check if entity is in any pane
     const pane = layout.findPaneByEntity(tab.layout, entity.id)
     if (!pane) {
-      // Add to first pane
-      const firstPane = layout.getFirstPane(tab.layout)
-      if (firstPane) {
-        tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, entity.id)
-      }
+      // Create a new pane for this entity and split horizontally with existing layout
+      const newPane = layout.createPane([entity.id], entity.id)
+      tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
     }
   })
 
