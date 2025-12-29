@@ -98,16 +98,16 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: god.sessionId || null
         }
 
-        // Add to layout - each new entity gets its own pane
+        // Add to layout - each new entity gets its own tile
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newPane = layout.createPane([god.name], god.name)
+          const newTile = layout.createTile([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = newPane
+            tab.layout = newTile
           } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
           }
-          appState.focusedPane = newPane.id
+          appState.focusedTile = newTile.id
         }
 
         appState.focusedEntity = god.name
@@ -137,16 +137,16 @@ export function handleMessage(ws, msg, projectRoot) {
           color: terminal.color
         }
 
-        // Add to layout - each new entity gets its own pane
+        // Add to layout - each new entity gets its own tile
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newPane = layout.createPane([terminal.name], terminal.name)
+          const newTile = layout.createTile([terminal.name], terminal.name)
           if (!tab.layout) {
-            tab.layout = newPane
+            tab.layout = newTile
           } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
           }
-          appState.focusedPane = newPane.id
+          appState.focusedTile = newTile.id
         }
 
         appState.focusedEntity = terminal.name
@@ -182,7 +182,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
       delete appState.entities[entityId]
 
-      // Remove from layout (automatically collapses empty panes)
+      // Remove from layout (automatically collapses empty tiles)
       if (entityTabId) {
         const tab = appState.tabs.find(t => t.id === entityTabId)
         if (tab?.layout) {
@@ -464,16 +464,16 @@ export function handleMessage(ws, msg, projectRoot) {
         project: data.project || null
       }
 
-      // Add to layout - each new entity gets its own pane
+      // Add to layout - each new entity gets its own tile
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (tab) {
-        const newPane = layout.createPane([entityId], entityId)
+        const newTile = layout.createTile([entityId], entityId)
         if (!tab.layout) {
-          tab.layout = newPane
+          tab.layout = newTile
         } else {
-          tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+          tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
         }
-        appState.focusedPane = newPane.id
+        appState.focusedTile = newTile.id
       }
 
       appState.focusedEntity = entityId
@@ -498,14 +498,14 @@ export function handleMessage(ws, msg, projectRoot) {
       const entityId = data.entityId || data.godName
       appState.focusedEntity = entityId || null
 
-      // Also update the pane's focusedEntityId in the layout
+      // Also update the tile's focusedEntityId in the layout
       if (entityId) {
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab?.layout) {
-          const pane = layout.findPaneByEntity(tab.layout, entityId)
-          if (pane) {
-            tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, entityId)
-            appState.focusedPane = pane.id
+          const tile = layout.findTileByEntity(tab.layout, entityId)
+          if (tile) {
+            tab.layout = layout.setFocusedEntityInTile(tab.layout, tile.id, entityId)
+            appState.focusedTile = tile.id
           }
         }
       }
@@ -515,19 +515,20 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'pane:focus': {
-      const { paneId } = data
-      if (!paneId) break
+    case 'tile:focus':
+    case 'pane:focus': {  // Legacy alias
+      const tileId = data.tileId || data.paneId
+      if (!tileId) break
 
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab?.layout) break
 
-      const paneResult = layout.findPane(tab.layout, paneId)
-      if (!paneResult) break
+      const tileResult = layout.findTile(tab.layout, tileId)
+      if (!tileResult) break
 
-      const pane = paneResult.node
-      appState.focusedPane = paneId
-      appState.focusedEntity = pane.focusedEntityId || pane.entityIds[0] || null
+      const tile = tileResult.node
+      appState.focusedTile = tileId
+      appState.focusedEntity = tile.focusedEntityId || tile.entityIds[0] || null
 
       saveState()
       broadcastState()
@@ -539,27 +540,27 @@ export function handleMessage(ws, msg, projectRoot) {
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab?.layout) break
 
-      // Find the focused pane
-      let pane = null
-      if (appState.focusedPane) {
-        const paneResult = layout.findPane(tab.layout, appState.focusedPane)
-        if (paneResult) pane = paneResult.node
+      // Find the focused tile
+      let tile = null
+      if (appState.focusedTile) {
+        const tileResult = layout.findTile(tab.layout, appState.focusedTile)
+        if (tileResult) tile = tileResult.node
       }
 
-      // If no focused pane, find pane containing focused entity
-      if (!pane && appState.focusedEntity) {
-        pane = layout.findPaneByEntity(tab.layout, appState.focusedEntity)
+      // If no focused tile, find tile containing focused entity
+      if (!tile && appState.focusedEntity) {
+        tile = layout.findTileByEntity(tab.layout, appState.focusedEntity)
       }
 
-      // Fallback to first pane
-      if (!pane) {
-        pane = layout.getFirstPane(tab.layout)
+      // Fallback to first tile
+      if (!tile) {
+        tile = layout.getFirstTile(tab.layout)
       }
 
-      if (!pane || pane.entityIds.length === 0) break
+      if (!tile || tile.entityIds.length === 0) break
 
-      // Cycle within this pane's entities
-      const entityIds = pane.entityIds
+      // Cycle within this tile's entities
+      const entityIds = tile.entityIds
       const currentIdx = entityIds.indexOf(appState.focusedEntity)
       let newIdx
 
@@ -571,10 +572,10 @@ export function handleMessage(ws, msg, projectRoot) {
 
       const newEntityId = entityIds[newIdx]
       appState.focusedEntity = newEntityId
-      appState.focusedPane = pane.id
+      appState.focusedTile = tile.id
 
-      // Update pane's focusedEntityId
-      tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, newEntityId)
+      // Update tile's focusedEntityId
+      tab.layout = layout.setFocusedEntityInTile(tab.layout, tile.id, newEntityId)
 
       saveState()
       broadcastState()
@@ -648,16 +649,16 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
 
-        // Add to layout - each new entity gets its own pane
+        // Add to layout - each new entity gets its own tile
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newPane = layout.createPane([god.name], god.name)
+          const newTile = layout.createTile([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = newPane
+            tab.layout = newTile
           } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
           }
-          appState.focusedPane = newPane.id
+          appState.focusedTile = newTile.id
         }
 
         appState.focusedEntity = god.name
@@ -1179,16 +1180,16 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: sessionId  // Preserve sessionId for re-banish
         }
 
-        // Add to layout - each new entity gets its own pane
+        // Add to layout - each new entity gets its own tile
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newPane = layout.createPane([god.name], god.name)
+          const newTile = layout.createTile([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = newPane
+            tab.layout = newTile
           } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
           }
-          appState.focusedPane = newPane.id
+          appState.focusedTile = newTile.id
         }
 
         appState.focusedEntity = god.name
@@ -1252,16 +1253,16 @@ export function handleMessage(ws, msg, projectRoot) {
         codeEntity = appState.entities[newId]
         isNewEntity = true
 
-        // Add to layout - each new entity gets its own pane
+        // Add to layout - each new entity gets its own tile
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newPane = layout.createPane([newId], newId)
+          const newTile = layout.createTile([newId], newId)
           if (!tab.layout) {
-            tab.layout = newPane
+            tab.layout = newTile
           } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
           }
-          appState.focusedPane = newPane.id
+          appState.focusedTile = newTile.id
         }
       }
 
@@ -1389,10 +1390,10 @@ export function handleMessage(ws, msg, projectRoot) {
         }
       }
 
-      // Create the initial pane with this entity
+      // Create the initial tile with this entity
       if (targetEntityId) {
-        tab.layout = layout.createPane([targetEntityId])
-        appState.focusedPane = tab.layout.id
+        tab.layout = layout.createTile([targetEntityId])
+        appState.focusedTile = tab.layout.id
         appState.focusedEntity = targetEntityId
       }
 
@@ -1402,7 +1403,8 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'layout:split': {
-      const { tabId, paneId, direction, position, entityId, entityType } = data
+      const { tabId, tileId, paneId, direction, position, entityId, entityType } = data
+      const targetTileId = tileId || paneId  // Support both new and legacy names
       const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
       if (!tab) break
 
@@ -1415,7 +1417,7 @@ export function handleMessage(ws, msg, projectRoot) {
         tab.layout = layout.initializeLayoutFromEntities(entityIds)
       }
 
-      // Create or get the entity to place in new pane
+      // Create or get the entity to place in new tile
       let targetEntityId = entityId
       if (entityType && !entityId) {
         // Spawn new entity of this type
@@ -1433,24 +1435,24 @@ export function handleMessage(ws, msg, projectRoot) {
         targetEntityId = newId
       }
 
-      // If moving an existing entity, remove it from its current pane first
-      // (removeEntityFromLayout automatically collapses empty panes)
+      // If moving an existing entity, remove it from its current tile first
+      // (removeEntityFromLayout automatically collapses empty tiles)
       if (entityId && tab.layout) {
         tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
       }
 
-      // Split the pane (if layout still exists after removal)
+      // Split the tile (if layout still exists after removal)
       if (tab.layout) {
-        tab.layout = layout.splitPane(tab.layout, paneId, direction, position, targetEntityId)
+        tab.layout = layout.splitTile(tab.layout, targetTileId, direction, position, targetEntityId)
       } else {
         // Layout was fully cleaned - create fresh with just this entity
-        tab.layout = layout.createPane([targetEntityId])
+        tab.layout = layout.createTile([targetEntityId])
       }
 
-      // Focus the new pane and entity
-      const newPane = layout.findPaneByEntity(tab.layout, targetEntityId)
-      if (newPane) {
-        appState.focusedPane = newPane.id
+      // Focus the new tile and entity
+      const newTile = layout.findTileByEntity(tab.layout, targetEntityId)
+      if (newTile) {
+        appState.focusedTile = newTile.id
         appState.focusedEntity = targetEntityId
       }
 
@@ -1460,18 +1462,19 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'layout:merge': {
-      const { tabId, paneId } = data
+      const { tabId, tileId, paneId } = data
+      const targetTileId = tileId || paneId  // Support both new and legacy names
       const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
       if (!tab || !tab.layout) break
 
-      const { layout: newLayout, mergedEntityIds } = layout.mergePane(tab.layout, paneId)
+      const { layout: newLayout, mergedEntityIds } = layout.mergeTile(tab.layout, targetTileId)
       tab.layout = newLayout
 
-      // Update focused pane if it was merged
-      if (appState.focusedPane === paneId) {
-        const firstPane = layout.getFirstPane(tab.layout)
-        appState.focusedPane = firstPane?.id || null
-        appState.focusedEntity = firstPane?.focusedEntityId || firstPane?.entityIds?.[0] || null
+      // Update focused tile if it was merged
+      if (appState.focusedTile === targetTileId) {
+        const firstTile = layout.getFirstTile(tab.layout)
+        appState.focusedTile = firstTile?.id || null
+        appState.focusedEntity = firstTile?.focusedEntityId || firstTile?.entityIds?.[0] || null
       }
 
       saveState()
@@ -1492,28 +1495,29 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'layout:move-entity': {
-      const { entityId, targetPaneId, dropPosition } = data
+      const { entityId, targetTileId, targetPaneId, dropPosition } = data
+      const targetId = targetTileId || targetPaneId  // Support both new and legacy names
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab || !tab.layout || !entityId) break
 
       if (dropPosition === 'center') {
-        // Add to existing pane stack
-        tab.layout = layout.moveEntityToPane(tab.layout, entityId, targetPaneId)
+        // Add to existing tile stack
+        tab.layout = layout.moveEntityToTile(tab.layout, entityId, targetId)
       } else {
-        // Split the pane
+        // Split the tile
         const direction = (dropPosition === 'left' || dropPosition === 'right') ? 'horizontal' : 'vertical'
 
         // Remove from current location first
         tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
 
-        // Split and add to new pane
-        tab.layout = layout.splitPane(tab.layout, targetPaneId, direction, dropPosition, entityId)
+        // Split and add to new tile
+        tab.layout = layout.splitTile(tab.layout, targetId, direction, dropPosition, entityId)
       }
 
       // Update focus
-      const newPane = layout.findPaneByEntity(tab.layout, entityId)
-      if (newPane) {
-        appState.focusedPane = newPane.id
+      const newTile = layout.findTileByEntity(tab.layout, entityId)
+      if (newTile) {
+        appState.focusedTile = newTile.id
         appState.focusedEntity = entityId
       }
 
@@ -1522,31 +1526,15 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'pane:focus': {
-      const { paneId } = data
-      appState.focusedPane = paneId
-
-      // Also update focusedEntity to the pane's focused entity
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab?.layout) {
-        const paneResult = layout.findPane(tab.layout, paneId)
-        if (paneResult) {
-          appState.focusedEntity = paneResult.node.focusedEntityId || paneResult.node.entityIds?.[0] || null
-        }
-      }
-
-      saveState()
-      broadcastState()
-      break
-    }
-
-    case 'pane:focus-entity': {
-      const { paneId, entityId } = data
+    case 'tile:focus-entity':
+    case 'pane:focus-entity': {  // Legacy alias
+      const tileId = data.tileId || data.paneId
+      const { entityId } = data
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab?.layout) break
 
-      tab.layout = layout.setFocusedEntityInPane(tab.layout, paneId, entityId)
-      appState.focusedPane = paneId
+      tab.layout = layout.setFocusedEntityInTile(tab.layout, tileId, entityId)
+      appState.focusedTile = tileId
       appState.focusedEntity = entityId
 
       saveState()
@@ -1554,8 +1542,10 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'layout:add-entity-to-pane': {
-      const { paneId, entityId, entityType } = data
+    case 'layout:add-entity-to-tile':
+    case 'layout:add-entity-to-pane': {  // Legacy alias
+      const tileId = data.tileId || data.paneId
+      const { entityId, entityType } = data
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab) break
 
@@ -1584,14 +1574,14 @@ export function handleMessage(ws, msg, projectRoot) {
         }
         targetEntityId = newId
       } else if (entityId) {
-        // Moving existing entity - remove from current pane first
+        // Moving existing entity - remove from current tile first
         tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
       }
 
-      // Add to pane
-      tab.layout = layout.addEntityToPane(tab.layout, paneId, targetEntityId)
+      // Add to tile
+      tab.layout = layout.addEntityToTile(tab.layout, tileId, targetEntityId)
 
-      appState.focusedPane = paneId
+      appState.focusedTile = tileId
       appState.focusedEntity = targetEntityId
 
       saveState()

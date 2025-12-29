@@ -1,24 +1,27 @@
 /**
- * Layout Tree Helpers
+ * Surface Layout Tree Helpers
  *
  * Layout nodes are either:
- * - PaneNode: { type: 'pane', id, entityIds: string[], focusedEntityId: string | null }
+ * - TileNode: { type: 'tile', id, entityIds: string[], focusedEntityId: string | null }
  * - SplitNode: { type: 'split', id, direction: 'horizontal' | 'vertical', ratio: number, children: [LayoutNode, LayoutNode] }
  */
 
-import { generatePaneId, generateSplitId } from './state.js'
+import { generateTileId, generateSplitId } from './state.js'
 
 /**
- * Create a new pane node
+ * Create a new tile node
  */
-export function createPane(entityIds = [], focusedEntityId = null) {
+export function createTile(entityIds = [], focusedEntityId = null) {
   return {
-    type: 'pane',
-    id: generatePaneId(),
+    type: 'tile',
+    id: generateTileId(),
     entityIds,
     focusedEntityId: focusedEntityId || entityIds[0] || null
   }
 }
+
+// Alias for backwards compatibility
+export const createPane = createTile
 
 /**
  * Create a new split node
@@ -55,23 +58,26 @@ export function findNode(layout, nodeId, parent = null, index = -1) {
 }
 
 /**
- * Find a pane by ID
+ * Find a tile by ID
  */
-export function findPane(layout, paneId) {
-  const result = findNode(layout, paneId)
-  if (result && result.node.type === 'pane') {
+export function findTile(layout, tileId) {
+  const result = findNode(layout, tileId)
+  if (result && result.node.type === 'tile') {
     return result
   }
   return null
 }
 
+// Alias for backwards compatibility
+export const findPane = findTile
+
 /**
- * Find the pane containing a specific entity
+ * Find the tile containing a specific entity
  */
-export function findPaneByEntity(layout, entityId) {
+export function findTileByEntity(layout, entityId) {
   if (!layout) return null
 
-  if (layout.type === 'pane') {
+  if (layout.type === 'tile') {
     if (layout.entityIds.includes(entityId)) {
       return layout
     }
@@ -80,7 +86,7 @@ export function findPaneByEntity(layout, entityId) {
 
   if (layout.type === 'split') {
     for (const child of layout.children) {
-      const result = findPaneByEntity(child, entityId)
+      const result = findTileByEntity(child, entityId)
       if (result) return result
     }
   }
@@ -88,46 +94,55 @@ export function findPaneByEntity(layout, entityId) {
   return null
 }
 
+// Alias for backwards compatibility
+export const findPaneByEntity = findTileByEntity
+
 /**
- * Get all panes in the layout tree
+ * Get all tiles in the layout tree
  */
-export function getAllPanes(layout) {
+export function getAllTiles(layout) {
   if (!layout) return []
 
-  if (layout.type === 'pane') {
+  if (layout.type === 'tile') {
     return [layout]
   }
 
   if (layout.type === 'split') {
-    return layout.children.flatMap(child => getAllPanes(child))
+    return layout.children.flatMap(child => getAllTiles(child))
   }
 
   return []
 }
 
+// Alias for backwards compatibility
+export const getAllPanes = getAllTiles
+
 /**
- * Get the first pane in the layout tree
+ * Get the first tile in the layout tree
  */
-export function getFirstPane(layout) {
+export function getFirstTile(layout) {
   if (!layout) return null
 
-  if (layout.type === 'pane') {
+  if (layout.type === 'tile') {
     return layout
   }
 
   if (layout.type === 'split') {
-    return getFirstPane(layout.children[0])
+    return getFirstTile(layout.children[0])
   }
 
   return null
 }
 
+// Alias for backwards compatibility
+export const getFirstPane = getFirstTile
+
 /**
- * Split a pane in a given direction and position
+ * Split a tile in a given direction and position
  * position: 'before' | 'after' | 'left' | 'right' | 'top' | 'bottom'
  * Returns a new layout tree (immutable)
  */
-export function splitPane(layout, paneId, direction, position, newEntityId) {
+export function splitTile(layout, tileId, direction, position, newEntityId) {
   if (!layout) return layout
 
   // Normalize position to 'before' or 'after'
@@ -136,31 +151,34 @@ export function splitPane(layout, paneId, direction, position, newEntityId) {
   // Deep clone to avoid mutation
   const cloned = JSON.parse(JSON.stringify(layout))
 
-  const result = findPane(cloned, paneId)
+  const result = findTile(cloned, tileId)
   if (!result) return cloned
 
-  const { node: pane, parent, index } = result
+  const { node: tile, parent, index } = result
 
-  // Create new pane for the dropped entity
-  const newPane = createPane(newEntityId ? [newEntityId] : [], newEntityId)
+  // Create new tile for the dropped entity
+  const newTile = createTile(newEntityId ? [newEntityId] : [], newEntityId)
 
-  // Create split node with old pane and new pane
+  // Create split node with old tile and new tile
   const children = normalizedPosition === 'before'
-    ? [newPane, pane]
-    : [pane, newPane]
+    ? [newTile, tile]
+    : [tile, newTile]
 
   const splitNode = createSplit(direction, children, 0.5)
 
-  // Replace pane with split node
+  // Replace tile with split node
   if (parent) {
     parent.children[index] = splitNode
   } else {
-    // Pane was root node
+    // Tile was root node
     return splitNode
   }
 
   return cloned
 }
+
+// Alias for backwards compatibility
+export const splitPane = splitTile
 
 /**
  * Normalize position to 'before' or 'after' relative to direction
@@ -181,41 +199,44 @@ function normalizePosition(position, direction) {
 }
 
 /**
- * Add an entity to a pane's stack
+ * Add an entity to a tile's stack
  * Returns a new layout tree (immutable)
  */
-export function addEntityToPane(layout, paneId, entityId) {
+export function addEntityToTile(layout, tileId, entityId) {
   if (!layout) return layout
 
   const cloned = JSON.parse(JSON.stringify(layout))
-  const result = findPane(cloned, paneId)
+  const result = findTile(cloned, tileId)
 
   if (!result) return cloned
 
-  const { node: pane } = result
+  const { node: tile } = result
 
   // Don't add if already present
-  if (!pane.entityIds.includes(entityId)) {
-    pane.entityIds.push(entityId)
+  if (!tile.entityIds.includes(entityId)) {
+    tile.entityIds.push(entityId)
   }
 
   // Focus the new entity
-  pane.focusedEntityId = entityId
+  tile.focusedEntityId = entityId
 
   return cloned
 }
 
+// Alias for backwards compatibility
+export const addEntityToPane = addEntityToTile
+
 /**
- * Remove an entity from any pane in the layout
- * If the pane becomes empty, it's automatically collapsed (sibling takes over)
- * Returns a new layout tree (immutable) - never contains empty panes
+ * Remove an entity from any tile in the layout
+ * If the tile becomes empty, it's automatically collapsed (sibling takes over)
+ * Returns a new layout tree (immutable) - never contains empty tiles
  */
 export function removeEntityFromLayout(layout, entityId) {
   if (!layout) return layout
 
-  // Recursive removal that collapses empty panes atomically
+  // Recursive removal that collapses empty tiles atomically
   function removeAndCollapse(node, parent, childIndex) {
-    if (node.type === 'pane') {
+    if (node.type === 'tile') {
       if (!node.entityIds.includes(entityId)) {
         return node // Entity not here, keep as-is
       }
@@ -224,7 +245,7 @@ export function removeEntityFromLayout(layout, entityId) {
       const newEntityIds = node.entityIds.filter(id => id !== entityId)
 
       if (newEntityIds.length > 0) {
-        // Pane still has entities - return updated pane
+        // Tile still has entities - return updated tile
         return {
           ...node,
           entityIds: newEntityIds,
@@ -233,7 +254,7 @@ export function removeEntityFromLayout(layout, entityId) {
             : node.focusedEntityId
         }
       } else {
-        // Pane is now empty - return null to signal collapse
+        // Tile is now empty - return null to signal collapse
         return null
       }
     }
@@ -262,30 +283,33 @@ export function removeEntityFromLayout(layout, entityId) {
 }
 
 /**
- * Move an entity from one pane to another
+ * Move an entity from one tile to another
  * Returns a new layout tree (immutable)
  */
-export function moveEntityToPane(layout, entityId, targetPaneId) {
+export function moveEntityToTile(layout, entityId, targetTileId) {
   if (!layout) return layout
 
   // First remove from current location
   let cloned = removeEntityFromLayout(layout, entityId)
 
-  // Then add to target pane
-  cloned = addEntityToPane(cloned, targetPaneId, entityId)
+  // Then add to target tile
+  cloned = addEntityToTile(cloned, targetTileId, entityId)
 
   return cloned
 }
 
+// Alias for backwards compatibility
+export const moveEntityToPane = moveEntityToTile
+
 /**
- * Merge a pane into its sibling (collapse the split)
+ * Merge a tile into its sibling (collapse the split)
  * Returns { layout, mergedEntityIds } (immutable)
  */
-export function mergePane(layout, paneId) {
+export function mergeTile(layout, tileId) {
   if (!layout) return { layout, mergedEntityIds: [] }
 
   const cloned = JSON.parse(JSON.stringify(layout))
-  const result = findNode(cloned, paneId)
+  const result = findNode(cloned, tileId)
 
   if (!result || !result.parent) {
     // Can't merge root node
@@ -293,12 +317,12 @@ export function mergePane(layout, paneId) {
   }
 
   const { parent: splitNode, index } = result
-  const paneToMerge = result.node
+  const tileToMerge = result.node
   const siblingIndex = index === 0 ? 1 : 0
   const sibling = splitNode.children[siblingIndex]
 
-  // Get entities from the pane being merged
-  const mergedEntityIds = paneToMerge.type === 'pane' ? [...paneToMerge.entityIds] : []
+  // Get entities from the tile being merged
+  const mergedEntityIds = tileToMerge.type === 'tile' ? [...tileToMerge.entityIds] : []
 
   // Find the grandparent to replace the split with the sibling
   const grandparentResult = findNode(cloned, splitNode.id)
@@ -313,6 +337,9 @@ export function mergePane(layout, paneId) {
 
   return { layout: cloned, mergedEntityIds }
 }
+
+// Alias for backwards compatibility
+export const mergePane = mergeTile
 
 /**
  * Update the ratio of a split node
@@ -332,36 +359,39 @@ export function updateSplitRatio(layout, splitId, ratio) {
 }
 
 /**
- * Set the focused entity in a pane
+ * Set the focused entity in a tile
  * Returns a new layout tree (immutable)
  */
-export function setFocusedEntityInPane(layout, paneId, entityId) {
+export function setFocusedEntityInTile(layout, tileId, entityId) {
   if (!layout) return layout
 
   const cloned = JSON.parse(JSON.stringify(layout))
-  const result = findPane(cloned, paneId)
+  const result = findTile(cloned, tileId)
 
   if (!result) return cloned
 
-  const { node: pane } = result
+  const { node: tile } = result
 
-  // Only set if entity is in this pane
-  if (pane.entityIds.includes(entityId)) {
-    pane.focusedEntityId = entityId
+  // Only set if entity is in this tile
+  if (tile.entityIds.includes(entityId)) {
+    tile.focusedEntityId = entityId
   }
 
   return cloned
 }
+
+// Alias for backwards compatibility
+export const setFocusedEntityInPane = setFocusedEntityInTile
 
 /**
  * Initialize layout from flat entity list (migration helper)
  */
 export function initializeLayoutFromEntities(entityIds) {
   if (!entityIds || entityIds.length === 0) {
-    return createPane([])
+    return createTile([])
   }
 
-  return createPane(entityIds, entityIds[0])
+  return createTile(entityIds, entityIds[0])
 }
 
 /**
@@ -370,7 +400,7 @@ export function initializeLayoutFromEntities(entityIds) {
 export function getAllEntityIds(layout) {
   if (!layout) return []
 
-  if (layout.type === 'pane') {
+  if (layout.type === 'tile') {
     return [...layout.entityIds]
   }
 

@@ -23,11 +23,11 @@ export const appState = {
   tabCounter: 1,
   entities: {},           // All entities: gods, terminals, browsers, git panels, etc.
   entityCounter: 0,       // For generating unique IDs
-  paneCounter: 0,         // For generating unique pane IDs
+  tileCounter: 0,         // For generating unique tile IDs
   splitCounter: 0,        // For generating unique split IDs
   theme: 'divine-void',
   focusedEntity: null,    // ID of focused entity
-  focusedPane: null,      // ID of focused pane (for multi-pane layouts)
+  focusedTile: null,      // ID of focused tile (for multi-tile layouts)
   gitProjects: [],        // [{path, name}]
   cemetery: [],           // Fallen gods: [{id, name, color, voice, mission, title, banishedAt, tabName, sessionId}]
   settings: {             // App settings (API keys, etc.)
@@ -135,17 +135,21 @@ export function loadState() {
     appState.cemetery = []
   }
 
-  // Ensure pane/split counters exist
-  if (!appState.paneCounter) {
-    appState.paneCounter = 0
+  // Ensure tile/split counters exist
+  if (!appState.tileCounter) {
+    // Migrate from old paneCounter if exists
+    appState.tileCounter = appState.paneCounter || 0
+    delete appState.paneCounter
   }
   if (!appState.splitCounter) {
     appState.splitCounter = 0
   }
 
-  // Ensure focusedPane exists
-  if (appState.focusedPane === undefined) {
-    appState.focusedPane = null
+  // Ensure focusedTile exists
+  if (appState.focusedTile === undefined) {
+    // Migrate from old focusedPane if exists
+    appState.focusedTile = appState.focusedPane || null
+    delete appState.focusedPane
   }
 
   // Ensure all tabs have layout property (migration from v2 to v3)
@@ -156,7 +160,7 @@ export function loadState() {
   })
 
   // Validate layouts: remove references to non-existent entities
-  // (removeEntityFromLayout auto-collapses empty panes)
+  // (removeEntityFromLayout auto-collapses empty tiles)
   const existingEntityIds = new Set(Object.keys(appState.entities))
   appState.tabs.forEach(tab => {
     if (tab.layout) {
@@ -169,23 +173,23 @@ export function loadState() {
     }
   })
 
-  // Ensure all entities are in a pane (create individual panes for orphans)
+  // Ensure all entities are in a tile (create individual tiles for orphans)
   Object.values(appState.entities).forEach(entity => {
     const tab = appState.tabs.find(t => t.id === entity.tabId)
     if (!tab) return
 
-    // Initialize layout if null - create pane for this entity
+    // Initialize layout if null - create tile for this entity
     if (!tab.layout) {
-      tab.layout = layout.createPane([entity.id], entity.id)
+      tab.layout = layout.createTile([entity.id], entity.id)
       return
     }
 
-    // Check if entity is in any pane
-    const pane = layout.findPaneByEntity(tab.layout, entity.id)
-    if (!pane) {
-      // Create a new pane for this entity and split horizontally with existing layout
-      const newPane = layout.createPane([entity.id], entity.id)
-      tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
+    // Check if entity is in any tile
+    const tile = layout.findTileByEntity(tab.layout, entity.id)
+    if (!tile) {
+      // Create a new tile for this entity and split horizontally with existing layout
+      const newTile = layout.createTile([entity.id], entity.id)
+      tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
     }
   })
 
@@ -267,13 +271,13 @@ export function getStateForBroadcast() {
 
   entities.sort((a, b) => a.order - b.order)
 
-  // Extract panes from each tab's layout
-  const panes = {}
+  // Extract tiles from each tab's layout
+  const tiles = {}
   appState.tabs.forEach(tab => {
     if (tab.layout) {
-      panes[tab.id] = layout.getAllPanes(tab.layout)
+      tiles[tab.id] = layout.getAllTiles(tab.layout)
     } else {
-      panes[tab.id] = []
+      tiles[tab.id] = []
     }
   })
 
@@ -286,8 +290,8 @@ export function getStateForBroadcast() {
     theme: appState.theme,
     godColors,
     focusedEntity: appState.focusedEntity,
-    focusedPane: appState.focusedPane,
-    panes,
+    focusedTile: appState.focusedTile,
+    tiles,
     gitProjects: appState.gitProjects || [],
     cemetery: appState.cemetery || [],
     settings: {
@@ -318,11 +322,14 @@ export function generateEntityId(type) {
   return `${type}-${appState.entityCounter}`
 }
 
-// Generate a unique pane ID
-export function generatePaneId() {
-  appState.paneCounter++
-  return `pane-${appState.paneCounter}`
+// Generate a unique tile ID
+export function generateTileId() {
+  appState.tileCounter++
+  return `tile-${appState.tileCounter}`
 }
+
+// Alias for backwards compatibility
+export const generatePaneId = generateTileId
 
 // Generate a unique split ID
 export function generateSplitId() {
