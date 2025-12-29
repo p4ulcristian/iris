@@ -17,10 +17,12 @@ export function broadcast(event, data = {}) {
 
 // App state (source of truth)
 export const appState = {
-  version: 3,
-  tabs: [{ id: 1, name: 'Olympus', layout: null }],  // layout: LayoutNode | null
+  version: 4,
+  // Realms (tabs) - each realm has multiple stages
+  tabs: [{ id: 1, name: 'Olympus', stages: [], activeStageId: null }],
   activeTabId: 1,
   tabCounter: 1,
+  stageCounter: 0,        // For generating unique stage IDs
   entities: {},           // All entities: gods, terminals, browsers, git panels, etc.
   entityCounter: 0,       // For generating unique IDs
   tileCounter: 0,         // For generating unique tile IDs
@@ -152,62 +154,155 @@ export function loadState() {
     delete appState.focusedPane
   }
 
-  // Ensure all tabs have layout property (migration from v2 to v3)
+  // Ensure stageCounter exists
+  if (!appState.stageCounter) {
+    appState.stageCounter = 0
+  }
+
+  // Migrate from v3 (tab.layout) to v4 (tab.stages[])
   appState.tabs.forEach(tab => {
-    if (tab.layout === undefined) {
-      tab.layout = null  // null means use flat entity list (legacy mode)
+    // Initialize stages array if not exists
+    if (!tab.stages) {
+      tab.stages = []
+    }
+    if (tab.activeStageId === undefined) {
+      tab.activeStageId = null
+    }
+
+    // Migrate old layout to stages format
+    if (tab.layout !== undefined) {
+      if (tab.layout !== null) {
+        // Convert single layout to a stage
+        appState.stageCounter++
+        const stageId = `stage-${appState.stageCounter}`
+        tab.stages.push({ id: stageId, layout: tab.layout })
+        tab.activeStageId = stageId
+      }
+      delete tab.layout
     }
   })
 
   // Migrate pane→tile in layout nodes (terminology refactor)
-  function migratePaneToTile(node) {
+  // Also migrate entityIds[] → entityId (single entity per tile)
+  function migrateLayoutNode(node) {
     if (!node) return node
     if (node.type === 'pane') {
       node.type = 'tile'
     }
+    if (node.type === 'tile') {
+      // Migrate entityIds[] to entityId (take first, create stages for rest later)
+      if (node.entityIds && !node.entityId) {
+        node.entityId = node.entityIds[0] || null
+        // Keep entityIds for now, will be cleaned after orphan stage creation
+      }
+    }
     if (node.type === 'split' && node.children) {
-      node.children = node.children.map(migratePaneToTile)
+      node.children = node.children.map(migrateLayoutNode)
     }
     return node
   }
   appState.tabs.forEach(tab => {
-    if (tab.layout) {
-      tab.layout = migratePaneToTile(tab.layout)
-    }
+    tab.stages.forEach(stage => {
+      if (stage.layout) {
+        stage.layout = migrateLayoutNode(stage.layout)
+      }
+    })
   })
 
   // Validate layouts: remove references to non-existent entities
-  // (removeEntityFromLayout auto-collapses empty tiles)
   const existingEntityIds = new Set(Object.keys(appState.entities))
   appState.tabs.forEach(tab => {
-    if (tab.layout) {
-      const layoutEntityIds = layout.getAllEntityIds(tab.layout)
-      for (const entityId of layoutEntityIds) {
-        if (!existingEntityIds.has(entityId)) {
-          tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+    tab.stages = tab.stages.filter(stage => {
+      if (stage.layout) {
+        const layoutEntityIds = layout.getAllEntityIds(stage.layout)
+        for (const entityId of layoutEntityIds) {
+          if (!existingEntityIds.has(entityId)) {
+            stage.layout = layout.removeEntityFromLayout(stage.layout, entityId)
+          }
         }
+        // Remove stage if layout became null (all entities gone)
+        return stage.layout !== null
       }
+      return false  // Remove stages with no layout
+    })
+    // Update activeStageId if it was removed
+    if (tab.activeStageId && !tab.stages.find(s => s.id === tab.activeStageId)) {
+      tab.activeStageId = tab.stages[0]?.id || null
     }
   })
 
-  // Ensure all entities are in a tile (create individual tiles for orphans)
+  // Deduplicate: ensure each entity only appears in ONE stage
+  // (Remove duplicate stages for the same entity, keeping the first one)
+  appState.tabs.forEach(tab => {
+    const seenEntities = new Set()
+    tab.stages = tab.stages.filter(stage => {
+      if (!stage.layout) return false
+      const entityIds = layout.getAllEntityIds(stage.layout)
+      // Check if any entity in this stage was already seen
+      const isDuplicate = entityIds.some(id => seenEntities.has(id))
+      if (isDuplicate) {
+        return false  // Remove this duplicate stage
+      }
+      // Mark all entities in this stage as seen
+      entityIds.forEach(id => seenEntities.add(id))
+      return true
+    })
+    // Update activeStageId if it was removed
+    if (tab.activeStageId && !tab.stages.find(s => s.id === tab.activeStageId)) {
+      tab.activeStageId = tab.stages[0]?.id || null
+    }
+  })
+
+  // Ensure all entities are in a stage (create individual stages for orphans)
   Object.values(appState.entities).forEach(entity => {
     const tab = appState.tabs.find(t => t.id === entity.tabId)
     if (!tab) return
 
-    // Initialize layout if null - create tile for this entity
-    if (!tab.layout) {
-      tab.layout = layout.createTile([entity.id], entity.id)
-      return
+    // Check if entity is in any stage's tile
+    let found = false
+    for (const stage of tab.stages) {
+      if (stage.layout) {
+        const tile = layout.findTileByEntity(stage.layout, entity.id)
+        if (tile) {
+          found = true
+          break
+        }
+      }
     }
 
-    // Check if entity is in any tile
-    const tile = layout.findTileByEntity(tab.layout, entity.id)
-    if (!tile) {
-      // Create a new tile for this entity and split horizontally with existing layout
-      const newTile = layout.createTile([entity.id], entity.id)
-      tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
+    // If not found, create a new stage for this entity
+    if (!found) {
+      appState.stageCounter++
+      const stageId = `stage-${appState.stageCounter}`
+      const newStage = {
+        id: stageId,
+        layout: layout.createTile(entity.id)
+      }
+      tab.stages.push(newStage)
+      if (!tab.activeStageId) {
+        tab.activeStageId = stageId
+      }
     }
+  })
+
+  // Clean up legacy entityIds/focusedEntityId from layout nodes
+  function cleanupLegacyFields(node) {
+    if (!node) return node
+    if (node.type === 'tile') {
+      delete node.entityIds
+      delete node.focusedEntityId
+    }
+    if (node.type === 'split' && node.children) {
+      node.children.forEach(cleanupLegacyFields)
+    }
+    return node
+  }
+  appState.tabs.forEach(tab => {
+    tab.stages.forEach(stage => {
+      if (stage.layout) {
+        cleanupLegacyFields(stage.layout)
+      }
+    })
   })
 
   // Apply settings to environment
@@ -288,14 +383,24 @@ export function getStateForBroadcast() {
 
   entities.sort((a, b) => a.order - b.order)
 
-  // Extract tiles from each tab's layout
+  // Extract tiles from ALL stages in each tab (so scrolls show all entities)
   const tiles = {}
   appState.tabs.forEach(tab => {
-    if (tab.layout) {
-      tiles[tab.id] = layout.getAllTiles(tab.layout)
-    } else {
-      tiles[tab.id] = []
+    const allTiles = []
+    if (tab.stages) {
+      for (const stage of tab.stages) {
+        if (stage.layout) {
+          const stageTiles = layout.getAllTiles(stage.layout)
+          // Mark which stage each tile belongs to
+          stageTiles.forEach(tile => {
+            tile.stageId = stage.id
+            tile.isActiveStage = stage.id === tab.activeStageId
+          })
+          allTiles.push(...stageTiles)
+        }
+      }
     }
+    tiles[tab.id] = allTiles
   })
 
   const godColors = GOD_COLORS
@@ -352,6 +457,30 @@ export const generatePaneId = generateTileId
 export function generateSplitId() {
   appState.splitCounter++
   return `split-${appState.splitCounter}`
+}
+
+// Generate a unique stage ID
+export function generateStageId() {
+  appState.stageCounter++
+  return `stage-${appState.stageCounter}`
+}
+
+// Find the stage containing a given entity ID within a tab
+export function findStageByEntity(tab, entityId) {
+  if (!tab?.stages) return null
+  for (const stage of tab.stages) {
+    if (stage.layout) {
+      const tile = layout.findTileByEntity(stage.layout, entityId)
+      if (tile) return stage
+    }
+  }
+  return null
+}
+
+// Get the active stage for a tab
+export function getActiveStage(tab) {
+  if (!tab?.stages || !tab.activeStageId) return null
+  return tab.stages.find(s => s.id === tab.activeStageId) || null
 }
 
 // Normalize order values for all entities in a tab (0, 1, 2, ...)

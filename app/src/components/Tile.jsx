@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import EntityCard from './EntityCard'
 import TerminalContent from './TerminalContent'
@@ -17,13 +17,16 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
 /**
- * Tile - A single tile in a surface layout that contains a stack of entities
+ * Tile - A single tile in a surface layout containing ONE entity
+ * (Stacking is now achieved via stages, not entity arrays in tiles)
  */
 export default function Tile({
   tileId,
-  entityIds,
-  focusedEntityId,
+  entityId,  // Single entity ID (new format)
+  entityIds,  // Legacy: array of entity IDs (backwards compat)
+  focusedEntityId,  // Legacy: kept for backwards compat
   isFocused,
+  isChapter = false,  // True when tile has a parent split (is part of a chapter)
   entities,
   tabId,
   containerSize,
@@ -33,16 +36,10 @@ export default function Tile({
   const ref = useRef(null)
   const [dropState, setDropState] = useState({ isDraggedOver: false, closestEdge: null })
 
-  // Get entity objects for this tile
-  const tileEntities = useMemo(() => {
-    return entityIds
-      .map(id => entities[id])
-      .filter(Boolean)
-  }, [entityIds, entities])
-
-  // The entity that should be shown in this tile
-  const visibleEntityId = focusedEntityId || entityIds[0] || null
-  const visibleEntity = visibleEntityId ? entities[visibleEntityId] : null
+  // Get the entity for this tile (single entity per tile)
+  // Support both new entityId and legacy entityIds format
+  const tileEntityId = entityId || (entityIds && entityIds[0]) || null
+  const tileEntity = tileEntityId ? entities[tileEntityId] : null
 
   // Handle clicking on the tile to focus it
   const handleTileClick = useCallback(() => {
@@ -80,27 +77,22 @@ export default function Tile({
       },
       onDrop: ({ source, self }) => {
         const edge = extractClosestEdge(self.data)
-        const { source: dragSource, entityId, entityType } = source.data
+        const { source: dragSource, entityId: droppedEntityId, entityType } = source.data
 
         // Determine zone from edge (null edge = center)
         const zone = edge || 'center'
 
-        if (zone === 'center') {
-          // Add to this tile's stack
-          if (dragSource === 'spawn') {
-            send({ event: 'layout:add-entity-to-tile', tileId, entityType })
-          } else if (dragSource === 'move') {
-            send({ event: 'layout:add-entity-to-tile', tileId, entityId })
-          }
-        } else {
-          // Split the tile
-          const direction = (zone === 'left' || zone === 'right') ? 'horizontal' : 'vertical'
+        // With single entity per tile, center drop splits horizontally
+        // (No more stacking - use stages for that)
+        const direction = (zone === 'left' || zone === 'right' || zone === 'center')
+          ? 'horizontal'
+          : 'vertical'
+        const position = zone === 'center' ? 'right' : zone
 
-          if (dragSource === 'spawn') {
-            send({ event: 'layout:split', tabId, tileId, direction, position: zone, entityType })
-          } else if (dragSource === 'move') {
-            send({ event: 'layout:split', tabId, tileId, direction, position: zone, entityId })
-          }
+        if (dragSource === 'spawn') {
+          send({ event: 'layout:split', tabId, tileId, direction, position, entityType })
+        } else if (dragSource === 'move') {
+          send({ event: 'layout:split', tabId, tileId, direction, position, entityId: droppedEntityId })
         }
 
         setDropState({ isDraggedOver: false, closestEdge: null })
@@ -108,26 +100,6 @@ export default function Tile({
     })
   }, [tileId, tabId, send])
 
-  // Get stack position for animation
-  const getStackPosition = (entityId, focusedId, entityList) => {
-    const focusedIdx = entityList.findIndex(e => e.id === focusedId)
-    const entityIdx = entityList.findIndex(e => e.id === entityId)
-    return entityIdx - focusedIdx
-  }
-
-  const getStackStyle = (position) => {
-    const y = `${position * 90}%`
-    const rotateX = position * -15
-    const absPos = Math.abs(position)
-
-    return {
-      y,
-      rotateX,
-      opacity: absPos === 0 ? 1 : 0,
-      zIndex: 10 - absPos,
-      pointerEvents: position === 0 ? 'auto' : 'none'
-    }
-  }
 
   // Render entity content based on type
   const renderEntityContent = (entity) => {
@@ -188,7 +160,8 @@ export default function Tile({
       case 'right':
         return { className: `${baseStyle} top-0 bottom-0 right-0 w-1/4`, label: 'Split right' }
       default:
-        return { className: `${baseStyle} inset-4`, label: 'Add to stack' }
+        // Center = split right (no more stacking)
+        return { className: `${baseStyle} top-0 bottom-0 right-0 w-1/2`, label: 'Split right' }
     }
   }
 
@@ -197,61 +170,36 @@ export default function Tile({
   return (
     <div
       ref={ref}
-      className="relative h-full w-full overflow-hidden"
+      className={`relative h-full w-full overflow-hidden ${isChapter ? 'border-2 border-white/20 rounded-2xl' : ''}`}
       onClick={handleTileClick}
     >
       {/* Empty tile state */}
-      {tileEntities.length === 0 && (
+      {!tileEntity && (
         <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary liquid-glass-god rounded-2xl">
           <p className="text-base">Empty tile</p>
           <p className="text-sm opacity-70">Drop an entity here</p>
         </div>
       )}
 
-      {/* Entity stack */}
-      {tileEntities.length > 0 && containerSize && (
-        <AnimatePresence mode="popLayout">
-          {tileEntities.map(entity => {
-            const position = getStackPosition(entity.id, visibleEntityId, tileEntities)
-            const style = getStackStyle(position)
-
-            return (
-              <motion.div
-                key={entity.id}
-                initial={{ opacity: 0, y: '-100%', rotateX: 15 }}
-                animate={{
-                  y: style.y,
-                  rotateX: style.rotateX,
-                  opacity: style.opacity,
-                  zIndex: style.zIndex,
-                }}
-                exit={{ opacity: 0, y: '100%', rotateX: -15 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 250,
-                  damping: 25,
-                  opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
-                }}
-                className="absolute inset-0"
-                style={{
-                  pointerEvents: style.pointerEvents,
-                  transformOrigin: 'center center',
-                }}
-              >
-                <EntityCard
-                  entity={entity}
-                  isFocused={position === 0 && isFocused}
-                  onClick={() => {
-                    if (position !== 0) {
-                      send({ event: 'tile:focus-entity', tileId, entityId: entity.id })
-                    }
-                  }}
-                >
-                  {renderEntityContent(entity)}
-                </EntityCard>
-              </motion.div>
-            )
-          })}
+      {/* Entity display - single entity per tile */}
+      {tileEntity && containerSize && (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={tileEntity.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="h-full w-full"
+          >
+            <EntityCard
+              entity={tileEntity}
+              isFocused={isFocused}
+              onClick={() => {}}
+            >
+              {renderEntityContent(tileEntity)}
+            </EntityCard>
+          </motion.div>
         </AnimatePresence>
       )}
 

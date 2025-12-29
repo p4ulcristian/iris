@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, useState, useLayoutEffect } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { generatePalette, getThemeTerminalSettings } from '../themes'
 import { useStore } from '../store'
@@ -20,6 +20,18 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
   const termRef = useRef(null)
   const wsRef = useRef(null)
   const cellDimsRef = useRef(null) // Cache cell dimensions once available
+
+  // Track which container the terminal is attached to (for hot reload detection)
+  const attachedContainerRef = useRef(null)
+  const [remountKey, setRemountKey] = useState(0)
+
+  // Detect hot reload: container DOM changed but React preserved our refs
+  useLayoutEffect(() => {
+    if (attachedContainerRef.current && attachedContainerRef.current !== containerRef.current) {
+      // Container changed - force terminal effect to re-run
+      setRemountKey(k => k + 1)
+    }
+  })
 
   const { name, displayName, color } = entity
   const godName = name
@@ -134,6 +146,9 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
   // Main terminal setup
   useEffect(() => {
     if (!containerRef.current) return
+
+    // Track current container for hot reload detection
+    attachedContainerRef.current = containerRef.current
 
     // Initial size from expected dimensions
     const { cols: initialCols, rows: initialRows } = calcDimensions(
@@ -260,7 +275,7 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
       term.dispose()
       ws.close()
     }
-  }, [godName, color])
+  }, [godName, color, remountKey])
 
   return (
     <div

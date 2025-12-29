@@ -58,7 +58,7 @@ const initialState = {
   browserUrl: null,
 
   // Tiles per tab - extracted from layout tree by server
-  tiles: {},  // { [tabId]: [{ id, entityIds, focusedEntityId }, ...] }
+  tiles: {},  // { [tabId]: [{ id, entityId }, ...] } - one entity per tile
 }
 
 // Store
@@ -277,24 +277,45 @@ export const useStore = create(
 
       // ============ LAYOUT SELECTORS ============
 
-      // Get layout for active tab
+      // Get layout for active stage in active tab
       getActiveLayout: () => {
         const state = get()
         const tab = state.tabs.find(t => t.id === state.activeTabId)
+        if (!tab) return null
+        // New stages format: get active stage's layout
+        if (tab.stages && tab.activeStageId) {
+          const activeStage = tab.stages.find(s => s.id === tab.activeStageId)
+          return activeStage?.layout || null
+        }
+        // Legacy fallback
         return tab?.layout || null
       },
 
-      // Get layout for a specific tab
+      // Get layout for a specific tab's active stage
       getLayoutForTab: (tabId) => {
         const state = get()
         const tab = state.tabs.find(t => t.id === tabId)
+        if (!tab) return null
+        // New stages format
+        if (tab.stages && tab.activeStageId) {
+          const activeStage = tab.stages.find(s => s.id === tab.activeStageId)
+          return activeStage?.layout || null
+        }
+        // Legacy fallback
         return tab?.layout || null
       },
 
-      // Check if current tab has a split layout
+      // Check if current tab's active stage has a split layout
       hasMultipleTiles: () => {
         const state = get()
         const tab = state.tabs.find(t => t.id === state.activeTabId)
+        if (!tab) return false
+        // New stages format
+        if (tab.stages && tab.activeStageId) {
+          const activeStage = tab.stages.find(s => s.id === tab.activeStageId)
+          return activeStage?.layout?.type === 'split'
+        }
+        // Legacy fallback
         return tab?.layout?.type === 'split'
       },
 

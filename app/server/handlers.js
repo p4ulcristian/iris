@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
 import { GOD_COLORS } from '../src/themes/index.js'
-import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
@@ -99,16 +99,15 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: god.sessionId || null
         }
 
-        // Add to layout - each new entity gets its own tile
+        // Create a new stage for this entity
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newTile = layout.createTile([god.name], god.name)
-          if (!tab.layout) {
-            tab.layout = newTile
-          } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-          }
-          appState.focusedTile = newTile.id
+          const stageId = generateStageId()
+          const tileId = layout.createTile([god.name], god.name)
+          const newStage = { id: stageId, layout: tileId }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileId.id
         }
 
         appState.focusedEntity = god.name
@@ -138,16 +137,15 @@ export function handleMessage(ws, msg, projectRoot) {
           color: terminal.color
         }
 
-        // Add to layout - each new entity gets its own tile
+        // Create a new stage for this entity
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newTile = layout.createTile([terminal.name], terminal.name)
-          if (!tab.layout) {
-            tab.layout = newTile
-          } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-          }
-          appState.focusedTile = newTile.id
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([terminal.name], terminal.name)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
         }
 
         appState.focusedEntity = terminal.name
@@ -183,13 +181,25 @@ export function handleMessage(ws, msg, projectRoot) {
 
       delete appState.entities[entityId]
 
-      // Remove from layout (automatically collapses empty tiles)
+      // Remove from stage's layout (and remove stage if empty)
       if (entityTabId) {
         const tab = appState.tabs.find(t => t.id === entityTabId)
-        if (tab?.layout) {
-          tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+        if (tab) {
+          // Find and update the stage containing this entity
+          const stage = findStageByEntity(tab, entityId)
+          if (stage) {
+            stage.layout = layout.removeEntityFromLayout(stage.layout, entityId)
+            // Remove stage if layout became null (all entities gone)
+            if (!stage.layout) {
+              tab.stages = tab.stages.filter(s => s.id !== stage.id)
+              // Update activeStageId if needed
+              if (tab.activeStageId === stage.id) {
+                tab.activeStageId = tab.stages[0]?.id || null
+              }
+            }
+          }
+          normalizeTabOrder(entityTabId)
         }
-        normalizeTabOrder(entityTabId)
       }
 
       if (appState.focusedEntity === entityId) {
@@ -198,6 +208,17 @@ export function handleMessage(ws, msg, projectRoot) {
           .filter(([_, e]) => e.tabId === appState.activeTabId)
           .sort((a, b) => a[1].order - b[1].order)
         appState.focusedEntity = remaining.length > 0 ? remaining[0][0] : null
+
+        // Switch to that entity's stage
+        if (appState.focusedEntity) {
+          const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+          if (tab) {
+            const stage = findStageByEntity(tab, appState.focusedEntity)
+            if (stage) {
+              tab.activeStageId = stage.id
+            }
+          }
+        }
       }
       saveState()
       broadcastState()
@@ -465,16 +486,15 @@ export function handleMessage(ws, msg, projectRoot) {
         project: data.project || null
       }
 
-      // Add to layout - each new entity gets its own tile
+      // Create a new stage for this entity
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (tab) {
-        const newTile = layout.createTile([entityId], entityId)
-        if (!tab.layout) {
-          tab.layout = newTile
-        } else {
-          tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-        }
-        appState.focusedTile = newTile.id
+        const stageId = generateStageId()
+        const tileNode = layout.createTile([entityId], entityId)
+        const newStage = { id: stageId, layout: tileNode }
+        tab.stages.push(newStage)
+        tab.activeStageId = stageId
+        appState.focusedTile = tileNode.id
       }
 
       appState.focusedEntity = entityId
@@ -499,14 +519,17 @@ export function handleMessage(ws, msg, projectRoot) {
       const entityId = data.entityId || data.godName
       appState.focusedEntity = entityId || null
 
-      // Also update the tile's focusedEntityId in the layout
+      // Find which stage contains this entity and switch to it
       if (entityId) {
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-        if (tab?.layout) {
-          const tile = layout.findTileByEntity(tab.layout, entityId)
-          if (tile) {
-            tab.layout = layout.setFocusedEntityInTile(tab.layout, tile.id, entityId)
-            appState.focusedTile = tile.id
+        if (tab) {
+          const stage = findStageByEntity(tab, entityId)
+          if (stage) {
+            tab.activeStageId = stage.id
+            const tile = layout.findTileByEntity(stage.layout, entityId)
+            if (tile) {
+              appState.focusedTile = tile.id
+            }
           }
         }
       }
@@ -522,14 +545,18 @@ export function handleMessage(ws, msg, projectRoot) {
       if (!tileId) break
 
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (!tab?.layout) break
+      if (!tab) break
 
-      const tileResult = layout.findTile(tab.layout, tileId)
+      // Find tile in active stage
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      const tileResult = layout.findTile(activeStage.layout, tileId)
       if (!tileResult) break
 
       const tile = tileResult.node
       appState.focusedTile = tileId
-      appState.focusedEntity = tile.focusedEntityId || tile.entityIds[0] || null
+      appState.focusedEntity = tile.entityId || tile.focusedEntityId || tile.entityIds?.[0] || null
 
       saveState()
       broadcastState()
@@ -539,44 +566,37 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'focus:next':
     case 'focus:prev': {
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (!tab?.layout) break
+      if (!tab || !tab.stages.length) break
 
-      // Find the focused tile
-      let tile = null
-      if (appState.focusedTile) {
-        const tileResult = layout.findTile(tab.layout, appState.focusedTile)
-        if (tileResult) tile = tileResult.node
-      }
+      // Get all entities in this tab (across all stages)
+      const entitiesInTab = Object.values(appState.entities)
+        .filter(e => e.tabId === appState.activeTabId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
 
-      // If no focused tile, find tile containing focused entity
-      if (!tile && appState.focusedEntity) {
-        tile = layout.findTileByEntity(tab.layout, appState.focusedEntity)
-      }
+      if (entitiesInTab.length === 0) break
 
-      // Fallback to first tile
-      if (!tile) {
-        tile = layout.getFirstTile(tab.layout)
-      }
-
-      if (!tile || tile.entityIds.length === 0) break
-
-      // Cycle within this tile's entities
-      const entityIds = tile.entityIds
-      const currentIdx = entityIds.indexOf(appState.focusedEntity)
+      // Find current index
+      const currentIdx = entitiesInTab.findIndex(e => e.id === appState.focusedEntity)
       let newIdx
 
       if (event === 'focus:next') {
-        newIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % entityIds.length
+        newIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % entitiesInTab.length
       } else {
-        newIdx = currentIdx < 0 ? entityIds.length - 1 : (currentIdx - 1 + entityIds.length) % entityIds.length
+        newIdx = currentIdx < 0 ? entitiesInTab.length - 1 : (currentIdx - 1 + entitiesInTab.length) % entitiesInTab.length
       }
 
-      const newEntityId = entityIds[newIdx]
+      const newEntityId = entitiesInTab[newIdx].id
       appState.focusedEntity = newEntityId
-      appState.focusedTile = tile.id
 
-      // Update tile's focusedEntityId
-      tab.layout = layout.setFocusedEntityInTile(tab.layout, tile.id, newEntityId)
+      // Switch to the stage containing this entity
+      const stage = findStageByEntity(tab, newEntityId)
+      if (stage) {
+        tab.activeStageId = stage.id
+        const tile = layout.findTileByEntity(stage.layout, newEntityId)
+        if (tile) {
+          appState.focusedTile = tile.id
+        }
+      }
 
       saveState()
       broadcastState()
@@ -617,6 +637,18 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           color: terminal.color
         }
+
+        // Create a new stage for this entity
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([terminal.name], terminal.name)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
+        }
+
         appState.focusedEntity = terminal.name
         saveState()
         broadcastState()
@@ -650,16 +682,15 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
 
-        // Add to layout - each new entity gets its own tile
+        // Create a new stage for this entity
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newTile = layout.createTile([god.name], god.name)
-          if (!tab.layout) {
-            tab.layout = newTile
-          } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-          }
-          appState.focusedTile = newTile.id
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([god.name], god.name)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
         }
 
         appState.focusedEntity = god.name
@@ -1181,16 +1212,15 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: sessionId  // Preserve sessionId for re-banish
         }
 
-        // Add to layout - each new entity gets its own tile
+        // Create a new stage for this entity
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newTile = layout.createTile([god.name], god.name)
-          if (!tab.layout) {
-            tab.layout = newTile
-          } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-          }
-          appState.focusedTile = newTile.id
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([god.name], god.name)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
         }
 
         appState.focusedEntity = god.name
@@ -1254,16 +1284,15 @@ export function handleMessage(ws, msg, projectRoot) {
         codeEntity = appState.entities[newId]
         isNewEntity = true
 
-        // Add to layout - each new entity gets its own tile
+        // Create a new stage for this entity
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
-          const newTile = layout.createTile([newId], newId)
-          if (!tab.layout) {
-            tab.layout = newTile
-          } else {
-            tab.layout = layout.createSplit('horizontal', [tab.layout, newTile], 0.5)
-          }
-          appState.focusedTile = newTile.id
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([newId], newId)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
         }
       }
 
@@ -1356,45 +1385,33 @@ export function handleMessage(ws, msg, projectRoot) {
       // Create or get the entity
       let targetEntityId = entityId
       if (entityType && !entityId) {
-        // Spawn new entity of this type
-        const newId = generateEntityId(entityType)
-        const num = getNextEntityNumber(entityType)
-
+        // Spawn new entity of this type - delegate to spawn handlers
         if (entityType === 'god') {
-          // For gods, we need to pick a name - use modal instead
-          // For now, spawn with a random available god
           const godColors = Object.keys(GOD_COLORS)
           const usedNames = Object.values(appState.entities).filter(e => e.type === 'god').map(e => e.name?.toLowerCase())
           const availableGods = godColors.filter(g => !usedNames.includes(g))
           const godPool = availableGods.length > 0 ? availableGods : godColors
           const randomGod = godPool[Math.floor(Math.random() * godPool.length)] || 'zeus'
           const godName = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
-
-          // Trigger god spawn instead
-          handleMessage(ws, { event: 'god:spawn', name: godName, task: '' })
+          handleMessage(ws, { event: 'god:spawn', name: godName, task: '' }, projectRoot)
           break
         } else if (entityType === 'terminal') {
-          handleMessage(ws, { event: 'terminal:spawn' })
+          handleMessage(ws, { event: 'terminal:spawn' }, projectRoot)
           break
         } else {
-          // Other entity types
-          appState.entities[newId] = {
-            id: newId,
-            type: entityType,
-            name: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} ${num}`,
-            displayName: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} ${num}`,
-            tabId: tab.id,
-            color: '#888888',
-            spawnedAt: Date.now()
-          }
-          targetEntityId = newId
+          handleMessage(ws, { event: 'entity:spawn', type: entityType }, projectRoot)
+          break
         }
       }
 
-      // Create the initial tile with this entity
+      // If moving existing entity, create a new stage for it
       if (targetEntityId) {
-        tab.layout = layout.createTile([targetEntityId])
-        appState.focusedTile = tab.layout.id
+        const stageId = generateStageId()
+        const tileNode = layout.createTile([targetEntityId], targetEntityId)
+        const newStage = { id: stageId, layout: tileNode }
+        tab.stages.push(newStage)
+        tab.activeStageId = stageId
+        appState.focusedTile = tileNode.id
         appState.focusedEntity = targetEntityId
       }
 
@@ -1409,14 +1426,9 @@ export function handleMessage(ws, msg, projectRoot) {
       const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
       if (!tab) break
 
-      // Initialize layout if null (migration from flat entity list)
-      if (!tab.layout) {
-        const entityIds = Object.values(appState.entities)
-          .filter(e => e.tabId === tab.id)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
-          .map(e => e.id)
-        tab.layout = layout.initializeLayoutFromEntities(entityIds)
-      }
+      // Get active stage
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
 
       // Create or get the entity to place in new tile
       let targetEntityId = entityId
@@ -1436,22 +1448,23 @@ export function handleMessage(ws, msg, projectRoot) {
         targetEntityId = newId
       }
 
-      // If moving an existing entity, remove it from its current tile first
-      // (removeEntityFromLayout automatically collapses empty tiles)
-      if (entityId && tab.layout) {
-        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+      // If moving an existing entity, remove it from its current stage first
+      if (entityId) {
+        const sourceStage = findStageByEntity(tab, entityId)
+        if (sourceStage) {
+          sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+          // Remove source stage if empty
+          if (!sourceStage.layout) {
+            tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+          }
+        }
       }
 
-      // Split the tile (if layout still exists after removal)
-      if (tab.layout) {
-        tab.layout = layout.splitTile(tab.layout, targetTileId, direction, position, targetEntityId)
-      } else {
-        // Layout was fully cleaned - create fresh with just this entity
-        tab.layout = layout.createTile([targetEntityId])
-      }
+      // Split the tile in active stage
+      activeStage.layout = layout.splitTile(activeStage.layout, targetTileId, direction, position, targetEntityId)
 
       // Focus the new tile and entity
-      const newTile = layout.findTileByEntity(tab.layout, targetEntityId)
+      const newTile = layout.findTileByEntity(activeStage.layout, targetEntityId)
       if (newTile) {
         appState.focusedTile = newTile.id
         appState.focusedEntity = targetEntityId
@@ -1466,16 +1479,19 @@ export function handleMessage(ws, msg, projectRoot) {
       const { tabId, tileId, paneId } = data
       const targetTileId = tileId || paneId  // Support both new and legacy names
       const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
-      if (!tab || !tab.layout) break
+      if (!tab) break
 
-      const { layout: newLayout, mergedEntityIds } = layout.mergeTile(tab.layout, targetTileId)
-      tab.layout = newLayout
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      const { layout: newLayout, mergedEntityIds } = layout.mergeTile(activeStage.layout, targetTileId)
+      activeStage.layout = newLayout
 
       // Update focused tile if it was merged
       if (appState.focusedTile === targetTileId) {
-        const firstTile = layout.getFirstTile(tab.layout)
+        const firstTile = layout.getFirstTile(activeStage.layout)
         appState.focusedTile = firstTile?.id || null
-        appState.focusedEntity = firstTile?.focusedEntityId || firstTile?.entityIds?.[0] || null
+        appState.focusedEntity = firstTile?.entityId || firstTile?.focusedEntityId || firstTile?.entityIds?.[0] || null
       }
 
       saveState()
@@ -1486,9 +1502,12 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'layout:resize': {
       const { tabId, splitId, ratio } = data
       const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
-      if (!tab || !tab.layout) break
+      if (!tab) break
 
-      tab.layout = layout.updateSplitRatio(tab.layout, splitId, ratio)
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      activeStage.layout = layout.updateSplitRatio(activeStage.layout, splitId, ratio)
 
       saveState()
       broadcastState()
@@ -1499,24 +1518,32 @@ export function handleMessage(ws, msg, projectRoot) {
       const { entityId, targetTileId, targetPaneId, dropPosition } = data
       const targetId = targetTileId || targetPaneId  // Support both new and legacy names
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (!tab || !tab.layout || !entityId) break
+      if (!tab || !entityId) break
+
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      // Remove from source stage first
+      const sourceStage = findStageByEntity(tab, entityId)
+      if (sourceStage) {
+        sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+        // Remove source stage if empty
+        if (!sourceStage.layout) {
+          tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+        }
+      }
 
       if (dropPosition === 'center') {
-        // Add to existing tile stack
-        tab.layout = layout.moveEntityToTile(tab.layout, entityId, targetId)
+        // Add to existing tile in active stage
+        activeStage.layout = layout.addEntityToTile(activeStage.layout, targetId, entityId)
       } else {
         // Split the tile
         const direction = (dropPosition === 'left' || dropPosition === 'right') ? 'horizontal' : 'vertical'
-
-        // Remove from current location first
-        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
-
-        // Split and add to new tile
-        tab.layout = layout.splitTile(tab.layout, targetId, direction, dropPosition, entityId)
+        activeStage.layout = layout.splitTile(activeStage.layout, targetId, direction, dropPosition, entityId)
       }
 
       // Update focus
-      const newTile = layout.findTileByEntity(tab.layout, entityId)
+      const newTile = layout.findTileByEntity(activeStage.layout, entityId)
       if (newTile) {
         appState.focusedTile = newTile.id
         appState.focusedEntity = entityId
@@ -1532,9 +1559,12 @@ export function handleMessage(ws, msg, projectRoot) {
       const tileId = data.tileId || data.paneId
       const { entityId } = data
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (!tab?.layout) break
+      if (!tab) break
 
-      tab.layout = layout.setFocusedEntityInTile(tab.layout, tileId, entityId)
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      activeStage.layout = layout.setFocusedEntityInTile(activeStage.layout, tileId, entityId)
       appState.focusedTile = tileId
       appState.focusedEntity = entityId
 
@@ -1550,14 +1580,8 @@ export function handleMessage(ws, msg, projectRoot) {
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab) break
 
-      // Initialize layout if needed
-      if (!tab.layout) {
-        const entityIds = Object.values(appState.entities)
-          .filter(e => e.tabId === tab.id)
-          .sort((a, b) => (a.order || 0) - (b.order || 0))
-          .map(e => e.id)
-        tab.layout = layout.initializeLayoutFromEntities(entityIds)
-      }
+      const activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
 
       // Create entity if type provided
       let targetEntityId = entityId
@@ -1575,12 +1599,19 @@ export function handleMessage(ws, msg, projectRoot) {
         }
         targetEntityId = newId
       } else if (entityId) {
-        // Moving existing entity - remove from current tile first
-        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+        // Moving existing entity - remove from its source stage first
+        const sourceStage = findStageByEntity(tab, entityId)
+        if (sourceStage) {
+          sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+          // Remove source stage if empty
+          if (!sourceStage.layout) {
+            tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+          }
+        }
       }
 
-      // Add to tile
-      tab.layout = layout.addEntityToTile(tab.layout, tileId, targetEntityId)
+      // Add to tile in active stage
+      activeStage.layout = layout.addEntityToTile(activeStage.layout, tileId, targetEntityId)
 
       appState.focusedTile = tileId
       appState.focusedEntity = targetEntityId

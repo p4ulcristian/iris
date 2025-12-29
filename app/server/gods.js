@@ -41,6 +41,10 @@ export function getSocketPath(godName) {
   return path.join(SOCKET_DIR, `${sanitizeName(godName)}.sock`)
 }
 
+export function getPidPath(godName) {
+  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.pid`)
+}
+
 export function socketExists(godName) {
   return fs.existsSync(getSocketPath(godName))
 }
@@ -117,7 +121,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   }
 
   try {
-    execSync(`dtach -n "${socketPath}" -E ${cmd}`, {
+    // Use setsid to create new process group (PID = PGID for clean group kill)
+    execSync(`setsid dtach -n "${socketPath}" -E ${cmd}`, {
       stdio: 'ignore',
       detached: true,
       cwd: projectRoot,
@@ -133,12 +138,27 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Wait briefly for Claude to create its session file
     execSync('sleep 0.5')
 
+    // Capture dtach PID for fast kill later
+    const pidFile = getPidPath(godKey)
+    try {
+      const pid = execSync(`pgrep -f "dtach.*${sanitizeName(godKey)}\\.sock"`, { encoding: 'utf-8' }).trim()
+      if (pid) {
+        fs.writeFileSync(pidFile, pid)
+      }
+    } catch {}
+
     // Find the new session ID (one that wasn't there before)
     let sessionId = resumeSessionId || null
     if (!resumeSessionId) {
       const sessionsAfter = getSessionIds(projectRoot)
       sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
     }
+
+    // Read back PID if we captured it
+    let pid = null
+    try {
+      pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
+    } catch {}
 
     return {
       name,
@@ -147,7 +167,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       voice: god.voice,
       status: 'working',
       mission: task || null,
-      sessionId
+      sessionId,
+      pid
     }
   } catch (e) {
     console.error('Failed to create dtach session:', e)
@@ -195,11 +216,13 @@ export function createTerminalSession(options = {}, projectRoot) {
   try {
     const shellCmd = command || 'bash'
     const workDir = cwd || projectRoot
+    const pidFile = path.join(SOCKET_DIR, `${sanitized}.pid`)
 
     // Wrap command in bash -c for proper argument handling
+    // Use setsid to create new process group (PID = PGID for clean group kill)
     const dtachCmd = command
-      ? `dtach -n "${socketPath}" -E bash -c ${JSON.stringify(shellCmd)}`
-      : `dtach -n "${socketPath}" -E bash`
+      ? `setsid dtach -n "${socketPath}" -E bash -c ${JSON.stringify(shellCmd)}`
+      : `setsid dtach -n "${socketPath}" -E bash`
 
     execSync(dtachCmd, {
       stdio: 'ignore',
@@ -216,12 +239,23 @@ export function createTerminalSession(options = {}, projectRoot) {
 
     execSync('sleep 0.2')
 
+    // Capture dtach PID for fast kill later
+    let pid = null
+    try {
+      const pidStr = execSync(`pgrep -f "dtach.*${sanitized}\\.sock"`, { encoding: 'utf-8' }).trim()
+      if (pidStr) {
+        pid = parseInt(pidStr)
+        fs.writeFileSync(pidFile, pidStr)
+      }
+    } catch {}
+
     return {
       name,
       displayName,
       socketPath,
       color: color || '#888888',
-      status: 'working'
+      status: 'working',
+      pid
     }
   } catch (e) {
     console.error('Failed to create terminal session:', e)
@@ -230,27 +264,29 @@ export function createTerminalSession(options = {}, projectRoot) {
 }
 
 export function killGodSession(godName) {
-  const socketPath = getSocketPath(godName.toLowerCase())
+  const sanitized = godName.toLowerCase()
+  const socketPath = getSocketPath(sanitized)
+  const pidFile = getPidPath(sanitized)
 
-  // Find and kill the process attached to this socket
-  try {
-    const output = execSync(`lsof -t "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' }).trim()
-    if (output) {
-      const pids = output.split('\n')
-      pids.forEach(pid => {
-        try {
-          process.kill(parseInt(pid), 'SIGTERM')
-        } catch {}
-      })
-    }
-  } catch {}
+  // Fast path: kill process group using stored PID
+  if (fs.existsSync(pidFile)) {
+    try {
+      const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
+      if (pid > 0) {
+        // Kill entire process group (negative PID)
+        process.kill(-pid, 'SIGTERM')
+      }
+    } catch {}
+  } else {
+    // Fallback for old sessions without PID file: use fuser (faster than lsof)
+    try {
+      execSync(`fuser -k "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
+    } catch {}
+  }
 
-  // Remove socket file if it still exists
-  try {
-    if (fs.existsSync(socketPath)) {
-      fs.unlinkSync(socketPath)
-    }
-  } catch {}
+  // Clean up files
+  try { fs.unlinkSync(pidFile) } catch {}
+  try { fs.unlinkSync(socketPath) } catch {}
 
   return true
 }

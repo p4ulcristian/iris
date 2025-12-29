@@ -2,21 +2,29 @@
  * Surface Layout Tree Helpers
  *
  * Layout nodes are either:
- * - TileNode: { type: 'tile', id, entityIds: string[], focusedEntityId: string | null }
+ * - TileNode: { type: 'tile', id, entityId: string | null }
  * - SplitNode: { type: 'split', id, direction: 'horizontal' | 'vertical', ratio: number, children: [LayoutNode, LayoutNode] }
+ *
+ * Each tile holds exactly ONE entity. Stacking is achieved via stages (multiple stages per realm).
  */
 
 import { generateTileId, generateSplitId } from './state.js'
 
 /**
- * Create a new tile node
+ * Create a new tile node with a single entity
+ * @param {string|string[]} entityIdOrIds - Single entity ID (or array for backwards compat during migration)
+ * @param {string} _focusedEntityId - Deprecated, kept for backwards compat during migration
  */
-export function createTile(entityIds = [], focusedEntityId = null) {
+export function createTile(entityIdOrIds = null, _focusedEntityId = null) {
+  // Handle backwards compatibility: if array passed, take first element
+  const entityId = Array.isArray(entityIdOrIds)
+    ? entityIdOrIds[0] || null
+    : entityIdOrIds
+
   return {
     type: 'tile',
     id: generateTileId(),
-    entityIds,
-    focusedEntityId: focusedEntityId || entityIds[0] || null
+    entityId
   }
 }
 
@@ -78,7 +86,12 @@ export function findTileByEntity(layout, entityId) {
   if (!layout) return null
 
   if (layout.type === 'tile') {
-    if (layout.entityIds.includes(entityId)) {
+    // Support both new single entityId and legacy entityIds array
+    if (layout.entityId === entityId) {
+      return layout
+    }
+    // Backwards compat for legacy entityIds array
+    if (layout.entityIds?.includes(entityId)) {
       return layout
     }
     return null
@@ -156,8 +169,8 @@ export function splitTile(layout, tileId, direction, position, newEntityId) {
 
   const { node: tile, parent, index } = result
 
-  // Create new tile for the dropped entity
-  const newTile = createTile(newEntityId ? [newEntityId] : [], newEntityId)
+  // Create new tile for the dropped entity (single entity)
+  const newTile = createTile(newEntityId)
 
   // Create split node with old tile and new tile
   const children = normalizedPosition === 'before'
@@ -199,7 +212,8 @@ function normalizePosition(position, direction) {
 }
 
 /**
- * Add an entity to a tile's stack
+ * Replace the entity in a tile (single entity per tile)
+ * In the new model, each tile holds exactly one entity.
  * Returns a new layout tree (immutable)
  */
 export function addEntityToTile(layout, tileId, entityId) {
@@ -212,13 +226,8 @@ export function addEntityToTile(layout, tileId, entityId) {
 
   const { node: tile } = result
 
-  // Don't add if already present
-  if (!tile.entityIds.includes(entityId)) {
-    tile.entityIds.push(entityId)
-  }
-
-  // Focus the new entity
-  tile.focusedEntityId = entityId
+  // Replace the entity (single entity per tile now)
+  tile.entityId = entityId
 
   return cloned
 }
@@ -228,7 +237,8 @@ export const addEntityToPane = addEntityToTile
 
 /**
  * Remove an entity from any tile in the layout
- * If the tile becomes empty, it's automatically collapsed (sibling takes over)
+ * Since each tile holds exactly one entity, removing it empties the tile.
+ * Empty tiles are automatically collapsed (sibling takes over).
  * Returns a new layout tree (immutable) - never contains empty tiles
  */
 export function removeEntityFromLayout(layout, entityId) {
@@ -237,26 +247,27 @@ export function removeEntityFromLayout(layout, entityId) {
   // Recursive removal that collapses empty tiles atomically
   function removeAndCollapse(node, parent, childIndex) {
     if (node.type === 'tile') {
-      if (!node.entityIds.includes(entityId)) {
-        return node // Entity not here, keep as-is
-      }
-
-      // Remove the entity
-      const newEntityIds = node.entityIds.filter(id => id !== entityId)
-
-      if (newEntityIds.length > 0) {
-        // Tile still has entities - return updated tile
-        return {
-          ...node,
-          entityIds: newEntityIds,
-          focusedEntityId: node.focusedEntityId === entityId
-            ? newEntityIds[0]
-            : node.focusedEntityId
-        }
-      } else {
-        // Tile is now empty - return null to signal collapse
+      // Check new single entityId format
+      if (node.entityId === entityId) {
+        // Tile becomes empty - return null to signal collapse
         return null
       }
+      // Backwards compat: check legacy entityIds array
+      if (node.entityIds?.includes(entityId)) {
+        const newEntityIds = node.entityIds.filter(id => id !== entityId)
+        if (newEntityIds.length > 0) {
+          return {
+            ...node,
+            entityIds: newEntityIds,
+            focusedEntityId: node.focusedEntityId === entityId
+              ? newEntityIds[0]
+              : node.focusedEntityId
+          }
+        } else {
+          return null
+        }
+      }
+      return node // Entity not here, keep as-is
     }
 
     if (node.type === 'split') {
@@ -322,7 +333,17 @@ export function mergeTile(layout, tileId) {
   const sibling = splitNode.children[siblingIndex]
 
   // Get entities from the tile being merged
-  const mergedEntityIds = tileToMerge.type === 'tile' ? [...tileToMerge.entityIds] : []
+  let mergedEntityIds = []
+  if (tileToMerge.type === 'tile') {
+    // New single entityId format
+    if (tileToMerge.entityId) {
+      mergedEntityIds = [tileToMerge.entityId]
+    }
+    // Legacy entityIds array
+    else if (tileToMerge.entityIds) {
+      mergedEntityIds = [...tileToMerge.entityIds]
+    }
+  }
 
   // Find the grandparent to replace the split with the sibling
   const grandparentResult = findNode(cloned, splitNode.id)
@@ -360,6 +381,7 @@ export function updateSplitRatio(layout, splitId, ratio) {
 
 /**
  * Set the focused entity in a tile
+ * With single entity per tile, this is a no-op (kept for backwards compat)
  * Returns a new layout tree (immutable)
  */
 export function setFocusedEntityInTile(layout, tileId, entityId) {
@@ -372,8 +394,14 @@ export function setFocusedEntityInTile(layout, tileId, entityId) {
 
   const { node: tile } = result
 
-  // Only set if entity is in this tile
-  if (tile.entityIds.includes(entityId)) {
+  // With single entity per tile, just verify entity is in this tile
+  if (tile.entityId === entityId) {
+    // No-op, already the entity in this tile
+    return cloned
+  }
+
+  // Backwards compat for legacy entityIds array
+  if (tile.entityIds?.includes(entityId)) {
     tile.focusedEntityId = entityId
   }
 
@@ -384,14 +412,17 @@ export function setFocusedEntityInTile(layout, tileId, entityId) {
 export const setFocusedEntityInPane = setFocusedEntityInTile
 
 /**
- * Initialize layout from flat entity list (migration helper)
+ * Initialize layout from a single entity (new model)
+ * For multiple entities, create separate stages instead.
  */
 export function initializeLayoutFromEntities(entityIds) {
   if (!entityIds || entityIds.length === 0) {
-    return createTile([])
+    return createTile(null)
   }
 
-  return createTile(entityIds, entityIds[0])
+  // With single entity per tile, just use the first entity
+  // Additional entities should go in separate stages
+  return createTile(entityIds[0])
 }
 
 /**
@@ -401,7 +432,15 @@ export function getAllEntityIds(layout) {
   if (!layout) return []
 
   if (layout.type === 'tile') {
-    return [...layout.entityIds]
+    // New single entityId format
+    if (layout.entityId) {
+      return [layout.entityId]
+    }
+    // Backwards compat for legacy entityIds array
+    if (layout.entityIds) {
+      return [...layout.entityIds]
+    }
+    return []
   }
 
   if (layout.type === 'split') {

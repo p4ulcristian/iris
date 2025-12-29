@@ -270,12 +270,18 @@ export default function App() {
   // Get tiles for active tab with their entities
   const activeTiles = useMemo(() => {
     const tabTiles = tiles[activeTabId] || []
-    return tabTiles.map(tile => ({
-      ...tile,
-      entities: tile.entityIds
-        .map(id => entities[id])
-        .filter(Boolean)  // Filter out any missing entities
-    }))
+    return tabTiles.map(tile => {
+      // Support both new entityId (single) and legacy entityIds (array) format
+      const entityIdList = tile.entityId
+        ? [tile.entityId]
+        : (tile.entityIds || [])
+      return {
+        ...tile,
+        entities: entityIdList
+          .map(id => entities[id])
+          .filter(Boolean)  // Filter out any missing entities
+      }
+    })
   }, [tiles, activeTabId, entities])
 
   // Get focused entity object
@@ -806,10 +812,13 @@ export default function App() {
                               tile={tile}
                               entities={tile.entities}
                               isFocused={tile.id === focusedTile}
-                              focusedEntityId={tile.focusedEntityId}
+                              focusedEntityId={tile.focusedEntityId || tile.entityId}
                               onClick={() => {
-                                // Focus the tile and its focused entity
-                                send({ event: 'tile:focus', tileId: tile.id })
+                                // Focus the entity (this will switch stages if needed)
+                                const entityId = tile.entityId || tile.entities?.[0]?.id
+                                if (entityId) {
+                                  send({ event: 'focus:set', entityId })
+                                }
                               }}
                               onClose={(entityId) => handleKillEntity(entityId)}
                               tabs={tabs}

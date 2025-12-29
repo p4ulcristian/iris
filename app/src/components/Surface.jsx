@@ -8,8 +8,10 @@ import { WS_URL } from '../config'
  * Surface - Recursively renders a layout tree
  *
  * Layout nodes are either:
- * - TileNode: { type: 'tile', id, entityIds: string[], focusedEntityId: string | null }
+ * - TileNode: { type: 'tile', id, entityId: string | null }
  * - SplitNode: { type: 'split', id, direction: 'horizontal' | 'vertical', ratio: number, children: [LayoutNode, LayoutNode] }
+ *
+ * Each tile holds exactly ONE entity. Stacking is achieved via stages.
  */
 export default function Surface({
   node,
@@ -44,9 +46,11 @@ export default function Surface({
     return (
       <Tile
         tileId={node.id}
-        entityIds={node.entityIds}
-        focusedEntityId={node.focusedEntityId}
+        entityId={node.entityId}
+        entityIds={node.entityIds}  // Legacy support
+        focusedEntityId={node.focusedEntityId}  // Legacy support
         isFocused={focusedTile === node.id}
+        isChapter={depth > 0}  // Has parent split = is a chapter
         entities={entities}
         tabId={tabId}
         containerSize={containerSize}
