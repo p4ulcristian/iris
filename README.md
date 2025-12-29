@@ -4,6 +4,26 @@
 
 Iris is a voice assistant that summons the Greek pantheon to do your bidding. She orchestrates divine workers - Zeus, Apollo, Artemis, Athena, and their kin - each god bringing their power to your tasks.
 
+## Download
+
+Get the latest release from [GitHub Releases](https://github.com/p4ulcristian/iris/releases).
+
+### Linux
+
+Download the `.AppImage` or `.deb` and run it.
+
+### macOS
+
+1. Download the `.dmg` file
+2. Open the DMG and drag Iris to Applications
+3. Run in terminal:
+   ```bash
+   xattr -cr /Applications/Iris.app
+   ```
+4. Open Iris from Applications
+
+> The `xattr` command is required because the app isn't code-signed.
+
 ## The Mythology
 
 In Greek mythology, Iris is the goddess of the rainbow and messenger of the gods. She travels between Olympus and the mortal world, carrying divine commands across realms.
