@@ -906,7 +906,7 @@ export default function App() {
                 {/* Floating collapse button - bottom left, centered when collapsed */}
                 <button
                   onClick={handleSidebarToggle}
-                  className="absolute bottom-2.5 left-1 z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="absolute bottom-0 left-0 z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
                   <FontAwesomeIcon

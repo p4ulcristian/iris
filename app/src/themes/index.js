@@ -102,7 +102,7 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   const hueTarget = themeTerminal['hue-target'] ?? primary.h
 
   // Transparent background for xterm
-  const bg = 'transparent'
+  const bg = 'rgba(0, 0, 0, 0)'
   const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
 
   const ansiBase = {
