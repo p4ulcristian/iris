@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import Button from './ui/Button'
 
 export default function ConfirmModal({
   isOpen,
@@ -46,25 +47,22 @@ export default function ConfirmModal({
         <p className="text-text-secondary text-sm mb-4">{message}</p>
 
         <div className="flex justify-end gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="md"
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"
           >
             {cancelText}
-          </button>
-          <button
+          </Button>
+          <Button
             ref={confirmRef}
+            variant="glass"
+            size="md"
+            color={danger ? 'danger' : undefined}
             onClick={onConfirm}
-            className={`
-              px-3 py-1.5 text-sm font-medium rounded transition-all
-              ${danger
-                ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30'
-                : 'bg-accent text-white hover:bg-[#5a62e0]'
-              }
-            `}
           >
             {confirmText}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

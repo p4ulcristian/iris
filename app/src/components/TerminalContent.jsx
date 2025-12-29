@@ -108,13 +108,11 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     } catch {}
   }, [expectedWidth, expectedHeight, godName])
 
-  // Focus and scroll when becoming focused
+  // Focus when becoming focused
   useEffect(() => {
     if (isFocused && termRef.current) {
-      // Small delay for animation to settle
       const timeout = setTimeout(() => {
         try {
-          termRef.current?.scrollToBottom()
           termRef.current?.focus()
         } catch {}
       }, 100)

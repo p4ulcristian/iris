@@ -503,7 +503,7 @@ function CreateIssueModal({ teams, send, onClose, onCreated }) {
   )
 }
 
-export default function LinearView({ send }) {
+export default function LinearView({ send, connected }) {
   const [issues, setIssues] = useState([])
   const [selectedIssue, setSelectedIssue] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -512,12 +512,18 @@ export default function LinearView({ send }) {
   const [teams, setTeams] = useState([])
   const [states, setStates] = useState({}) // teamId -> states[]
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [hasFetched, setHasFetched] = useState(false)
 
-  // Fetch issues and teams on mount
+  // Fetch issues and teams when connected (handles initial load and reconnects)
   useEffect(() => {
-    fetchIssues()
-    fetchTeams()
-  }, [])
+    if (connected && !hasFetched) {
+      setHasFetched(true)
+      setLoading(true)
+      setError(null)
+      send({ event: 'linear:issues:fetch', assignee: 'me' })
+      send({ event: 'linear:teams:fetch' })
+    }
+  }, [connected, hasFetched, send])
 
   const fetchIssues = useCallback(() => {
     setLoading(true)

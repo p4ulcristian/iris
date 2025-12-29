@@ -277,6 +277,13 @@ export const useStore = create(
 
       // ============ LAYOUT SELECTORS ============
 
+      // Get active stage ID for current tab
+      getActiveStageId: () => {
+        const state = get()
+        const tab = state.tabs.find(t => t.id === state.activeTabId)
+        return tab?.activeStageId || null
+      },
+
       // Get layout for active stage in active tab
       getActiveLayout: () => {
         const state = get()

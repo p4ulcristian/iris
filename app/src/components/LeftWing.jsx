@@ -24,6 +24,7 @@ import {
   faEye,
   faBrain
 } from '@fortawesome/free-solid-svg-icons'
+import IconButton from './ui/IconButton'
 
 const REALM_ICONS = {
   'Olympus': faBolt,
@@ -76,7 +77,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-8 h-8 flex items-center justify-center liquid-glass-pill liquid-glass-text-muted transition-all"
+        className="btn btn-glass btn-icon btn-icon-md"
         title={`Services (${activeCount}/${serviceList.length})`}
       >
         <FontAwesomeIcon
@@ -86,7 +87,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
       </button>
 
       {open && (
-        <div className="absolute left-full bottom-0 ml-1 min-w-[160px] liquid-glass rounded-lg shadow-lg py-1 z-50">
+        <div className="absolute left-full bottom-0 ml-2 min-w-[160px] liquid-glass py-1.5 z-50">
           {serviceList.map((service) => {
             const isActive = services[service.key]
             const isLoading = servicesLoading[service.key]
@@ -96,13 +97,14 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
                 key={service.key}
                 onClick={() => !isLoading && onToggle(service.key, isActive)}
                 disabled={isLoading}
-                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 transition-all ${
+                className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 transition-all rounded-lg mx-auto ${
                   isLoading
                     ? 'text-yellow-400 cursor-wait'
                     : isActive
-                      ? 'liquid-glass-text hover:bg-white/5'
-                      : 'liquid-glass-text-muted hover:bg-white/5'
+                      ? 'liquid-glass-text hover:bg-white/10'
+                      : 'liquid-glass-text-muted hover:bg-white/10'
                 }`}
+                style={{ width: 'calc(100% - 8px)', marginLeft: '4px' }}
               >
                 {isLoading ? (
                   <Spinner />
@@ -113,7 +115,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
                   />
                 )}
                 <span className={isActive ? '' : isLoading ? '' : 'opacity-60'}>{service.name}</span>
-                {isActive && !isLoading && <span className="ml-auto text-green-400">✓</span>}
+                {isActive && !isLoading && <span className="ml-auto text-green-400 text-[10px]">●</span>}
               </button>
             )
           })}
@@ -163,7 +165,7 @@ export default function LeftWing({
   }
 
   return (
-    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3">
+    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pl-3 pr-3">
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
         {tabs?.map((tab, idx) => {
@@ -175,10 +177,10 @@ export default function LeftWing({
               key={tab.id}
               onClick={() => onTabSelect(tab.id)}
               className={`
-                group relative w-8 h-8 flex items-center justify-center transition-all
+                group relative btn btn-icon btn-icon-md
                 ${isActive
-                  ? 'liquid-glass-pill liquid-glass-text'
-                  : 'liquid-glass-text-muted hover:bg-white/5 rounded-lg'
+                  ? 'btn-glass'
+                  : 'btn-ghost'
                 }
               `}
               title={`${tab.name} (Alt+${idx + 1})`}
@@ -186,7 +188,7 @@ export default function LeftWing({
               {realmIcon && (
                 <FontAwesomeIcon
                   icon={realmIcon}
-                  className={`text-xs ${isActive ? 'text-accent' : 'opacity-50'}`}
+                  className={`text-xs ${isActive ? 'text-white' : 'opacity-50'}`}
                 />
               )}
               {tabs.length > 1 && (
@@ -195,7 +197,8 @@ export default function LeftWing({
                     e.stopPropagation()
                     onTabClose(tab.id)
                   }}
-                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-500 text-white rounded-lg transition-all cursor-pointer"
+                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-500 text-white transition-all cursor-pointer"
+                  style={{ borderRadius: '12px' }}
                 >
                   <FontAwesomeIcon icon={faXmark} className="text-[10px]" />
                 </span>
@@ -205,13 +208,13 @@ export default function LeftWing({
         })}
 
         {/* Add tab button */}
-        <button
+        <IconButton
+          icon={faPlus}
+          size="md"
+          variant="ghost"
           onClick={onTabNew}
-          className="w-8 h-8 flex items-center justify-center liquid-glass-text-muted hover:bg-white/10 rounded-lg transition-all"
           title="New tab (Alt+N)"
-        >
-          <FontAwesomeIcon icon={faPlus} className="text-xs" />
-        </button>
+        />
       </div>
 
       {/* Spacer */}

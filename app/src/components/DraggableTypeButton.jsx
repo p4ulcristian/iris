@@ -47,10 +47,8 @@ export default function DraggableTypeButton({
       ref={ref}
       onClick={onClick}
       className={`
-        group relative flex items-center justify-center p-2 rounded-lg
-        bg-black/40 border border-white/20 text-white/80
-        hover:bg-white/10 hover:text-white transition-all
-        cursor-grab active:cursor-grabbing select-none
+        group relative btn btn-glass btn-icon btn-icon-md
+        cursor-grab active:cursor-grabbing
         ${isDragging ? 'opacity-50' : ''}
       `}
       style={{ touchAction: 'none' }}

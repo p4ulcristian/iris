@@ -3,7 +3,7 @@ import { Reorder, motion, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
@@ -70,7 +70,7 @@ function TypeIcon({ type, size = 'sm' }) {
   }
 }
 
-export default function EntityCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
+export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
 
   const [elapsed, setElapsed] = useState(null)
@@ -226,6 +226,20 @@ export default function EntityCard({ entity, isActive, onClick, onClose, tabs, a
         <span className="text-sm font-medium text-white truncate flex-1">
           {displayName || name}
         </span>
+
+        {/* Split out of group button */}
+        {onSplit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onSplit()
+            }}
+            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
+            title="Split to new stage"
+          >
+            <FontAwesomeIcon icon={faArrowRightFromBracket} size="xs" />
+          </button>
+        )}
 
         {/* Move to tab button */}
         <div className="relative" ref={moveMenuRef}>

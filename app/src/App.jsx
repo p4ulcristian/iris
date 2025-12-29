@@ -269,7 +269,10 @@ export default function App() {
   const collectEntityIds = useCallback((node) => {
     if (!node) return []
     if (node.type === 'tile') {
-      return node.entityId ? [node.entityId] : []
+      // Support both new entityId and legacy entityIds format
+      if (node.entityId) return [node.entityId]
+      if (node.entityIds?.length) return node.entityIds
+      return []
     }
     if (node.type === 'split' && node.children) {
       return node.children.flatMap(child => collectEntityIds(child))
@@ -760,7 +763,7 @@ export default function App() {
                                 <GitView send={send} />
                               )}
                               {entity.type === 'linear' && (
-                                <LinearView send={send} />
+                                <LinearView send={send} connected={connected} />
                               )}
                               {entity.type === 'settings' && (
                                 <SettingsView send={send} />
@@ -813,7 +816,7 @@ export default function App() {
                       transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
                     >
                       {activeStages.length > 0 ? (
-                        <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3">
                           {activeStages.map((stage) => {
                             const activeTab = tabs.find(t => t.id === activeTabId)
                             const isActiveStage = stage.id === activeTab?.activeStageId
@@ -828,6 +831,9 @@ export default function App() {
                                   send({ event: 'focus:set', entityId })
                                 }}
                                 onClose={(entityId) => handleKillEntity(entityId)}
+                                onSplit={(entityId) => {
+                                  send({ event: 'stage:split', entityId, stageId: stage.id })
+                                }}
                                 tabs={tabs}
                                 activeTabId={activeTabId}
                                 onMoveToTab={(entityId, tabId) => {
@@ -847,7 +853,7 @@ export default function App() {
                           axis="y"
                           values={activeEntities}
                           onReorder={handleEntityReorder}
-                          className="flex flex-col gap-4"
+                          className="flex flex-col gap-3"
                         >
                           {activeEntities.map((entity) => (
                             <EntityCard

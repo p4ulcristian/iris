@@ -31,7 +31,7 @@ export default function Tile({
   containerSize,
   globalFocusedEntity
 }) {
-  const { send } = useWebSocket(WS_URL)
+  const { send, connected } = useWebSocket(WS_URL)
   const ref = useRef(null)
   const [dropState, setDropState] = useState({ isDraggedOver: false, closestEdge: null })
 
@@ -122,7 +122,7 @@ export default function Tile({
       case 'git':
         return <GitView send={send} />
       case 'linear':
-        return <LinearView send={send} />
+        return <LinearView send={send} connected={connected} />
       case 'settings':
         return <SettingsView send={send} />
       case 'cemetery':

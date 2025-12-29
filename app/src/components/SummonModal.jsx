@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
+import Button from './ui/Button'
 
 export default function SummonModal({
   isOpen,
@@ -56,25 +57,25 @@ export default function SummonModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 liquid-glass-backdrop"
         onClick={onCancel}
       />
 
       {/* Modal */}
       <form
         onSubmit={handleSubmit}
-        className="relative bg-bg-secondary border border-border rounded-lg shadow-xl w-96 p-4"
+        className="relative liquid-glass-modal w-96 p-5"
       >
-        <h3 className="text-text-primary font-medium mb-4">Summon a God</h3>
+        <h3 className="liquid-glass-text text-lg mb-4">Summon a God</h3>
 
         {/* God selector */}
         <div className="mb-4">
-          <label className="block text-text-secondary text-sm mb-1.5">God</label>
+          <label className="block liquid-glass-text-muted text-sm mb-1.5">God</label>
           <div className="relative">
             <select
               value={selectedGod}
               onChange={(e) => setSelectedGod(e.target.value)}
-              className="w-full bg-bg-tertiary border border-border rounded px-3 py-2 text-text-primary appearance-none cursor-pointer focus:outline-none focus:border-accent"
+              className="w-full liquid-glass-select px-3 py-2.5 appearance-none"
               style={{
                 borderLeftWidth: '3px',
                 borderLeftColor: godColors[selectedGod] || '#888'
@@ -86,7 +87,7 @@ export default function SummonModal({
                 </option>
               ))}
             </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                 <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" />
               </svg>
@@ -96,7 +97,7 @@ export default function SummonModal({
 
         {/* Task input */}
         <div className="mb-4">
-          <label className="block text-text-secondary text-sm mb-1.5">
+          <label className="block liquid-glass-text-muted text-sm mb-1.5">
             Task <span className="opacity-50">(optional)</span>
           </label>
           <textarea
@@ -116,34 +117,31 @@ export default function SummonModal({
             }}
             placeholder="What should they do?"
             rows={3}
-            className="w-full bg-bg-tertiary border border-border rounded px-3 py-2 text-text-primary placeholder-text-secondary/50 resize-none focus:outline-none focus:border-accent"
+            className="w-full liquid-glass-input px-3 py-2.5 resize-none"
           />
-          <p className="text-text-secondary/50 text-xs mt-1">
+          <p className="liquid-glass-text-muted text-xs mt-1.5 opacity-60">
             Enter to summon · Ctrl+Enter for newline
           </p>
         </div>
 
         {/* Buttons */}
         <div className="flex justify-end gap-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="md"
             onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-tertiary rounded transition-all"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="px-4 py-1.5 text-sm font-medium rounded transition-all"
-            style={{
-              backgroundColor: (godColors[selectedGod] || '#888') + '33',
-              color: godColors[selectedGod] || '#888',
-              borderWidth: '1px',
-              borderColor: (godColors[selectedGod] || '#888') + '66'
-            }}
+            variant="glass"
+            size="md"
+            color={godColors[selectedGod] || '#888'}
           >
             Summon
-          </button>
+          </Button>
         </div>
       </form>
     </div>

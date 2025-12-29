@@ -1,23 +1,62 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { reportError } from '../utils/error-reporter'
 
+// Singleton WebSocket and state
+let sharedWs = null
+let sharedConnected = false
+const connectionListeners = new Set()
+
+function notifyConnectionChange(isConnected) {
+  sharedConnected = isConnected
+  connectionListeners.forEach(fn => fn(isConnected))
+}
+
+function ensureConnection(url) {
+  if (sharedWs && sharedWs.readyState !== WebSocket.CLOSED) {
+    return // Already connected or connecting
+  }
+
+  const ws = new WebSocket(url)
+
+  ws.onopen = () => {
+    console.log('WebSocket connected')
+    notifyConnectionChange(true)
+  }
+
+  ws.onclose = () => {
+    console.log('WebSocket disconnected')
+    notifyConnectionChange(false)
+    sharedWs = null
+    // Reconnect after 2 seconds
+    setTimeout(() => ensureConnection(url), 2000)
+  }
+
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error)
+    reportError({ message: 'WebSocket connection error' }, 'websocket', { type: 'connection' })
+  }
+
+  sharedWs = ws
+  window.__irisWs = ws
+}
+
 export function useWebSocket(url) {
-  const [connected, setConnected] = useState(false)
+  const [connected, setConnected] = useState(sharedConnected)
   const [lastMessage, setLastMessage] = useState(null)
-  const wsRef = useRef(null)
-  const reconnectTimeoutRef = useRef(null)
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+  useEffect(() => {
+    // Subscribe to connection changes
+    const onConnectionChange = (isConnected) => setConnected(isConnected)
+    connectionListeners.add(onConnectionChange)
 
-    const ws = new WebSocket(url)
+    // Ensure we have a connection
+    ensureConnection(url)
 
-    ws.onopen = () => {
-      console.log('WebSocket connected')
-      setConnected(true)
-    }
+    // Sync current state
+    setConnected(sharedConnected)
 
-    ws.onmessage = (event) => {
+    // Listen for messages
+    const onMessage = (event) => {
       try {
         const data = JSON.parse(event.data)
         setLastMessage(data)
@@ -27,49 +66,26 @@ export function useWebSocket(url) {
       }
     }
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected')
-      setConnected(false)
-      // Reconnect after 2 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 2000)
+    // Add message listener to current ws
+    if (sharedWs) {
+      sharedWs.addEventListener('message', onMessage)
     }
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-      reportError({ message: 'WebSocket connection error' }, 'websocket', { type: 'connection' })
+    return () => {
+      connectionListeners.delete(onConnectionChange)
+      if (sharedWs) {
+        sharedWs.removeEventListener('message', onMessage)
+      }
     }
-
-    wsRef.current = ws
-    // Expose for components that need direct access
-    window.__irisWs = ws
   }, [url])
 
   const send = useCallback((data) => {
-    console.log('useWebSocket.send called:', data)
-    const state = wsRef.current?.readyState
-    console.log('WebSocket readyState:', state, '(OPEN=1)')
-    if (state === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(data))
-      console.log('Message sent successfully')
-      document.title = `SENT: ${data.event}`
+    if (sharedWs?.readyState === WebSocket.OPEN) {
+      sharedWs.send(JSON.stringify(data))
     } else {
-      console.error('WebSocket not open! State:', state)
-      document.title = `FAILED: state=${state}`
+      console.error('WebSocket not open!')
     }
   }, [])
-
-  useEffect(() => {
-    connect()
-
-    return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
-      }
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-    }
-  }, [connect])
 
   return { connected, send, lastMessage }
 }

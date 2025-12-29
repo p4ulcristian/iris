@@ -1427,8 +1427,17 @@ export function handleMessage(ws, msg, projectRoot) {
       if (!tab) break
 
       // Get active stage
-      const activeStage = getActiveStage(tab)
+      let activeStage = getActiveStage(tab)
       if (!activeStage?.layout) break
+
+      // Check if we're dropping an entity onto its own tile (no-op)
+      if (entityId) {
+        const targetTile = layout.findTile(activeStage.layout, targetTileId)
+        if (targetTile?.node?.entityId === entityId) {
+          // Entity is already in this tile, nothing to do
+          break
+        }
+      }
 
       // Create or get the entity to place in new tile
       let targetEntityId = entityId
@@ -1452,16 +1461,35 @@ export function handleMessage(ws, msg, projectRoot) {
       if (entityId) {
         const sourceStage = findStageByEntity(tab, entityId)
         if (sourceStage) {
+          const sourceIsActive = sourceStage.id === activeStage.id
           sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
           // Remove source stage if empty
           if (!sourceStage.layout) {
             tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+            // If we removed the active stage, re-fetch it (might have changed)
+            if (sourceIsActive) {
+              activeStage = getActiveStage(tab)
+              // If no active stage, we need to create a new one for the split
+              if (!activeStage) {
+                const stageId = generateStageId()
+                const tileNode = layout.createTile(null)
+                const newStage = { id: stageId, layout: tileNode }
+                tab.stages.push(newStage)
+                tab.activeStageId = stageId
+                activeStage = newStage
+              }
+            }
           }
         }
       }
 
-      // Split the tile in active stage
-      activeStage.layout = layout.splitTile(activeStage.layout, targetTileId, direction, position, targetEntityId)
+      // Split the tile in active stage (if we still have one with a layout)
+      if (activeStage?.layout) {
+        activeStage.layout = layout.splitTile(activeStage.layout, targetTileId, direction, position, targetEntityId)
+      } else {
+        // No layout to split, just set this entity as the tile's entity
+        activeStage.layout = layout.createTile(targetEntityId)
+      }
 
       // Focus the new tile and entity
       const newTile = layout.findTileByEntity(activeStage.layout, targetEntityId)
@@ -1615,6 +1643,44 @@ export function handleMessage(ws, msg, projectRoot) {
 
       appState.focusedTile = tileId
       appState.focusedEntity = targetEntityId
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Split entity out of a multi-entity stage into its own new stage
+    case 'stage:split': {
+      const { entityId, stageId } = data
+      if (!entityId) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab) break
+
+      // Find the source stage
+      const sourceStage = stageId
+        ? tab.stages.find(s => s.id === stageId)
+        : findStageByEntity(tab, entityId)
+      if (!sourceStage?.layout) break
+
+      // Remove entity from source stage's layout
+      sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+
+      // If source stage is now empty, remove it
+      if (!sourceStage.layout) {
+        tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+      }
+
+      // Create a new stage for the split-out entity
+      const newStageId = generateStageId()
+      const tileNode = layout.createTile([entityId], entityId)
+      const newStage = { id: newStageId, layout: tileNode }
+      tab.stages.push(newStage)
+
+      // Switch to the new stage and focus the entity
+      tab.activeStageId = newStageId
+      appState.focusedTile = tileNode.id
+      appState.focusedEntity = entityId
 
       saveState()
       broadcastState()
