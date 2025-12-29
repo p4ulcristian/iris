@@ -18,7 +18,7 @@ jobs:
         working-directory: ./app
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          bun pkg set version="$VERSION"
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
 
       - name: Install dependencies
         working-directory: ./app
@@ -48,7 +48,7 @@ jobs:
         working-directory: ./app
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          bun pkg set version="$VERSION"
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
 
       - name: Install dependencies
         working-directory: ./app
