@@ -139,6 +139,9 @@ export default function App() {
   const sidebarCollapsedRef = useRef(sidebarCollapsed)
   sidebarCollapsedRef.current = sidebarCollapsed
 
+  // Track which side of breakpoint we're on to detect crossings
+  const lastBreakpointSideRef = useRef(null)
+
   useEffect(() => {
     if (!mainContainerRef.current) return
 
@@ -146,11 +149,22 @@ export default function App() {
     const handleResize = (entries) => {
       clearTimeout(resizeTimeout)
       resizeTimeout = setTimeout(() => {
-        // Skip if auto mode is disabled or animation is in progress
-        if (!sidebarAutoModeRef.current || sidebarAnimatingRef.current) return
+        // Skip if animation is in progress
+        if (sidebarAnimatingRef.current) return
 
         const width = entries[0]?.contentRect?.width || window.innerWidth
         const shouldCollapse = width < SIDEBAR_BREAKPOINT
+
+        // Detect breakpoint crossing - re-enable auto mode when crossing
+        if (lastBreakpointSideRef.current !== null && lastBreakpointSideRef.current !== shouldCollapse) {
+          sidebarAutoModeRef.current = true
+          setSidebarAutoMode(true)
+        }
+        lastBreakpointSideRef.current = shouldCollapse
+
+        // Only auto-toggle if in auto mode
+        if (!sidebarAutoModeRef.current) return
+
         if (shouldCollapse !== sidebarCollapsedRef.current) {
           handleSidebarToggle(true) // true = auto toggle
         }
@@ -795,7 +809,7 @@ export default function App() {
             <motion.div
               className="flex flex-col overflow-hidden relative pl-3"
               animate={{
-                width: sidebarCollapsed ? 40 : 288
+                width: sidebarCollapsed ? 48 : 288
               }}
               transition={{
                 duration: WIDTH_DURATION / 1000,
@@ -884,7 +898,7 @@ export default function App() {
                   {sidebarShowIcons && (
                     <motion.div
                       key="icons"
-                      className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col gap-1.5"
+                      className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5 pt-1"
                       initial={{ y: '100%' }}
                       animate={{ y: 0 }}
                       exit={{ y: '100%' }}
@@ -928,7 +942,7 @@ export default function App() {
 
                 {/* Floating collapse button - bottom left, centered when collapsed */}
                 <button
-                  onClick={handleSidebarToggle}
+                  onClick={() => handleSidebarToggle()}
                   className="absolute bottom-0 left-0 z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
                   title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 >
