@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import http from 'http'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 import { WebSocketServer } from 'ws'
 
 import { WS_PORT, SOCKET_DIR, OAUTH_PORT } from './config.js'
@@ -13,6 +14,17 @@ import * as calendar from './calendar.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.join(__dirname, '../..')
+
+// Check for dtach dependency (required for terminal sessions)
+let dtachMissing = false
+try {
+  execSync('which dtach', { stdio: 'ignore' })
+} catch {
+  dtachMissing = true
+  const isMac = process.platform === 'darwin'
+  console.warn('⚠️  dtach not found - terminal sessions will not work')
+  console.warn(isMac ? '   Install with: brew install dtach' : '   Install with: sudo apt install dtach')
+}
 
 // Ensure socket directory exists
 if (!fs.existsSync(SOCKET_DIR)) {
@@ -53,6 +65,16 @@ wss.on('connection', (ws) => {
     ...stateData,
     services: serviceStatus
   }))
+
+  // Warn if dtach is missing
+  if (dtachMissing) {
+    const isMac = process.platform === 'darwin'
+    ws.send(JSON.stringify({
+      event: 'warning',
+      message: 'dtach not found - terminal sessions will not work',
+      hint: isMac ? 'brew install dtach' : 'sudo apt install dtach'
+    }))
+  }
 
   ws.on('message', (data) => {
     try {

@@ -258,6 +258,10 @@ export default function App() {
         // Dispatch window event for CodeView to handle
         window.dispatchEvent(new CustomEvent('iris:code:open', { detail: data }))
         break
+
+      case 'warning':
+        console.warn(`⚠️ ${data.message}`, data.hint ? `\n   ${data.hint}` : '')
+        break
     }
   }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone])
 

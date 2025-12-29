@@ -1,5 +1,6 @@
 import fs from 'fs'
-import { STATE_FILE } from './config.js'
+import path from 'path'
+import { STATE_FILE, SOCKET_DIR } from './config.js'
 import { GOD_COLORS } from '../src/themes/index.js'
 import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
@@ -99,6 +100,22 @@ export function loadState() {
       delete appState.entities[id]
     }
   })
+
+  // Clean up orphaned buffer files (buffers without active sockets)
+  try {
+    const files = fs.readdirSync(SOCKET_DIR)
+    const activeSocketNames = new Set(files.filter(f => f.endsWith('.sock')).map(f => f.replace('.sock', '')))
+    files
+      .filter(f => f.endsWith('.buf'))
+      .forEach(bufFile => {
+        const name = bufFile.replace('.buf', '')
+        if (!activeSocketNames.has(name)) {
+          try {
+            fs.unlinkSync(path.join(SOCKET_DIR, bufFile))
+          } catch {}
+        }
+      })
+  } catch {}
 
   // Add new sockets to first tab
   sockets.forEach(sock => {
@@ -513,5 +530,44 @@ export function getNextEntityNumber(type) {
       return match ? parseInt(match[1]) : 0
     })
   return existing.length > 0 ? Math.max(...existing) + 1 : 1
+}
+
+// Check if a tab is empty (no stages) and delete it if so
+// Returns true if tab was deleted, false otherwise
+export function deleteTabIfEmpty(tabId) {
+  const tab = appState.tabs.find(t => t.id === tabId)
+  if (!tab) return false
+
+  // Check if tab has any stages left
+  if (tab.stages && tab.stages.length > 0) {
+    return false
+  }
+
+  // Don't delete the last tab - keep at least one
+  if (appState.tabs.length <= 1) {
+    return false
+  }
+
+  // Remove the tab
+  appState.tabs = appState.tabs.filter(t => t.id !== tabId)
+
+  // If this was the active tab, switch to another
+  if (appState.activeTabId === tabId) {
+    appState.activeTabId = appState.tabs[0].id
+  }
+
+  // Clear focusedEntity if it was in the deleted tab
+  if (appState.focusedEntity) {
+    const focusedEntity = appState.entities[appState.focusedEntity]
+    if (focusedEntity?.tabId === tabId) {
+      // Find first entity in the new active tab
+      const remaining = Object.entries(appState.entities)
+        .filter(([_, e]) => e.tabId === appState.activeTabId)
+        .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
+      appState.focusedEntity = remaining.length > 0 ? remaining[0][0] : null
+    }
+  }
+
+  return true
 }
 

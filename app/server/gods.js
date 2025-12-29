@@ -1,8 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { execSync } from 'child_process'
+import { spawn, execSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
+
+const isMac = process.platform === 'darwin'
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
@@ -96,16 +98,16 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   // Record sessions before spawn so we can detect the new one
   const sessionsBefore = new Set(getSessionIds(projectRoot))
 
-  let cmd
+  // Build dtach command args
+  let dtachArgs = ['-n', socketPath, '-E', 'claude', '--dangerously-skip-permissions']
 
   if (resumeSessionId) {
     // Resume existing session
-    cmd = `claude --dangerously-skip-permissions --resume "${resumeSessionId}"`
+    dtachArgs.push('--resume', resumeSessionId)
   } else {
     // Build init prompt with god identity
     const identity = `You are ${name}. Voice: ${god.voice}.`
 
-    // Combine: startPrompt (if any) + task + identity
     let initPrompt = ''
     if (startPrompt) {
       initPrompt += startPrompt + '\n\n'
@@ -115,16 +117,15 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
     initPrompt += identity
 
-    // Build command - use $'...' syntax for real newlines
-    const escapedPrompt = initPrompt.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-    cmd = `claude --dangerously-skip-permissions $'${escapedPrompt}'`
+    // Pass prompt directly - no shell escaping needed with spawn
+    dtachArgs.push(initPrompt)
   }
 
   try {
-    // Use setsid to create new process group (PID = PGID for clean group kill)
-    execSync(`setsid dtach -n "${socketPath}" -E ${cmd}`, {
-      stdio: 'ignore',
+    // Use spawn with detached:true - this calls setsid() internally on Unix (both Linux and macOS)
+    const child = spawn('dtach', dtachArgs, {
       detached: true,
+      stdio: 'ignore',
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -134,18 +135,17 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
         GOD_NAME: name
       }
     })
+    child.unref()
+
+    // Get PID directly from spawn result - no pgrep needed
+    const pid = child.pid
+    const pidFile = getPidPath(godKey)
+    if (pid) {
+      fs.writeFileSync(pidFile, String(pid))
+    }
 
     // Wait briefly for Claude to create its session file
-    execSync('sleep 0.5')
-
-    // Capture dtach PID for fast kill later
-    const pidFile = getPidPath(godKey)
-    try {
-      const pid = execSync(`pgrep -f "dtach.*${sanitizeName(godKey)}\\.sock"`, { encoding: 'utf-8' }).trim()
-      if (pid) {
-        fs.writeFileSync(pidFile, pid)
-      }
-    } catch {}
+    Bun.sleepSync(500)
 
     // Find the new session ID (one that wasn't there before)
     let sessionId = resumeSessionId || null
@@ -153,12 +153,6 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       const sessionsAfter = getSessionIds(projectRoot)
       sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
     }
-
-    // Read back PID if we captured it
-    let pid = null
-    try {
-      pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
-    } catch {}
 
     return {
       name,
@@ -214,21 +208,19 @@ export function createTerminalSession(options = {}, projectRoot) {
   }
 
   try {
-    const shellCmd = command || 'bash'
     const workDir = cwd || projectRoot
     const pidFile = path.join(SOCKET_DIR, `${sanitized}.pid`)
 
-    // Wrap command in bash -c for proper argument handling
-    // Use setsid to create new process group (PID = PGID for clean group kill)
-    const dtachCmd = command
-      ? `setsid dtach -n "${socketPath}" -E bash -c ${JSON.stringify(shellCmd)}`
-      : `setsid dtach -n "${socketPath}" -E bash`
+    // Build dtach args - use bash -c for custom commands, plain bash otherwise
+    const dtachArgs = command
+      ? ['-n', socketPath, '-E', 'bash', '-c', command]
+      : ['-n', socketPath, '-E', 'bash']
 
-    execSync(dtachCmd, {
-      stdio: 'ignore',
+    // Use spawn with detached:true - cross-platform setsid equivalent
+    const child = spawn('dtach', dtachArgs, {
       detached: true,
+      stdio: 'ignore',
       cwd: workDir,
-      shell: true,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
@@ -236,18 +228,15 @@ export function createTerminalSession(options = {}, projectRoot) {
         FORCE_COLOR: '3'
       }
     })
+    child.unref()
 
-    execSync('sleep 0.2')
+    // Get PID directly from spawn result
+    const pid = child.pid
+    if (pid) {
+      fs.writeFileSync(pidFile, String(pid))
+    }
 
-    // Capture dtach PID for fast kill later
-    let pid = null
-    try {
-      const pidStr = execSync(`pgrep -f "dtach.*${sanitized}\\.sock"`, { encoding: 'utf-8' }).trim()
-      if (pidStr) {
-        pid = parseInt(pidStr)
-        fs.writeFileSync(pidFile, pidStr)
-      }
-    } catch {}
+    Bun.sleepSync(200)
 
     return {
       name,
@@ -268,19 +257,25 @@ export function killGodSession(godName) {
   const socketPath = getSocketPath(sanitized)
   const pidFile = getPidPath(sanitized)
 
-  // Fast path: kill process group using stored PID
+  // Fast path: kill process group using stored PID (works on both Linux and macOS)
   if (fs.existsSync(pidFile)) {
     try {
       const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
       if (pid > 0) {
-        // Kill entire process group (negative PID)
+        // Kill entire process group (negative PID) - POSIX standard
         process.kill(-pid, 'SIGTERM')
       }
     } catch {}
   } else {
-    // Fallback for old sessions without PID file: use fuser (faster than lsof)
+    // Fallback for old sessions without PID file
     try {
-      execSync(`fuser -k "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
+      if (isMac) {
+        // macOS: use lsof to find process using the socket
+        execSync(`lsof -t "${socketPath}" 2>/dev/null | xargs kill 2>/dev/null`, { encoding: 'utf-8' })
+      } else {
+        // Linux: use fuser (faster)
+        execSync(`fuser -k "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
+      }
     } catch {}
   }
 

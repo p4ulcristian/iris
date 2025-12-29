@@ -244,6 +244,7 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     wsRef.current = ws
 
     ws.onopen = () => {
+      console.log(`[TerminalContent] ${godName}: WebSocket opened, sending pty:attach`)
       ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
     }
 
@@ -252,10 +253,13 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
         const msg = JSON.parse(event.data)
         if (msg.event === 'pty:output' && msg.godName === godName) {
           if (typeof msg.data === 'string') {
+            console.log(`[TerminalContent] ${godName}: received ${msg.data.length} chars`)
             term.write(msg.data)
           }
         }
-      } catch {}
+      } catch (e) {
+        console.error(`[TerminalContent] ${godName}: error`, e)
+      }
     }
 
     // Show loading state immediately

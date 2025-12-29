@@ -1,6 +1,14 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { getSocketPath, sanitizeName, SOCKET_DIR } from './gods.js'
+
+const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
+function ptyLog(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  console.log(msg)
+  try { fs.appendFileSync(PTY_LOG, line) } catch {}
+}
 
 // godName -> { proc, terminal, clients: Set<ws>, socketPath }
 export const ptyProcesses = new Map()
@@ -96,9 +104,11 @@ export function clearOutputBuffer(godName) {
 }
 
 export function attachPty(godName, ws, cols, rows) {
+  ptyLog(`[pty:attach] START ${godName}`)
   const socketPath = getSocketPath(godName)
 
   if (!fs.existsSync(socketPath)) {
+    ptyLog(`[pty:attach] ${godName}: socket not found at ${socketPath}`)
     ws.send(JSON.stringify({ event: 'error', message: `Socket not found: ${socketPath}` }))
     return
   }
@@ -107,22 +117,35 @@ export function attachPty(godName, ws, cols, rows) {
   if (ptyProcesses.has(godName)) {
     const entry = ptyProcesses.get(godName)
     entry.clients.add(ws)
+    ptyLog(`[pty:attach] ${godName}: PTY exists, now ${entry.clients.size} clients`)
 
-    // Send buffered output to new client
+    // Send buffered output to new client after short delay (let initial PTY output settle)
     const buffer = getFullBuffer(godName)
+    ptyLog(`[pty:attach] ${godName}: will send existing buffer (${buffer ? buffer.length + ' chars' : 'none'})`)
     if (buffer) {
-      ws.send(JSON.stringify({ event: 'pty:output', godName, data: buffer }))
+      setTimeout(() => {
+        if (ws.readyState === 1) {
+          ptyLog(`[pty:attach] ${godName}: sending ${buffer.length} chars (delayed)`)
+          ws.send(JSON.stringify({ event: 'pty:output', godName, data: '\x1b[2J\x1b[H' + buffer }))
+        }
+      }, 200)
     }
     return
   }
 
-  // Load any persisted buffer from disk for this session
-  const persistedBuffer = loadBufferFromDisk(godName)
-  if (persistedBuffer) {
-    outputBuffers.set(godName, persistedBuffer)
-    // Send persisted buffer to client immediately
-    ws.send(JSON.stringify({ event: 'pty:output', godName, data: persistedBuffer }))
+  // Check memory buffer first (more recent), then fall back to disk
+  let buffer = outputBuffers.get(godName)
+  ptyLog(`[pty:attach] ${godName}: memory buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
+  if (!buffer) {
+    buffer = loadBufferFromDisk(godName)
+    ptyLog(`[pty:attach] ${godName}: disk buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
+    if (buffer) {
+      outputBuffers.set(godName, buffer)
+    }
   }
+
+  // Store buffer to send after resize jiggle (so bash redraw doesn't overwrite it)
+  const pendingBuffer = buffer
 
   const clients = new Set([ws])
 
@@ -153,7 +176,7 @@ export function attachPty(godName, ws, cols, rows) {
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, socketPath })
 
-  // Trigger redraw with resize jiggle (no Ctrl+L - would clear replayed buffer)
+  // Trigger redraw with resize jiggle, then send buffer AFTER (so bash redraw doesn't overwrite it)
   const actualCols = cols || 120
   const actualRows = rows || 40
   setTimeout(() => {
@@ -164,6 +187,17 @@ export function attachPty(godName, ws, cols, rows) {
         if (entry?.terminal) {
           entry.terminal.resize(actualCols, actualRows)
         }
+        // Send buffer AFTER resize jiggle completes
+        setTimeout(() => {
+          if (pendingBuffer) {
+            ptyLog(`[pty:attach] ${godName}: sending ${pendingBuffer.length} chars AFTER resize`)
+            entry.clients.forEach(client => {
+              if (client.readyState === 1) {
+                client.send(JSON.stringify({ event: 'pty:output', godName, data: '\x1b[2J\x1b[H' + pendingBuffer }))
+              }
+            })
+          }
+        }, 50)
       }, 50)
     }
   }, 100)
@@ -191,6 +225,8 @@ export function detachPty(godName, ws) {
 
   // If no more clients, kill process (but NOT the dtach session)
   if (entry.clients.size === 0) {
+    // Flush buffer to disk before detaching (in case of pending debounced save)
+    saveBufferToDisk(godName)
     entry.proc.kill()
     ptyProcesses.delete(godName)
   }
@@ -213,7 +249,12 @@ export function resizePty(godName, cols, rows) {
 export function detachAllFromClient(ws) {
   ptyProcesses.forEach((entry, godName) => {
     entry.clients.delete(ws)
+    ptyLog(`[detach] ${godName}: ${entry.clients.size} clients remaining`)
     if (entry.clients.size === 0) {
+      // Flush buffer to disk before detaching (in case of pending debounced save)
+      const buf = outputBuffers.get(godName)
+      ptyLog(`[detach] ${godName}: saving buffer (${buf ? buf.length + ' chars' : 'none'}) to disk`)
+      saveBufferToDisk(godName)
       entry.proc.kill()
       ptyProcesses.delete(godName)
     }

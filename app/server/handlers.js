@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
 import { GOD_COLORS } from '../src/themes/index.js'
-import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
@@ -83,6 +83,8 @@ export function handleMessage(ws, msg, projectRoot) {
           ? available[Math.floor(Math.random() * available.length)]
           : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
       }
+      // Clear any orphaned buffer from a previous incarnation
+      clearOutputBuffer(godName)
       const god = createGodSession(godName, data.task, projectRoot, {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName
@@ -120,6 +122,10 @@ export function handleMessage(ws, msg, projectRoot) {
     }
 
     case 'terminal:spawn': {
+      // Clear any orphaned buffer from a previous incarnation
+      if (data.name) {
+        clearOutputBuffer(data.name)
+      }
       const terminal = createTerminalSession({
         command: data.command,
         name: data.name,
@@ -199,6 +205,8 @@ export function handleMessage(ws, msg, projectRoot) {
             }
           }
           normalizeTabOrder(entityTabId)
+          // Delete tab if it has no more stages
+          deleteTabIfEmpty(entityTabId)
         }
       }
 
@@ -417,13 +425,46 @@ export function handleMessage(ws, msg, projectRoot) {
         const sourceTabId = entity.tabId
         const destTabId = data.tabId
 
+        // Remove from source tab's stage layout
+        const sourceTab = appState.tabs.find(t => t.id === sourceTabId)
+        if (sourceTab) {
+          const sourceStage = findStageByEntity(sourceTab, entityId)
+          if (sourceStage) {
+            sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+            // Remove source stage if empty
+            if (!sourceStage.layout) {
+              sourceTab.stages = sourceTab.stages.filter(s => s.id !== sourceStage.id)
+              if (sourceTab.activeStageId === sourceStage.id) {
+                sourceTab.activeStageId = sourceTab.stages[0]?.id || null
+              }
+            }
+          }
+        }
+
         // Move to destination tab with next order
         entity.tabId = destTabId
         entity.order = getNextOrder(destTabId)
 
+        // Create a new stage for this entity in the destination tab
+        const destTab = appState.tabs.find(t => t.id === destTabId)
+        if (destTab) {
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([entityId], entityId)
+          const newStage = { id: stageId, layout: tileNode }
+          destTab.stages = destTab.stages || []
+          destTab.stages.push(newStage)
+          destTab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
+        }
+
         // Normalize both tabs
         normalizeTabOrder(sourceTabId)
         normalizeTabOrder(destTabId)
+
+        // Delete source tab if it has no more stages
+        deleteTabIfEmpty(sourceTabId)
+
+        appState.focusedEntity = entityId
       }
       saveState()
       broadcastState()
@@ -436,10 +477,36 @@ export function handleMessage(ws, msg, projectRoot) {
       const entity = appState.entities[entityId]
       const sourceTabId = entity?.tabId
 
+      // Remove from source tab's stage layout first
+      if (sourceTabId) {
+        const sourceTab = appState.tabs.find(t => t.id === sourceTabId)
+        if (sourceTab) {
+          const sourceStage = findStageByEntity(sourceTab, entityId)
+          if (sourceStage) {
+            sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+            // Remove source stage if empty
+            if (!sourceStage.layout) {
+              sourceTab.stages = sourceTab.stages.filter(s => s.id !== sourceStage.id)
+              if (sourceTab.activeStageId === sourceStage.id) {
+                sourceTab.activeStageId = sourceTab.stages[0]?.id || null
+              }
+            }
+          }
+        }
+      }
+
       appState.tabCounter++
-      const newTab = { id: appState.tabCounter, name: getRandomRealmName() }
+      const stageId = generateStageId()
+      const tileNode = layout.createTile([entityId], entityId)
+      const newTab = {
+        id: appState.tabCounter,
+        name: getRandomRealmName(),
+        stages: [{ id: stageId, layout: tileNode }],
+        activeStageId: stageId
+      }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
+      appState.focusedTile = tileNode.id
 
       if (entity) {
         entity.tabId = newTab.id
@@ -448,6 +515,8 @@ export function handleMessage(ws, msg, projectRoot) {
         // Normalize source tab after removal
         if (sourceTabId) {
           normalizeTabOrder(sourceTabId)
+          // Delete source tab if it has no more stages
+          deleteTabIfEmpty(sourceTabId)
         }
       }
       appState.focusedEntity = entityId
