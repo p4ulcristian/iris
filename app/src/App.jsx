@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Reorder, AnimatePresence, motion } from 'framer-motion'
-import EntityCard from './components/EntityCard'
+import TileCard from './components/TileCard'
 import TerminalContent from './components/TerminalContent'
-import Scroll from './components/Scroll'
-import ScrollGroup from './components/ScrollGroup'
+import EntityCard from './components/EntityCard'
+import EntityGroup from './components/EntityGroup'
 import LeftWing from './components/LeftWing'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
@@ -50,8 +50,6 @@ export default function App() {
   const theme = useStore(s => s.theme)
   const godColors = useStore(s => s.godColors)
   const getActiveLayout = useStore(s => s.getActiveLayout)
-  const getActiveTiles = useStore(s => s.getActiveTiles)
-  const tiles = useStore(s => s.tiles)
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
@@ -267,22 +265,32 @@ export default function App() {
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   }, [entities, activeTabId])
 
-  // Get tiles for active tab with their entities
-  const activeTiles = useMemo(() => {
-    const tabTiles = tiles[activeTabId] || []
-    return tabTiles.map(tile => {
-      // Support both new entityId (single) and legacy entityIds (array) format
-      const entityIdList = tile.entityId
-        ? [tile.entityId]
-        : (tile.entityIds || [])
+  // Helper: collect all entity IDs from a layout tree
+  const collectEntityIds = useCallback((node) => {
+    if (!node) return []
+    if (node.type === 'tile') {
+      return node.entityId ? [node.entityId] : []
+    }
+    if (node.type === 'split' && node.children) {
+      return node.children.flatMap(child => collectEntityIds(child))
+    }
+    return []
+  }, [])
+
+  // Get stages for active tab with their entities (grouped by stage)
+  const activeStages = useMemo(() => {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    const stages = activeTab?.stages || []
+    return stages.map(stage => {
+      const entityIds = collectEntityIds(stage.layout)
       return {
-        ...tile,
-        entities: entityIdList
+        ...stage,
+        entities: entityIds
           .map(id => entities[id])
-          .filter(Boolean)  // Filter out any missing entities
+          .filter(Boolean)
       }
     })
-  }, [tiles, activeTabId, entities])
+  }, [tabs, activeTabId, entities, collectEntityIds])
 
   // Get focused entity object
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
@@ -728,7 +736,7 @@ export default function App() {
                           }}
                         >
                           {containerSize && (
-                            <EntityCard
+                            <TileCard
                               entity={entity}
                               isFocused={position === 0}
                               onClick={() => handleSetFocus(entity.id)}
@@ -769,7 +777,7 @@ export default function App() {
                               {entity.type === 'oracle' && (
                                 <OracleView entityId={entity.id} />
                               )}
-                            </EntityCard>
+                            </TileCard>
                           )}
                         </motion.div>
                       )
@@ -804,37 +812,37 @@ export default function App() {
                       exit={{ y: '-100%' }}
                       transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
                     >
-                      {activeTiles.length > 0 ? (
+                      {activeStages.length > 0 ? (
                         <div className="flex flex-col gap-4">
-                          {activeTiles.map((tile) => (
-                            <ScrollGroup
-                              key={tile.id}
-                              tile={tile}
-                              entities={tile.entities}
-                              isFocused={tile.id === focusedTile}
-                              focusedEntityId={tile.focusedEntityId || tile.entityId}
-                              onClick={() => {
-                                // Focus the entity (this will switch stages if needed)
-                                const entityId = tile.entityId || tile.entities?.[0]?.id
-                                if (entityId) {
+                          {activeStages.map((stage) => {
+                            const activeTab = tabs.find(t => t.id === activeTabId)
+                            const isActiveStage = stage.id === activeTab?.activeStageId
+                            return (
+                              <EntityGroup
+                                key={stage.id}
+                                stage={stage}
+                                entities={stage.entities}
+                                isFocused={isActiveStage}
+                                focusedEntityId={focusedEntity}
+                                onClick={(entityId) => {
                                   send({ event: 'focus:set', entityId })
-                                }
-                              }}
-                              onClose={(entityId) => handleKillEntity(entityId)}
-                              tabs={tabs}
-                              activeTabId={activeTabId}
-                              onMoveToTab={(entityId, tabId) => {
-                                send({ event: 'entity:move', entityId, tabId })
-                                send({ event: 'tab:select', tabId })
-                              }}
-                              onMoveToNewTab={(entityId) => {
-                                send({ event: 'entity:move-to-new-tab', entityId })
-                              }}
-                            />
-                          ))}
+                                }}
+                                onClose={(entityId) => handleKillEntity(entityId)}
+                                tabs={tabs}
+                                activeTabId={activeTabId}
+                                onMoveToTab={(entityId, tabId) => {
+                                  send({ event: 'entity:move', entityId, tabId })
+                                  send({ event: 'tab:select', tabId })
+                                }}
+                                onMoveToNewTab={(entityId) => {
+                                  send({ event: 'entity:move-to-new-tab', entityId })
+                                }}
+                              />
+                            )
+                          })}
                         </div>
                       ) : activeEntities.length > 0 ? (
-                        /* Fallback: no tiles data, render flat entity list */
+                        /* Fallback: no stages data, render flat entity list */
                         <Reorder.Group
                           axis="y"
                           values={activeEntities}
@@ -842,7 +850,7 @@ export default function App() {
                           className="flex flex-col gap-4"
                         >
                           {activeEntities.map((entity) => (
-                            <Scroll
+                            <EntityCard
                               key={entity.id}
                               entity={entity}
                               isActive={entity.id === effectiveFocusedEntity}
@@ -1047,7 +1055,7 @@ export default function App() {
       <div className="fixed -left-[9999px] -top-[9999px] w-[800px] h-[600px] overflow-hidden pointer-events-none" aria-hidden="true">
         {hiddenGods.map(god => (
           <div key={god.id} className="w-full h-full">
-            <EntityCard entity={god} isFocused={false}>
+            <TileCard entity={god} isFocused={false}>
               <TerminalContent
                 entity={god}
                 isFocused={false}
@@ -1055,7 +1063,7 @@ export default function App() {
                 expectedWidth={800}
                 expectedHeight={600}
               />
-            </EntityCard>
+            </TileCard>
           </div>
         ))}
       </div>

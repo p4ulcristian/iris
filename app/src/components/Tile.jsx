@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import EntityCard from './EntityCard'
+import TileCard from './TileCard'
 import TerminalContent from './TerminalContent'
 import BrowserView from './BrowserView'
 import HistoryView from './HistoryView'
@@ -183,24 +182,13 @@ export default function Tile({
 
       {/* Entity display - single entity per tile */}
       {tileEntity && containerSize && (
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={tileEntity.id}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="h-full w-full"
-          >
-            <EntityCard
-              entity={tileEntity}
-              isFocused={isFocused}
-              onClick={() => {}}
-            >
-              {renderEntityContent(tileEntity)}
-            </EntityCard>
-          </motion.div>
-        </AnimatePresence>
+        <TileCard
+          entity={tileEntity}
+          isFocused={isFocused}
+          onClick={() => {}}
+        >
+          {renderEntityContent(tileEntity)}
+        </TileCard>
       )}
 
       {/* Drop indicator overlay */}

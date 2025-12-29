@@ -1,15 +1,15 @@
 import { motion } from 'framer-motion'
-import Scroll from './Scroll'
+import EntityCard from './EntityCard'
 
 /**
- * ScrollGroup - Renders a tile's entities as stacked cards
+ * EntityGroup - Renders a stage's entities as stacked cards
  *
- * Solo tile (1 entity): Renders like a regular Scroll
- * Group tile (2+ entities): Cards stacked with slight Y offset, focused on top
+ * Solo stage (1 entity): Renders like a regular EntityCard
+ * Multi-entity stage (2+ entities): Cards stacked with slight Y offset, focused on top
  */
-export default function ScrollGroup({
-  tile,
-  entities,  // Array of entity objects for this tile
+export default function EntityGroup({
+  stage,
+  entities,  // Array of entity objects for this stage
   isFocused,
   focusedEntityId,
   onClick,
@@ -24,13 +24,13 @@ export default function ScrollGroup({
   const focusedEntity = entities.find(e => e.id === effectiveFocusedId) || entities[0]
   const otherEntities = entities.filter(e => e.id !== effectiveFocusedId)
 
-  // Solo tile - just render a regular Scroll
+  // Solo stage - just render a regular EntityCard
   if (entities.length === 1) {
     return (
-      <Scroll
+      <EntityCard
         entity={entities[0]}
         isActive={isFocused}
-        onClick={onClick}
+        onClick={() => onClick(entities[0].id)}
         onClose={() => onClose(entities[0].id)}
         tabs={tabs}
         activeTabId={activeTabId}
@@ -41,7 +41,7 @@ export default function ScrollGroup({
     )
   }
 
-  // Group tile - render stacked cards with shadow effect
+  // Multi-entity stage - render stacked cards with shadow effect
   return (
     <motion.div
       className="relative group"
@@ -76,10 +76,10 @@ export default function ScrollGroup({
 
       {/* Focused entity card on top (fully interactive) */}
       <div className="relative" style={{ zIndex: 10 }}>
-        <Scroll
+        <EntityCard
           entity={focusedEntity}
           isActive={isFocused}
-          onClick={onClick}
+          onClick={() => onClick(focusedEntity.id)}
           onClose={() => onClose(focusedEntity.id)}
           tabs={tabs}
           activeTabId={activeTabId}
@@ -91,7 +91,7 @@ export default function ScrollGroup({
         {/* Stack indicator badge */}
         <div
           className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-[10px] text-white font-medium"
-          title={`${entities.length} entities in this tile - Ctrl+Up/Down to cycle`}
+          title={`${entities.length} entities on this stage`}
         >
           {entities.length}
         </div>

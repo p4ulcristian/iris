@@ -50,11 +50,11 @@ iris/
 │   │   ├── App.jsx        # Main React component
 │   │   ├── components/
 │   │   │   ├── Terminal.jsx    # xterm.js wrapper
-│   │   │   ├── EntityCard.jsx  # Entity container with terminal
+│   │   │   ├── TileCard.jsx    # Entity container wrapper (in tiles)
 │   │   │   ├── Tile.jsx        # Single tile in Surface layout
 │   │   │   ├── Surface.jsx     # Recursive layout renderer
-│   │   │   ├── Scroll.jsx      # Entity status card (right wing)
-│   │   │   ├── ScrollGroup.jsx # Grouped scrolls for stacked tiles
+│   │   │   ├── EntityCard.jsx  # Entity status card (right wing)
+│   │   │   ├── EntityGroup.jsx # Entities grouped by stage
 │   │   │   └── LeftWing.jsx    # Left sidebar (Realms + Powers)
 │   │   ├── hooks/
 │   │   │   └── useWebSocket.js # WS connection
