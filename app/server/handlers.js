@@ -98,18 +98,16 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: god.sessionId || null
         }
 
-        // Add to layout
+        // Add to layout - each new entity gets its own pane
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
+          const newPane = layout.createPane([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = layout.createPane([god.name], god.name)
+            tab.layout = newPane
           } else {
-            const firstPane = layout.getFirstPane(tab.layout)
-            if (firstPane) {
-              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
-            }
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
           }
-          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+          appState.focusedPane = newPane.id
         }
 
         appState.focusedEntity = god.name
@@ -139,18 +137,16 @@ export function handleMessage(ws, msg, projectRoot) {
           color: terminal.color
         }
 
-        // Add to layout
+        // Add to layout - each new entity gets its own pane
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
+          const newPane = layout.createPane([terminal.name], terminal.name)
           if (!tab.layout) {
-            tab.layout = layout.createPane([terminal.name], terminal.name)
+            tab.layout = newPane
           } else {
-            const firstPane = layout.getFirstPane(tab.layout)
-            if (firstPane) {
-              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, terminal.name)
-            }
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
           }
-          appState.focusedPane = layout.findPaneByEntity(tab.layout, terminal.name)?.id || null
+          appState.focusedPane = newPane.id
         }
 
         appState.focusedEntity = terminal.name
@@ -468,18 +464,16 @@ export function handleMessage(ws, msg, projectRoot) {
         project: data.project || null
       }
 
-      // Add to layout
+      // Add to layout - each new entity gets its own pane
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (tab) {
+        const newPane = layout.createPane([entityId], entityId)
         if (!tab.layout) {
-          tab.layout = layout.createPane([entityId], entityId)
+          tab.layout = newPane
         } else {
-          const firstPane = layout.getFirstPane(tab.layout)
-          if (firstPane) {
-            tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, entityId)
-          }
+          tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
         }
-        appState.focusedPane = layout.findPaneByEntity(tab.layout, entityId)?.id || null
+        appState.focusedPane = newPane.id
       }
 
       appState.focusedEntity = entityId
@@ -654,18 +648,16 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
 
-        // Add to layout
+        // Add to layout - each new entity gets its own pane
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
+          const newPane = layout.createPane([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = layout.createPane([god.name], god.name)
+            tab.layout = newPane
           } else {
-            const firstPane = layout.getFirstPane(tab.layout)
-            if (firstPane) {
-              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
-            }
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
           }
-          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+          appState.focusedPane = newPane.id
         }
 
         appState.focusedEntity = god.name
@@ -1187,18 +1179,16 @@ export function handleMessage(ws, msg, projectRoot) {
           sessionId: sessionId  // Preserve sessionId for re-banish
         }
 
-        // Add to layout
+        // Add to layout - each new entity gets its own pane
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
+          const newPane = layout.createPane([god.name], god.name)
           if (!tab.layout) {
-            tab.layout = layout.createPane([god.name], god.name)
+            tab.layout = newPane
           } else {
-            const firstPane = layout.getFirstPane(tab.layout)
-            if (firstPane) {
-              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
-            }
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
           }
-          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+          appState.focusedPane = newPane.id
         }
 
         appState.focusedEntity = god.name
@@ -1262,18 +1252,16 @@ export function handleMessage(ws, msg, projectRoot) {
         codeEntity = appState.entities[newId]
         isNewEntity = true
 
-        // Add to layout
+        // Add to layout - each new entity gets its own pane
         const tab = appState.tabs.find(t => t.id === appState.activeTabId)
         if (tab) {
+          const newPane = layout.createPane([newId], newId)
           if (!tab.layout) {
-            tab.layout = layout.createPane([newId], newId)
+            tab.layout = newPane
           } else {
-            const firstPane = layout.getFirstPane(tab.layout)
-            if (firstPane) {
-              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, newId)
-            }
+            tab.layout = layout.createSplit('horizontal', [tab.layout, newPane], 0.5)
           }
-          appState.focusedPane = layout.findPaneByEntity(tab.layout, newId)?.id || null
+          appState.focusedPane = newPane.id
         }
       }
 
