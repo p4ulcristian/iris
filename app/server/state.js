@@ -159,6 +159,23 @@ export function loadState() {
     }
   })
 
+  // Migrate pane→tile in layout nodes (terminology refactor)
+  function migratePaneToTile(node) {
+    if (!node) return node
+    if (node.type === 'pane') {
+      node.type = 'tile'
+    }
+    if (node.type === 'split' && node.children) {
+      node.children = node.children.map(migratePaneToTile)
+    }
+    return node
+  }
+  appState.tabs.forEach(tab => {
+    if (tab.layout) {
+      tab.layout = migratePaneToTile(tab.layout)
+    }
+  })
+
   // Validate layouts: remove references to non-existent entities
   // (removeEntityFromLayout auto-collapses empty tiles)
   const existingEntityIds = new Set(Object.keys(appState.entities))

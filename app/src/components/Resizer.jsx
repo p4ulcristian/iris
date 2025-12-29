@@ -66,8 +66,8 @@ export default function Resizer({
     <div
       className={`
         flex-shrink-0
-        ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-        ${isDragging ? 'bg-accent/50' : 'bg-white/10 hover:bg-white/30'}
+        ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
+        ${isDragging ? 'bg-accent/50' : 'bg-transparent'}
         transition-colors
       `}
       onMouseDown={handleMouseDown}

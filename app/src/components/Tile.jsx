@@ -124,7 +124,6 @@ export default function Tile({
       y,
       rotateX,
       opacity: absPos === 0 ? 1 : 0,
-      scale: 1 - absPos * 0.08,
       zIndex: 10 - absPos,
       pointerEvents: position === 0 ? 'auto' : 'none'
     }
@@ -198,8 +197,7 @@ export default function Tile({
   return (
     <div
       ref={ref}
-      className={`relative h-full w-full overflow-hidden ${isFocused ? 'ring-2 ring-accent/50' : ''}`}
-      style={{ perspective: '1200px' }}
+      className="relative h-full w-full overflow-hidden"
       onClick={handleTileClick}
     >
       {/* Empty tile state */}
@@ -220,15 +218,14 @@ export default function Tile({
             return (
               <motion.div
                 key={entity.id}
-                initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
+                initial={{ opacity: 0, y: '-100%', rotateX: 15 }}
                 animate={{
                   y: style.y,
                   rotateX: style.rotateX,
-                  scale: style.scale,
                   opacity: style.opacity,
                   zIndex: style.zIndex,
                 }}
-                exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
+                exit={{ opacity: 0, y: '100%', rotateX: -15 }}
                 transition={{
                   type: 'spring',
                   stiffness: 250,

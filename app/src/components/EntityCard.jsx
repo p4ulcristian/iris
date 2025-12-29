@@ -38,7 +38,7 @@ const EntityCard = forwardRef(function EntityCard({
       ref={ref}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className={`relative h-full min-h-0 overflow-hidden ${isFocused ? 'liquid-glass-focused' : 'liquid-glass-god'} ${className}`}
+      className={`relative h-full min-h-0 overflow-hidden ${className}`}
       style={{
         '--god-color': entityColor,
         '--god-color-rgb': hexToRgbCss(entityColor),

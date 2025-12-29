@@ -655,11 +655,11 @@ export default function App() {
         />
 
         {/* Main content area */}
-        <main className="flex-1 min-h-0 overflow-visible py-2 pr-2">
+        <main className="flex-1 min-h-0 overflow-visible">
           {/* Main layout: focused entity + sidebar */}
-          <div className="flex gap-3 h-full">
+          <div className="flex h-full">
             {/* Main focused entity area */}
-            <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full" style={{ perspective: '1200px' }}>
+            <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full">
               <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
               {(() => {
                 const activeLayout = getActiveLayout()
@@ -902,16 +902,6 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-
-                {/* Gradient blur bar at bottom */}
-                <div
-                  className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none backdrop-blur-md"
-                  style={{
-                    maskImage: 'linear-gradient(to bottom, transparent, black)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, transparent, black)',
-                    background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.3))'
-                  }}
-                />
 
                 {/* Floating collapse button - bottom left, centered when collapsed */}
                 <button
