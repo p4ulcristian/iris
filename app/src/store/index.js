@@ -31,7 +31,6 @@ const initialState = {
   // UI state
   focusedEntity: null,
   focusedPane: null,  // For multi-pane layouts
-  fullscreenEntity: null,
   layoutMode: 'auto',
   devPanelOpen: false,
 
@@ -74,7 +73,6 @@ export const useStore = create(
         state.tabs.push({ id: newId, name: tabName })
         state.activeTabId = newId
         state.focusedEntity = null
-        state.fullscreenEntity = null
       }),
 
       closeTab: (tabId) => set((state) => {
@@ -99,7 +97,6 @@ export const useStore = create(
         }
 
         state.focusedEntity = null
-        state.fullscreenEntity = null
       }),
 
       renameTab: (tabId, name) => set((state) => {
@@ -110,7 +107,6 @@ export const useStore = create(
       switchTab: (tabId) => set((state) => {
         state.activeTabId = tabId
         state.focusedEntity = null
-        state.fullscreenEntity = null
       }),
 
       nextTab: () => set((state) => {
@@ -151,13 +147,11 @@ export const useStore = create(
       }),
 
       removeEntity: (entityId) => set((state) => {
-        const wasFullscreen = state.fullscreenEntity === entityId
         const wasFocused = state.focusedEntity === entityId
         const tabId = state.entities[entityId]?.tabId
 
         delete state.entities[entityId]
 
-        if (wasFullscreen) state.fullscreenEntity = null
         if (wasFocused) {
           // Auto-select another entity from the same tab
           const remaining = Object.values(state.entities).filter(e => e.tabId === tabId)
@@ -181,12 +175,6 @@ export const useStore = create(
 
       setFocusedEntity: (entityId) => set((state) => {
         state.focusedEntity = entityId
-      }),
-
-      toggleFullscreen: (entityId) => set((state) => {
-        const target = entityId || state.focusedEntity
-        if (!target) return
-        state.fullscreenEntity = state.fullscreenEntity === target ? null : target
       }),
 
       setLayoutMode: (mode) => set((state) => {
@@ -376,11 +364,6 @@ export const useStore = create(
         // Sync code highlights
         if (serverState.codeHighlights !== undefined) {
           state.codeHighlights = serverState.codeHighlights
-        }
-
-        // Clear fullscreen if entity no longer exists (fullscreen is still client-only)
-        if (state.fullscreenEntity && !newEntities[state.fullscreenEntity]) {
-          state.fullscreenEntity = null
         }
       }),
 

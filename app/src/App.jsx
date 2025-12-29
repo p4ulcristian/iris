@@ -44,7 +44,6 @@ export default function App() {
   const entities = useStore(s => s.entities)
   const focusedEntity = useStore(s => s.focusedEntity)
   const focusedPane = useStore(s => s.focusedPane)
-  const fullscreenEntity = useStore(s => s.fullscreenEntity)
   const layoutMode = useStore(s => s.layoutMode)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const theme = useStore(s => s.theme)
@@ -53,7 +52,6 @@ export default function App() {
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
-  const toggleFullscreen = useStore(s => s.toggleFullscreen)
   const rotateLayout = useStore(s => s.rotateLayout)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
@@ -339,11 +337,6 @@ export default function App() {
     send({ event: 'entities:reorder', order: orderedIds })
   }, [send])
 
-  // Toggle fullscreen with view transition
-  const handleToggleFullscreen = useCallback((entityId) => {
-    withViewTransition(() => toggleFullscreen(entityId))
-  }, [toggleFullscreen])
-
   // Spawn a view entity
   const handleSpawnEntity = useCallback((type, data = {}) => {
     send({ event: 'entity:spawn', type, ...data })
@@ -476,11 +469,11 @@ export default function App() {
         return
       }
 
-      // Ctrl+F: Toggle fullscreen
+      // Ctrl+F: Toggle window fullscreen
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault()
         e.stopPropagation()
-        handleToggleFullscreen()
+        window.iris.windowControl('toggle-fullscreen')
         return
       }
 
@@ -521,16 +514,9 @@ export default function App() {
         return
       }
 
-      // Escape: Exit fullscreen, then clear focus
-      if (e.key === 'Escape') {
-        if (fullscreenEntity) {
-          e.preventDefault()
-          e.stopPropagation()
-          handleToggleFullscreen()
-          return
-        } else if (focusedEntity) {
-          handleSetFocus(null)
-        }
+      // Escape: Clear focus
+      if (e.key === 'Escape' && focusedEntity) {
+        handleSetFocus(null)
       }
 
       // Ctrl+Up: Focus previous entity
@@ -585,8 +571,8 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
-    handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, handleToggleFullscreen,
-    rotateLayout, focusedEntity, fullscreenEntity, activeEntities,
+    handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab,
+    rotateLayout, focusedEntity, activeEntities,
     toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
 

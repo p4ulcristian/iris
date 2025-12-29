@@ -8,9 +8,8 @@ export default function DevPanel() {
   const stateData = {
     tabs: state.tabs,
     activeTabId: state.activeTabId,
-    gods: state.gods,
-    focusedGod: state.focusedGod,
-    fullscreenGod: state.fullscreenGod,
+    entities: state.entities,
+    focusedEntity: state.focusedEntity,
     layoutMode: state.layoutMode,
     connected: state.connected,
   }
