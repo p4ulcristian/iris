@@ -5,12 +5,11 @@
   "main": "main/index.js",
   "type": "module",
   "scripts": {
-    "generate:themes": "bun ../scripts/generate-themes.js",
-    "dev": "bun run generate:themes && concurrently -k -n vite,server,electron -c cyan,green,magenta \"bun:dev:vite\" \"bun:dev:server\" \"sleep 2 && bun run dev:electron\"",
+    "dev": "concurrently -k -n vite,server,electron -c cyan,green,magenta \"bun:dev:vite\" \"bun:dev:server\" \"sleep 2 && bun run dev:electron\"",
     "dev:vite": "bunx --bun vite",
     "dev:server": "bun --watch server/index.js",
     "dev:electron": "electron . --dev",
-    "build": "bun run generate:themes && bunx --bun vite build && electron-builder",
+    "build": "bunx --bun vite build && electron-builder",
     "preview": "bunx --bun vite preview"
   },
   "dependencies": {

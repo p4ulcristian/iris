@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
+import { GOD_COLORS } from '../src/themes/index.js'
 import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder } from './state.js'
 import { startService, stopService } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
@@ -1362,7 +1363,7 @@ export function handleMessage(ws, msg, projectRoot) {
         if (entityType === 'god') {
           // For gods, we need to pick a name - use modal instead
           // For now, spawn with a random available god
-          const godColors = Object.keys(require('../src/themes/generated/palettes.js').godPalettes || {})
+          const godColors = Object.keys(GOD_COLORS)
           const usedNames = Object.values(appState.entities).filter(e => e.type === 'god').map(e => e.name?.toLowerCase())
           const availableGods = godColors.filter(g => !usedNames.includes(g))
           const godPool = availableGods.length > 0 ? availableGods : godColors

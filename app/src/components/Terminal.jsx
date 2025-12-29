@@ -23,8 +23,9 @@ export default function Terminal({ sessionName, color, onData, onResize }) {
       cursorBlink: true,
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+      allowTransparency: true,
       theme: {
-        background: '#0a0a0a',
+        background: 'transparent',
         foreground: '#e0e0e0',
         cursor: color,
         cursorAccent: '#0a0a0a',

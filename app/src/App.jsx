@@ -919,7 +919,7 @@ export default function App() {
                 <AnimatePresence>
                   {sidebarShowButtons && (
                     <motion.div
-                      className="absolute bottom-1 right-1 z-10 flex flex-col items-end"
+                      className="absolute bottom-0 right-0 z-10 flex flex-col items-end"
                       initial={{ x: '100%', opacity: 0 }}
                       animate={{ x: 0, opacity: 1 }}
                       exit={{ x: '100%', opacity: 0 }}

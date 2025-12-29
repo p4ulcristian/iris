@@ -1,6 +1,6 @@
 import fs from 'fs'
 import { STATE_FILE } from './config.js'
-import { GOD_COLORS } from '../src/themes/generated/palettes.js'
+import { GOD_COLORS } from '../src/themes/index.js'
 import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
 

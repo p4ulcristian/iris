@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '../store'
-import { THEMES } from '../themes/generated/themes'
+import { THEMES } from '../themes'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faEye,

@@ -1,19 +1,41 @@
-// Auto-generated from prompts/pantheon.yaml
-// Do not edit directly - run: node scripts/generate-themes.js
+// Theme system - hardcoded from pantheon.yaml and themes.yaml
 
-// God primary colors
+// God colors from pantheon
 export const GOD_COLORS = {
-  "zeus": "#FFCC00",
-  "ares": "#FF3366",
-  "artemis": "#00FF88",
-  "poseidon": "#0088FF",
-  "hermes": "#00DDFF",
-  "hera": "#FF44AA",
-  "hephaestus": "#FF6622",
-  "dionysus": "#AA44FF"
+  zeus: '#FFCC00',
+  ares: '#FF3366',
+  artemis: '#00FF88',
+  poseidon: '#0088FF',
+  hermes: '#00DDFF',
+  hera: '#FF44AA',
+  hephaestus: '#FF6622',
+  dionysus: '#AA44FF'
 }
 
-// Color utilities for runtime palette generation
+// Realms list
+export const REALMS = [
+  'Olympus', 'Elysium', 'Tartarus', 'Agora', 'Forge', 'Grove',
+  'Styx', 'Temple', 'Acropolis', 'Nectar Hall', 'Labyrinth', 'Oracle'
+]
+
+// Theme definitions
+export const THEMES = [
+  { id: 'obsidian', label: 'Obsidian', accent: '#888888', terminal: { 'bg-lightness': 6, 'bg-saturation': 0, 'fg-lightness': 85, saturation: 0, 'ansi-saturation': 0.7, 'ansi-warmth': 0, 'hue-blend': 0 } },
+  { id: 'charcoal', label: 'Charcoal', accent: '#a0a0a0', terminal: { 'bg-lightness': 8, 'bg-saturation': 0, 'fg-lightness': 82, saturation: 0, 'ansi-saturation': 0.75, 'ansi-warmth': 0, 'hue-blend': 0 } },
+  { id: 'slate', label: 'Slate', accent: '#959595', terminal: { 'bg-lightness': 10, 'bg-saturation': 0, 'fg-lightness': 78, saturation: 0, 'ansi-saturation': 0.8, 'ansi-warmth': 0, 'hue-blend': 0 } },
+  { id: 'graphite', label: 'Graphite', accent: '#8a8a8a', terminal: { 'bg-lightness': 12, 'bg-saturation': 0, 'fg-lightness': 75, saturation: 0, 'ansi-saturation': 0.8, 'ansi-warmth': 0, 'hue-blend': 0 } },
+  { id: 'ash', label: 'Ash', accent: '#7a7a7a', terminal: { 'bg-lightness': 14, 'bg-saturation': 0, 'fg-lightness': 72, saturation: 0, 'ansi-saturation': 0.85, 'ansi-warmth': 0, 'hue-blend': 0 } }
+]
+
+export const DEFAULT_THEME = 'obsidian'
+
+// Get terminal settings for a theme
+export function getThemeTerminalSettings(themeId) {
+  const theme = THEMES.find(t => t.id === themeId)
+  return theme?.terminal || THEMES[0]?.terminal || {}
+}
+
+// Color utilities
 function hexToHsl(hex) {
   const r = parseInt(hex.slice(1, 3), 16) / 255
   const g = parseInt(hex.slice(3, 5), 16) / 255
@@ -59,13 +81,6 @@ function hslToHex(h, s, l) {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`
 }
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
 function blendHue(baseHue, targetHue, amount) {
   let diff = targetHue - baseHue
   if (diff > 180) diff -= 360
@@ -86,8 +101,8 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
   const hueBlend = themeTerminal['hue-blend'] ?? 0.15
   const hueTarget = themeTerminal['hue-target'] ?? primary.h
 
-  // Subtle dark background for readability while preserving liquid glass
-  const bg = 'rgba(0, 0, 0, 0.3)'
+  // Transparent background for xterm
+  const bg = 'transparent'
   const fg = hslToHex(primary.h, Math.min(primary.s * 0.15, 10), fgLightness)
 
   const ansiBase = {
@@ -136,7 +151,7 @@ export function generatePalette(primaryHex, themeTerminal = {}) {
     background: bg,
     foreground: fg,
     cursor: primaryHex,
-    cursorAccent: bg,
+    cursorAccent: '#0a0a0a',
     selectionBackground: primaryHex + '44',
     selectionForeground: '#ffffff',
     ...colors,

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useMemo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
-import { generatePalette } from '../themes/generated/palettes'
-import { getThemeTerminalSettings } from '../themes/generated/themes'
+import { generatePalette, getThemeTerminalSettings } from '../themes'
 import { useStore } from '../store'
 import { WS_URL } from '../config'
 
