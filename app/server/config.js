@@ -17,7 +17,8 @@ export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },
   express: { port: 8767, name: 'Express', icon: '💬', script: 'brain/express/server.py' },
-  wake: { port: null, name: 'Wake', icon: '⌨️', script: 'brain/wake/listener.py' }
+  wake: { port: null, name: 'Wake', icon: '⌨️', script: 'brain/wake/listener.py' },
+  ollama: { port: 11434, name: 'Ollama', icon: '🧠', script: 'ollama serve' }
 }
 
 // Load pantheon from YAML (single source of truth)

@@ -137,12 +137,12 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
         borderRadius: '12px 16px 16px 12px',
         borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
       }}
-      // Only animate opacity/filter for active state changes (no position animations)
       animate={{
         opacity: isActive ? 1 : 0.6,
         filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
       }}
       transition={{ duration: 0.15 }}
+      whileDrag={{ scale: 1.02, zIndex: 50 }}
     >
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">

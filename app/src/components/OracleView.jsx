@@ -112,11 +112,13 @@ export default function OracleView({ entityId }) {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState(null)
   const [connected, setConnected] = useState(false)
-  const messagesEndRef = useRef(null)
+  const messagesContainerRef = useRef(null)
   const inputRef = useRef(null)
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [])
 
   useEffect(() => {
@@ -187,6 +189,7 @@ export default function OracleView({ entityId }) {
         for (const line of lines) {
           try {
             const data = JSON.parse(line)
+            // Only show content, not thinking (qwen3 outputs thinking first, then content)
             if (data.message?.content) {
               content += data.message.content
               setMessages((prev) => {
@@ -255,7 +258,7 @@ export default function OracleView({ entityId }) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-text-tertiary">
             <span className="text-4xl mb-4">🔮</span>
@@ -277,7 +280,6 @@ export default function OracleView({ entityId }) {
             <span>Oracle is thinking...</span>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Error */}

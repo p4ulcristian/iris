@@ -21,7 +21,8 @@ import {
   faCity,
   faWineGlass,
   faCompass,
-  faEye
+  faEye,
+  faBrain
 } from '@fortawesome/free-solid-svg-icons'
 
 const REALM_ICONS = {
@@ -66,6 +67,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
     { name: 'Hear', key: 'hear', icon: faEarListen },
     { name: 'Speak', key: 'speak', icon: faVolumeHigh },
     { name: 'Express', key: 'express', icon: faCommentDots },
+    { name: 'Ollama', key: 'ollama', icon: faBrain },
   ]
 
   const activeCount = serviceList.filter(s => services[s.key]).length
@@ -75,7 +77,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
       <button
         onClick={() => setOpen(!open)}
         className="w-8 h-8 flex items-center justify-center liquid-glass-pill liquid-glass-text-muted transition-all"
-        title={`Services (${activeCount}/4)`}
+        title={`Services (${activeCount}/${serviceList.length})`}
       >
         <FontAwesomeIcon
           icon={faCircle}

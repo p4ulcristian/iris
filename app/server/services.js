@@ -14,7 +14,8 @@ export const serviceStatus = {
   speak: false,
   hear: false,
   express: false,
-  wake: false
+  wake: false,
+  ollama: false
 }
 
 // Service processes we've started
@@ -37,6 +38,17 @@ async function checkServiceHealth(name, port) {
     })
   }
 
+  // For Ollama, check /api/tags instead of /health
+  if (name === 'ollama') {
+    return new Promise((resolve) => {
+      const req = http.get(`http://127.0.0.1:${port}/api/tags`, { timeout: 1000 }, (res) => {
+        resolve(res.statusCode === 200)
+      })
+      req.on('error', () => resolve(false))
+      req.on('timeout', () => { req.destroy(); resolve(false) })
+    })
+  }
+
   // For HTTP services, check health endpoint
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${port}/health`, { timeout: 1000 }, (res) => {
@@ -52,20 +64,23 @@ export async function checkAllServices() {
     checkServiceHealth('speak', SERVICES.speak.port),
     checkServiceHealth('hear', SERVICES.hear.port),
     checkServiceHealth('express', SERVICES.express.port),
-    checkServiceHealth('wake', SERVICES.wake.port)
+    checkServiceHealth('wake', SERVICES.wake.port),
+    checkServiceHealth('ollama', SERVICES.ollama.port)
   ])
 
   const changed = (
     serviceStatus.speak !== results[0] ||
     serviceStatus.hear !== results[1] ||
     serviceStatus.express !== results[2] ||
-    serviceStatus.wake !== results[3]
+    serviceStatus.wake !== results[3] ||
+    serviceStatus.ollama !== results[4]
   )
 
   serviceStatus.speak = results[0]
   serviceStatus.hear = results[1]
   serviceStatus.express = results[2]
   serviceStatus.wake = results[3]
+  serviceStatus.ollama = results[4]
 
   if (changed && broadcastFn) {
     broadcastFn('services:status', { services: serviceStatus })
@@ -99,18 +114,33 @@ export function startService(name, projectRoot) {
   const script = SERVICES[name]?.script
   if (!script) return
 
-  const scriptPath = `${projectRoot}/${script}`
-  const uvPath = process.env.HOME + '/.local/bin/uv'
+  let proc
 
-  const proc = spawn(uvPath, ['run', '--script', scriptPath], {
-    cwd: projectRoot,
-    detached: true,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      CUDA_VISIBLE_DEVICES: '0'
-    }
-  })
+  // Ollama is a direct command, not a uv script
+  if (name === 'ollama') {
+    proc = spawn('ollama', ['serve'], {
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        CUDA_VISIBLE_DEVICES: '0',
+        OLLAMA_ORIGINS: '*'  // Allow CORS for browser/Electron access
+      }
+    })
+  } else {
+    const scriptPath = `${projectRoot}/${script}`
+    const uvPath = process.env.HOME + '/.local/bin/uv'
+
+    proc = spawn(uvPath, ['run', '--script', scriptPath], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        CUDA_VISIBLE_DEVICES: '0'
+      }
+    })
+  }
 
   proc.on('error', () => {
     delete serviceProcesses[name]

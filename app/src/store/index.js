@@ -17,13 +17,15 @@ const initialState = {
     speak: false,
     hear: false,
     express: false,
-    wake: false
+    wake: false,
+    ollama: false
   },
   servicesLoading: {
     speak: false,
     hear: false,
     express: false,
-    wake: false
+    wake: false,
+    ollama: false
   },
 
   // UI state (client-only)
