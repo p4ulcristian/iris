@@ -4,7 +4,10 @@
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
-  "author": "Paul Cristian",
+  "author": {
+    "name": "Paul Cristian",
+    "email": "p4ulcristian@gmail.com"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,8 +19,8 @@
     "dev:server": "bun --watch server/index.js",
     "dev:electron": "electron . --dev",
     "build": "bunx --bun vite build && electron-builder",
-    "build:linux": "bunx --bun vite build && electron-builder --linux",
-    "build:mac": "bunx --bun vite build && electron-builder --mac",
+    "build:linux": "bunx --bun vite build && electron-builder --linux --publish never",
+    "build:mac": "bunx --bun vite build && electron-builder --mac --publish never",
     "preview": "bunx --bun vite preview"
   },
   "build": {
