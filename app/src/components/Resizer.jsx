@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 
 /**
- * Resizer - Draggable divider between split panes
+ * Resizer - Draggable divider between split tiles
  */
 export default function Resizer({
   direction,

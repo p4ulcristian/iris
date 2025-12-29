@@ -1,22 +1,22 @@
 import { useMemo, useCallback } from 'react'
-import Pane from './Pane'
+import Tile from './Tile'
 import Resizer from './Resizer'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
 /**
- * SplitLayout - Recursively renders a layout tree
+ * Surface - Recursively renders a layout tree
  *
  * Layout nodes are either:
- * - PaneNode: { type: 'pane', id, entityIds: string[], focusedEntityId: string | null }
+ * - TileNode: { type: 'tile', id, entityIds: string[], focusedEntityId: string | null }
  * - SplitNode: { type: 'split', id, direction: 'horizontal' | 'vertical', ratio: number, children: [LayoutNode, LayoutNode] }
  */
-export default function SplitLayout({
+export default function Surface({
   node,
   tabId,
   depth = 0,
   entities,
-  focusedPane,
+  focusedTile,
   focusedEntity,
   containerSize
 }) {
@@ -39,14 +39,14 @@ export default function SplitLayout({
     )
   }
 
-  // Pane node - render the Pane component
-  if (node.type === 'pane') {
+  // Tile node - render the Tile component
+  if (node.type === 'tile') {
     return (
-      <Pane
-        paneId={node.id}
+      <Tile
+        tileId={node.id}
         entityIds={node.entityIds}
         focusedEntityId={node.focusedEntityId}
-        isFocused={focusedPane === node.id}
+        isFocused={focusedTile === node.id}
         entities={entities}
         tabId={tabId}
         containerSize={containerSize}
@@ -78,12 +78,12 @@ export default function SplitLayout({
             overflow: 'hidden'
           }}
         >
-          <SplitLayout
+          <Surface
             node={children[0]}
             tabId={tabId}
             depth={depth + 1}
             entities={entities}
-            focusedPane={focusedPane}
+            focusedTile={focusedTile}
             focusedEntity={focusedEntity}
             containerSize={containerSize ? {
               width: isHorizontal ? containerSize.width * firstFlex : containerSize.width,
@@ -109,12 +109,12 @@ export default function SplitLayout({
             overflow: 'hidden'
           }}
         >
-          <SplitLayout
+          <Surface
             node={children[1]}
             tabId={tabId}
             depth={depth + 1}
             entities={entities}
-            focusedPane={focusedPane}
+            focusedTile={focusedTile}
             focusedEntity={focusedEntity}
             containerSize={containerSize ? {
               width: isHorizontal ? containerSize.width * secondFlex : containerSize.width,

@@ -19,25 +19,24 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 ## App Structure
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Tab Bar                                     [+] [Ctrl+N]│
-├─────────────────────────────────────────────────────────┤
-│ ┌─────────────────────┐ ┌─────────────────────┐         │
-│ │ Zeus                │ │ Apollo              │         │
-│ │ gold border         │ │ yellow border       │         │
-│ │                     │ │                     │         │
-│ │   xterm terminal    │ │   xterm terminal    │         │
-│ │                     │ │                     │         │
-│ └─────────────────────┘ └─────────────────────┘         │
-├─────────────────────────────────────────────────────────┤
-│ Status Bar                          🔊 👂 💬 ⌨️  │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ ┌────────┐ ┌───────────────────────────────┐ ┌──────────────┐ │
+│ │        │ │           STAGE               │ │              │ │
+│ │  LEFT  │ │ ┌─────────────┬─────────────┐ │ │    RIGHT     │ │
+│ │  WING  │ │ │    TILE     │    TILE     │ │ │    WING      │ │
+│ │        │ │ │   (Zeus)    │   (Apollo)  │ │ │              │ │
+│ │ Realms │ │ │             │             │ │ │   Scrolls    │ │
+│ │   +    │ │ └─────────────┴─────────────┘ │ │      +       │ │
+│ │ Powers │ │         SURFACE               │ │ Summon Menu  │ │
+│ └────────┘ └───────────────────────────────┘ └──────────────┘ │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-- Responsive grid layout (auto-adjusts to god count)
-- Each god card has colored border matching identity
-- Tabs for workspace organization
-- Status bar shows service health
+- **Stage**: Main content area with the Surface layout
+- **Surface**: Splittable workspace containing Tiles
+- **Tiles**: Individual sections holding entities (gods, terminals, etc.)
+- **Left Wing**: Realm tabs + Powers (services)
+- **Right Wing**: Entity Scrolls + Summon menu
 
 ## File Structure
 
@@ -51,9 +50,12 @@ iris/
 │   │   ├── App.jsx        # Main React component
 │   │   ├── components/
 │   │   │   ├── Terminal.jsx    # xterm.js wrapper
-│   │   │   ├── GodCard.jsx     # God container with terminal
-│   │   │   ├── TabBar.jsx      # Workspace tabs
-│   │   │   └── StatusBar.jsx   # Service status
+│   │   │   ├── EntityCard.jsx  # Entity container with terminal
+│   │   │   ├── Tile.jsx        # Single tile in Surface layout
+│   │   │   ├── Surface.jsx     # Recursive layout renderer
+│   │   │   ├── Scroll.jsx      # Entity status card (right wing)
+│   │   │   ├── ScrollGroup.jsx # Grouped scrolls for stacked tiles
+│   │   │   └── LeftWing.jsx    # Left sidebar (Realms + Powers)
 │   │   ├── hooks/
 │   │   │   └── useWebSocket.js # WS connection
 │   │   └── store/
@@ -79,7 +81,7 @@ iris/
 │   │   └── bubble.py      # GTK4 overlay
 │   │
 │   ├── skills/            # Utility commands
-│   │   ├── focus/         # Pane title updates
+│   │   ├── focus/         # Entity title updates
 │   │   ├── glow/          # Markdown viewer
 │   │   └── nvim/          # Neovim integration
 │   │
@@ -87,7 +89,7 @@ iris/
 │
 ├── prompts/               # God instructions
 │   ├── god.md             # Core god identity
-│   ├── realms.md          # Pane/environment info
+│   ├── realms.md          # Tile/environment info
 │   ├── voice.md           # Speech guidelines
 │   ├── skills.md          # Available skills
 │   └── pantheon.yaml      # God definitions
@@ -108,9 +110,9 @@ iris/
 1. **Summon**: User presses Ctrl+N or clicks [+]
    - Electron spawns dtach session: `dtach -n <socket> -E claude "<prompt>"`
    - Socket stored at `~/.local/share/iris/sockets/<name>.sock`
-   - React adds god card to grid
+   - React adds god entity to tile
 
-2. **Attach**: When god card renders
+2. **Attach**: When entity renders
    - node-pty spawns: `dtach -a <socket>`
    - PTY output streams to xterm.js via WebSocket
 
@@ -253,9 +255,9 @@ wake/
     wtype pastes text at cursor
 ```
 
-## Services
+## Powers (Services)
 
-Started/stopped via status bar or automatically:
+Started/stopped via Left Wing or automatically:
 
 | Service | Port | Script |
 |---------|------|--------|

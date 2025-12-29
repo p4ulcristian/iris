@@ -123,7 +123,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   )
 }
 
-export default function StatusBar({
+export default function LeftWing({
   connected,
   send,
   tabs,

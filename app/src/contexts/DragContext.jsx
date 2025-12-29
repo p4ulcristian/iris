@@ -6,7 +6,7 @@ const DragContext = createContext(null)
 export function DragProvider({ children }) {
   const [dragData, setDragData] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
-  const [dropTarget, setDropTarget] = useState(null) // { paneId, zone }
+  const [dropTarget, setDropTarget] = useState(null) // { tileId, zone }
 
   // Monitor all drag events globally
   useEffect(() => {
@@ -28,7 +28,7 @@ export function DragProvider({ children }) {
         const target = location.current.dropTargets[0]
         if (target) {
           setDropTarget({
-            paneId: target.data.paneId,
+            tileId: target.data.tileId,
             zone: target.data.zone
           })
         } else {

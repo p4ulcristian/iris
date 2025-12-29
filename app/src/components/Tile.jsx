@@ -17,10 +17,10 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
 /**
- * Pane - A single pane in a split layout that contains a stack of entities
+ * Tile - A single tile in a surface layout that contains a stack of entities
  */
-export default function Pane({
-  paneId,
+export default function Tile({
+  tileId,
   entityIds,
   focusedEntityId,
   isFocused,
@@ -33,23 +33,23 @@ export default function Pane({
   const ref = useRef(null)
   const [dropState, setDropState] = useState({ isDraggedOver: false, closestEdge: null })
 
-  // Get entity objects for this pane
-  const paneEntities = useMemo(() => {
+  // Get entity objects for this tile
+  const tileEntities = useMemo(() => {
     return entityIds
       .map(id => entities[id])
       .filter(Boolean)
   }, [entityIds, entities])
 
-  // The entity that should be shown in this pane
+  // The entity that should be shown in this tile
   const visibleEntityId = focusedEntityId || entityIds[0] || null
   const visibleEntity = visibleEntityId ? entities[visibleEntityId] : null
 
-  // Handle clicking on the pane to focus it
-  const handlePaneClick = useCallback(() => {
+  // Handle clicking on the tile to focus it
+  const handleTileClick = useCallback(() => {
     if (!isFocused) {
-      send({ event: 'pane:focus', paneId })
+      send({ event: 'tile:focus', tileId })
     }
-  }, [send, paneId, isFocused])
+  }, [send, tileId, isFocused])
 
   // Setup drop target
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function Pane({
       element: el,
       getData: ({ input, element }) => {
         // Attach closest edge data for split detection
-        const data = attachClosestEdge({ paneId }, {
+        const data = attachClosestEdge({ tileId }, {
           element,
           input,
           allowedEdges: ['top', 'bottom', 'left', 'right']
@@ -86,27 +86,27 @@ export default function Pane({
         const zone = edge || 'center'
 
         if (zone === 'center') {
-          // Add to this pane's stack
+          // Add to this tile's stack
           if (dragSource === 'spawn') {
-            send({ event: 'layout:add-entity-to-pane', paneId, entityType })
+            send({ event: 'layout:add-entity-to-tile', tileId, entityType })
           } else if (dragSource === 'move') {
-            send({ event: 'layout:add-entity-to-pane', paneId, entityId })
+            send({ event: 'layout:add-entity-to-tile', tileId, entityId })
           }
         } else {
-          // Split the pane
+          // Split the tile
           const direction = (zone === 'left' || zone === 'right') ? 'horizontal' : 'vertical'
 
           if (dragSource === 'spawn') {
-            send({ event: 'layout:split', tabId, paneId, direction, position: zone, entityType })
+            send({ event: 'layout:split', tabId, tileId, direction, position: zone, entityType })
           } else if (dragSource === 'move') {
-            send({ event: 'layout:split', tabId, paneId, direction, position: zone, entityId })
+            send({ event: 'layout:split', tabId, tileId, direction, position: zone, entityId })
           }
         }
 
         setDropState({ isDraggedOver: false, closestEdge: null })
       }
     })
-  }, [paneId, tabId, send])
+  }, [tileId, tabId, send])
 
   // Get stack position for animation
   const getStackPosition = (entityId, focusedId, entityList) => {
@@ -200,21 +200,21 @@ export default function Pane({
       ref={ref}
       className={`relative h-full w-full overflow-hidden ${isFocused ? 'ring-2 ring-accent/50' : ''}`}
       style={{ perspective: '1200px' }}
-      onClick={handlePaneClick}
+      onClick={handleTileClick}
     >
-      {/* Empty pane state */}
-      {paneEntities.length === 0 && (
+      {/* Empty tile state */}
+      {tileEntities.length === 0 && (
         <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary liquid-glass-god rounded-2xl">
-          <p className="text-base">Empty pane</p>
+          <p className="text-base">Empty tile</p>
           <p className="text-sm opacity-70">Drop an entity here</p>
         </div>
       )}
 
       {/* Entity stack */}
-      {paneEntities.length > 0 && containerSize && (
+      {tileEntities.length > 0 && containerSize && (
         <AnimatePresence mode="popLayout">
-          {paneEntities.map(entity => {
-            const position = getStackPosition(entity.id, visibleEntityId, paneEntities)
+          {tileEntities.map(entity => {
+            const position = getStackPosition(entity.id, visibleEntityId, tileEntities)
             const style = getStackStyle(position)
 
             return (
@@ -246,7 +246,7 @@ export default function Pane({
                   isFocused={position === 0 && isFocused}
                   onClick={() => {
                     if (position !== 0) {
-                      send({ event: 'pane:focus-entity', paneId, entityId: entity.id })
+                      send({ event: 'tile:focus-entity', tileId, entityId: entity.id })
                     }
                   }}
                 >

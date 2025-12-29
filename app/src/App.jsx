@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Reorder, AnimatePresence, motion } from 'framer-motion'
 import EntityCard from './components/EntityCard'
 import TerminalContent from './components/TerminalContent'
-import GodTaskCard from './components/GodTaskCard'
-import PaneGroup from './components/PaneGroup'
-import StatusBar from './components/StatusBar'
+import Scroll from './components/Scroll'
+import ScrollGroup from './components/ScrollGroup'
+import LeftWing from './components/LeftWing'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import DevPanel from './components/DevPanel'
@@ -17,7 +17,7 @@ import CemeteryView from './components/CemeteryView'
 import CalendarView from './components/CalendarView'
 import CodeView from './components/CodeView'
 import OracleView from './components/OracleView'
-import SplitLayout from './components/SplitLayout'
+import Surface from './components/Surface'
 import DraggableTypeButton from './components/DraggableTypeButton'
 import RootDropZone from './components/RootDropZone'
 import { DragProvider } from './contexts/DragContext'
@@ -44,14 +44,14 @@ export default function App() {
   const activeTabId = useStore(s => s.activeTabId)
   const entities = useStore(s => s.entities)
   const focusedEntity = useStore(s => s.focusedEntity)
-  const focusedPane = useStore(s => s.focusedPane)
+  const focusedTile = useStore(s => s.focusedTile)
   const layoutMode = useStore(s => s.layoutMode)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const theme = useStore(s => s.theme)
   const godColors = useStore(s => s.godColors)
   const getActiveLayout = useStore(s => s.getActiveLayout)
-  const getActivePanes = useStore(s => s.getActivePanes)
-  const panes = useStore(s => s.panes)
+  const getActiveTiles = useStore(s => s.getActiveTiles)
+  const tiles = useStore(s => s.tiles)
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
@@ -267,16 +267,16 @@ export default function App() {
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   }, [entities, activeTabId])
 
-  // Get panes for active tab with their entities
-  const activePanes = useMemo(() => {
-    const tabPanes = panes[activeTabId] || []
-    return tabPanes.map(pane => ({
-      ...pane,
-      entities: pane.entityIds
+  // Get tiles for active tab with their entities
+  const activeTiles = useMemo(() => {
+    const tabTiles = tiles[activeTabId] || []
+    return tabTiles.map(tile => ({
+      ...tile,
+      entities: tile.entityIds
         .map(id => entities[id])
         .filter(Boolean)  // Filter out any missing entities
     }))
-  }, [panes, activeTabId, entities])
+  }, [tiles, activeTabId, entities])
 
   // Get focused entity object
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
@@ -642,8 +642,8 @@ export default function App() {
 
       {/* Main layout: sidebar + content */}
       <div ref={mainContainerRef} className="flex flex-1 min-h-0">
-        {/* Left sidebar (tabs + services) */}
-        <StatusBar
+        {/* Left Wing (Realms + Powers) */}
+        <LeftWing
           connected={connected}
           send={send}
           tabs={tabs}
@@ -664,14 +664,14 @@ export default function App() {
               {(() => {
                 const activeLayout = getActiveLayout()
 
-                // If we have a layout tree, use SplitLayout
+                // If we have a layout tree, use Surface
                 if (activeLayout) {
                   return (
-                    <SplitLayout
+                    <Surface
                       node={activeLayout}
                       tabId={activeTabId}
                       entities={entities}
-                      focusedPane={focusedPane}
+                      focusedTile={focusedTile}
                       focusedEntity={focusedEntity}
                       containerSize={containerSize}
                     />
@@ -798,18 +798,18 @@ export default function App() {
                       exit={{ y: '-100%' }}
                       transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
                     >
-                      {activePanes.length > 0 ? (
+                      {activeTiles.length > 0 ? (
                         <div className="flex flex-col gap-4">
-                          {activePanes.map((pane) => (
-                            <PaneGroup
-                              key={pane.id}
-                              pane={pane}
-                              entities={pane.entities}
-                              isFocused={pane.id === focusedPane}
-                              focusedEntityId={pane.focusedEntityId}
+                          {activeTiles.map((tile) => (
+                            <ScrollGroup
+                              key={tile.id}
+                              tile={tile}
+                              entities={tile.entities}
+                              isFocused={tile.id === focusedTile}
+                              focusedEntityId={tile.focusedEntityId}
                               onClick={() => {
-                                // Focus the pane and its focused entity
-                                send({ event: 'pane:focus', paneId: pane.id })
+                                // Focus the tile and its focused entity
+                                send({ event: 'tile:focus', tileId: tile.id })
                               }}
                               onClose={(entityId) => handleKillEntity(entityId)}
                               tabs={tabs}
@@ -825,7 +825,7 @@ export default function App() {
                           ))}
                         </div>
                       ) : activeEntities.length > 0 ? (
-                        /* Fallback: no panes data, render flat entity list */
+                        /* Fallback: no tiles data, render flat entity list */
                         <Reorder.Group
                           axis="y"
                           values={activeEntities}
@@ -833,7 +833,7 @@ export default function App() {
                           className="flex flex-col gap-4"
                         >
                           {activeEntities.map((entity) => (
-                            <GodTaskCard
+                            <Scroll
                               key={entity.id}
                               entity={entity}
                               isActive={entity.id === effectiveFocusedEntity}

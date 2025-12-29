@@ -1,15 +1,15 @@
 import { motion } from 'framer-motion'
-import GodTaskCard from './GodTaskCard'
+import Scroll from './Scroll'
 
 /**
- * PaneGroup - Renders a pane's entities as stacked cards
+ * ScrollGroup - Renders a tile's entities as stacked cards
  *
- * Solo pane (1 entity): Renders like a regular GodTaskCard
- * Group pane (2+ entities): Cards stacked with slight Y offset, focused on top
+ * Solo tile (1 entity): Renders like a regular Scroll
+ * Group tile (2+ entities): Cards stacked with slight Y offset, focused on top
  */
-export default function PaneGroup({
-  pane,
-  entities,  // Array of entity objects for this pane
+export default function ScrollGroup({
+  tile,
+  entities,  // Array of entity objects for this tile
   isFocused,
   focusedEntityId,
   onClick,
@@ -24,10 +24,10 @@ export default function PaneGroup({
   const focusedEntity = entities.find(e => e.id === effectiveFocusedId) || entities[0]
   const otherEntities = entities.filter(e => e.id !== effectiveFocusedId)
 
-  // Solo pane - just render a regular GodTaskCard
+  // Solo tile - just render a regular Scroll
   if (entities.length === 1) {
     return (
-      <GodTaskCard
+      <Scroll
         entity={entities[0]}
         isActive={isFocused}
         onClick={onClick}
@@ -41,7 +41,7 @@ export default function PaneGroup({
     )
   }
 
-  // Group pane - render stacked cards with shadow effect
+  // Group tile - render stacked cards with shadow effect
   return (
     <motion.div
       className="relative group"
@@ -76,7 +76,7 @@ export default function PaneGroup({
 
       {/* Focused entity card on top (fully interactive) */}
       <div className="relative" style={{ zIndex: 10 }}>
-        <GodTaskCard
+        <Scroll
           entity={focusedEntity}
           isActive={isFocused}
           onClick={onClick}
@@ -91,7 +91,7 @@ export default function PaneGroup({
         {/* Stack indicator badge */}
         <div
           className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center text-[10px] text-white font-medium"
-          title={`${entities.length} entities in this pane - Ctrl+Up/Down to cycle`}
+          title={`${entities.length} entities in this tile - Ctrl+Up/Down to cycle`}
         >
           {entities.length}
         </div>

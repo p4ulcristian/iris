@@ -26,7 +26,7 @@ export default function RootDropZone({ children, tabId, hasLayout }) {
       onDrop: ({ source }) => {
         const { source: dragSource, entityId, entityType } = source.data
 
-        // Create the first pane with this entity
+        // Create the first tile with this entity
         if (dragSource === 'spawn') {
           send({ event: 'layout:init', tabId, entityType })
         } else if (dragSource === 'move') {
@@ -47,7 +47,7 @@ export default function RootDropZone({ children, tabId, hasLayout }) {
         <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
           <div className="absolute inset-4 border-2 border-dashed border-accent/60 rounded-2xl bg-accent/10" />
           <span className="px-4 py-2 bg-accent/80 text-white text-sm font-medium rounded-full shadow-lg z-10">
-            Drop to create first pane
+            Drop to create first tile
           </span>
         </div>
       )}

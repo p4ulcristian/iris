@@ -70,13 +70,13 @@ function TypeIcon({ type, size = 'sm' }) {
   }
 }
 
-export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
+export default function Scroll({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const [isSummoning, setIsSummoning] = useState(true)
-  const [isPaneDragging, setIsPaneDragging] = useState(false)
+  const [isTileDragging, setIsTileDragging] = useState(false)
   const moveMenuRef = useRef(null)
   const cardRef = useRef(null)
   const dragControls = useDragControls()
@@ -87,7 +87,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
     return () => clearTimeout(timer)
   }, [])
 
-  // Setup pragmatic drag for entire card (pane-level drag)
+  // Setup pragmatic drag for entire card (tile-level drag)
   useEffect(() => {
     const el = cardRef.current
     if (!el) return
@@ -105,8 +105,8 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
         entityId: id,
         entityType: type
       }),
-      onDragStart: () => setIsPaneDragging(true),
-      onDrop: () => setIsPaneDragging(false)
+      onDragStart: () => setIsTileDragging(true),
+      onDrop: () => setIsTileDragging(false)
     })
 
     return () => cleanup()
@@ -194,11 +194,11 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
 
   return (
     <Wrapper {...wrapperProps}>
-      {/* Draggable card wrapper for pane splitting */}
+      {/* Draggable card wrapper for tile splitting */}
       <div
         ref={cardRef}
         onClick={onClick}
-        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isPaneDragging ? 'opacity-50' : ''}`}
+        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isTileDragging ? 'opacity-50' : ''}`}
         style={{
           '--god-color': entityColor,
           '--god-color-rgb': hexToRgbCss(entityColor),

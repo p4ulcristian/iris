@@ -30,7 +30,7 @@ const initialState = {
 
   // UI state
   focusedEntity: null,
-  focusedPane: null,  // For multi-pane layouts
+  focusedTile: null,  // For multi-tile layouts
   layoutMode: 'auto',
   devPanelOpen: false,
 
@@ -57,8 +57,8 @@ const initialState = {
   // Browser URL (from skill)
   browserUrl: null,
 
-  // Panes per tab - extracted from layout tree by server
-  panes: {},  // { [tabId]: [{ id, entityIds, focusedEntityId }, ...] }
+  // Tiles per tab - extracted from layout tree by server
+  tiles: {},  // { [tabId]: [{ id, entityIds, focusedEntityId }, ...] }
 }
 
 // Store
@@ -292,22 +292,22 @@ export const useStore = create(
       },
 
       // Check if current tab has a split layout
-      hasMultiplePanes: () => {
+      hasMultipleTiles: () => {
         const state = get()
         const tab = state.tabs.find(t => t.id === state.activeTabId)
         return tab?.layout?.type === 'split'
       },
 
-      // Get panes for active tab
-      getActivePanes: () => {
+      // Get tiles for active tab
+      getActiveTiles: () => {
         const state = get()
-        return state.panes[state.activeTabId] || []
+        return state.tiles[state.activeTabId] || []
       },
 
-      // Get panes for a specific tab
-      getPanesForTab: (tabId) => {
+      // Get tiles for a specific tab
+      getTilesForTab: (tabId) => {
         const state = get()
-        return state.panes[tabId] || []
+        return state.tiles[tabId] || []
       },
 
       // ============ SYNC FROM SERVER ============
@@ -353,12 +353,12 @@ export const useStore = create(
           state.godColors = serverState.godColors
         }
 
-        // Sync focusedEntity and focusedPane from server
+        // Sync focusedEntity and focusedTile from server
         if (serverState.focusedEntity !== undefined) {
           state.focusedEntity = serverState.focusedEntity
         }
-        if (serverState.focusedPane !== undefined) {
-          state.focusedPane = serverState.focusedPane
+        if (serverState.focusedTile !== undefined) {
+          state.focusedTile = serverState.focusedTile
         }
 
         // Sync git projects
@@ -381,9 +381,9 @@ export const useStore = create(
           state.codeHighlights = serverState.codeHighlights
         }
 
-        // Sync panes
-        if (serverState.panes !== undefined) {
-          state.panes = serverState.panes
+        // Sync tiles
+        if (serverState.tiles !== undefined) {
+          state.tiles = serverState.tiles
         }
       }),
 

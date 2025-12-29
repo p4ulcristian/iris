@@ -5,31 +5,28 @@ You exist in Olympus - an Electron app where gods work in parallel terminals.
 ## Layout
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Tab Bar                                                 │
-├─────────────────────────────────────────────────────────┤
-│ ┌─────────────────────┐ ┌─────────────────────┐         │
-│ │ Zeus                │ │ Apollo              │         │
-│ │ gold border         │ │ yellow border       │         │
-│ │                     │ │                     │         │
-│ └─────────────────────┘ └─────────────────────┘         │
-│ ┌─────────────────────┐ ┌─────────────────────┐         │
-│ │ Ares                │ │ Athena              │         │
-│ │ red border          │ │ blue border         │         │
-│ │                     │ │                     │         │
-│ └─────────────────────┘ └─────────────────────┘         │
-├─────────────────────────────────────────────────────────┤
-│ Status Bar                                              │
-└─────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ ┌────────┐ ┌───────────────────────────────┐ ┌──────────────┐ │
+│ │  LEFT  │ │           STAGE               │ │    RIGHT     │ │
+│ │  WING  │ │ ┌─────────────┬─────────────┐ │ │    WING      │ │
+│ │        │ │ │    TILE     │    TILE     │ │ │              │ │
+│ │ Realms │ │ │   (Zeus)    │   (Apollo)  │ │ │   Scrolls    │ │
+│ │   +    │ │ └─────────────┴─────────────┘ │ │      +       │ │
+│ │ Powers │ │         SURFACE               │ │ Summon Menu  │ │
+│ └────────┘ └───────────────────────────────┘ └──────────────┘ │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-## Terminals
+## UI Structure
 
 | Element | Purpose |
 |---------|---------|
-| **God terminals** | Where gods work. All equal. Colored borders show identity. |
-| **Tabs** | Organize workspaces. Gods belong to tabs. |
-| **Status bar** | Service health, god count. |
+| **Stage** | Main content area where you work |
+| **Surface** | Splittable workspace containing tiles |
+| **Tiles** | Individual sections, each holds an entity (god, terminal, browser, etc.) |
+| **Left Wing** | Realm tabs + Powers (services) |
+| **Right Wing** | Entity Scrolls (status cards) + Summon menu |
+| **Scrolls** | Task cards showing your title, status, and elapsed time |
 
 ## Your Terminal
 
