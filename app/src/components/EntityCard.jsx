@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faRobot } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
@@ -11,6 +11,7 @@ import linearIcon from '../assets/icons/linear.png'
 import gitIcon from '../assets/icons/git.png'
 import nvimIcon from '../assets/icons/nvim.png'
 import browserIcon from '../assets/icons/browser.png'
+import vscodeIcon from '../assets/icons/vscode.svg'
 
 // Convert hex to RGB for CSS (comma-separated)
 function hexToRgbCss(hex) {
@@ -60,11 +61,11 @@ function TypeIcon({ type, size = 'sm' }) {
     case 'cemetery':
       return <FontAwesomeIcon icon={faSkull} className={faIconClass} size={faSize} />
     case 'code':
-      return <FontAwesomeIcon icon={faCode} className={faIconClass} size={faSize} />
+      return <img src={vscodeIcon} alt="Code" className={iconClass} />
     case 'calendar':
       return <FontAwesomeIcon icon={faCalendar} className={faIconClass} size={faSize} />
     case 'oracle':
-      return <span className={size === 'sm' ? 'text-sm' : 'text-lg'}>🔮</span>
+      return <FontAwesomeIcon icon={faRobot} className={faIconClass} size={faSize} />
     default:
       return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size={faSize} />
   }

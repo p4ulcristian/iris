@@ -26,7 +26,7 @@ import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faCode, faGlobe, faClockRotateLeft, faGear, faSkull, faPlus, faCalendar, faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faChevronLeft, faChevronRight, faRobot } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from './assets/icons/claude.png'
@@ -34,6 +34,7 @@ import linearIcon from './assets/icons/linear.png'
 import gitIcon from './assets/icons/git.png'
 import nvimIcon from './assets/icons/nvim.png'
 import browserIcon from './assets/icons/browser.png'
+import vscodeIcon from './assets/icons/vscode.svg'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -1003,7 +1004,7 @@ export default function App() {
                               />
                               <DraggableTypeButton
                                 entityType="oracle"
-                                iconComponent={<span className="text-sm">🔮</span>}
+                                icon={faRobot}
                                 title="Oracle (Local LLM) - drag to split"
                                 onClick={() => handleSpawnEntity('oracle')}
                               />
@@ -1070,7 +1071,7 @@ export default function App() {
                         />
                         <DraggableTypeButton
                           entityType="code"
-                          icon={faCode}
+                          iconComponent={<img src={vscodeIcon} alt="Code" className="w-4 h-4 object-contain" />}
                           title="Code viewer - drag to split"
                           onClick={() => handleSpawnEntity('code')}
                         />

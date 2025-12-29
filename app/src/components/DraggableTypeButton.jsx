@@ -1,6 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 
 /**
@@ -47,25 +46,16 @@ export default function DraggableTypeButton({
       ref={ref}
       onClick={onClick}
       className={`
-        group relative btn btn-glass btn-icon btn-icon-md
+        btn btn-glass btn-icon btn-icon-md
         cursor-grab active:cursor-grabbing
         ${isDragging ? 'opacity-50' : ''}
       `}
       style={{ touchAction: 'none' }}
       title={title}
     >
-      {/* Icon (normal state) */}
-      <span className="group-hover:opacity-0 transition-opacity duration-150">
-        {iconComponent || (
-          <FontAwesomeIcon icon={icon} className="text-sm" />
-        )}
-      </span>
-
-      {/* Plus icon (hover state) */}
-      <FontAwesomeIcon
-        icon={faPlus}
-        className="absolute text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-      />
+      {iconComponent || (
+        <FontAwesomeIcon icon={icon} className="text-sm" />
+      )}
     </button>
   )
 }
