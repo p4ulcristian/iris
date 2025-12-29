@@ -94,6 +94,12 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
 
     const cleanup = draggable({
       element: el,
+      // Don't start drag if clicking on the reorder grip handle
+      canDrag: ({ input }) => {
+        const target = input.target
+        // Check if target or parent has the reorder-handle data attribute
+        return !target?.closest?.('[data-reorder-handle]')
+      },
       getInitialData: () => ({
         source: 'move',
         entityId: id,
@@ -202,6 +208,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
       <div className="flex items-center h-8 px-3 gap-2">
         {/* Drag handle for reorder */}
         <div
+          data-reorder-handle
           onPointerDown={(e) => {
             e.stopPropagation()
             dragControls.start(e)

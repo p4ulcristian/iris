@@ -207,25 +207,58 @@ export function addEntityToPane(layout, paneId, entityId) {
 
 /**
  * Remove an entity from any pane in the layout
- * Returns a new layout tree (immutable)
+ * If the pane becomes empty, it's automatically collapsed (sibling takes over)
+ * Returns a new layout tree (immutable) - never contains empty panes
  */
 export function removeEntityFromLayout(layout, entityId) {
   if (!layout) return layout
 
-  const cloned = JSON.parse(JSON.stringify(layout))
-  const pane = findPaneByEntity(cloned, entityId)
+  // Recursive removal that collapses empty panes atomically
+  function removeAndCollapse(node, parent, childIndex) {
+    if (node.type === 'pane') {
+      if (!node.entityIds.includes(entityId)) {
+        return node // Entity not here, keep as-is
+      }
 
-  if (!pane) return cloned
+      // Remove the entity
+      const newEntityIds = node.entityIds.filter(id => id !== entityId)
 
-  // Remove entity from pane
-  pane.entityIds = pane.entityIds.filter(id => id !== entityId)
+      if (newEntityIds.length > 0) {
+        // Pane still has entities - return updated pane
+        return {
+          ...node,
+          entityIds: newEntityIds,
+          focusedEntityId: node.focusedEntityId === entityId
+            ? newEntityIds[0]
+            : node.focusedEntityId
+        }
+      } else {
+        // Pane is now empty - return null to signal collapse
+        return null
+      }
+    }
 
-  // Update focus if necessary
-  if (pane.focusedEntityId === entityId) {
-    pane.focusedEntityId = pane.entityIds[0] || null
+    if (node.type === 'split') {
+      // Process children
+      const newChildren = node.children.map((child, idx) =>
+        removeAndCollapse(child, node, idx)
+      )
+
+      // If either child is null (was emptied), return the other
+      if (newChildren[0] === null) return newChildren[1]
+      if (newChildren[1] === null) return newChildren[0]
+
+      // Both children exist - return updated split
+      return { ...node, children: newChildren }
+    }
+
+    return node
   }
 
-  return cloned
+  const result = removeAndCollapse(JSON.parse(JSON.stringify(layout)), null, -1)
+
+  // If entire layout collapsed to null, return null
+  return result
 }
 
 /**
@@ -318,43 +351,6 @@ export function setFocusedEntityInPane(layout, paneId, entityId) {
   }
 
   return cloned
-}
-
-/**
- * Clean up empty panes and unnecessary splits
- * Returns a new layout tree (immutable)
- */
-export function cleanupLayout(layout) {
-  if (!layout) return null
-
-  if (layout.type === 'pane') {
-    // Keep panes even if empty (they can receive drops)
-    return layout
-  }
-
-  if (layout.type === 'split') {
-    // Recursively clean children
-    const cleanedChildren = layout.children.map(child => cleanupLayout(child))
-
-    // If either child is null, return the other
-    if (!cleanedChildren[0]) return cleanedChildren[1]
-    if (!cleanedChildren[1]) return cleanedChildren[0]
-
-    // If both children are panes with no entities, merge into one
-    if (cleanedChildren[0].type === 'pane' &&
-        cleanedChildren[1].type === 'pane' &&
-        cleanedChildren[0].entityIds.length === 0 &&
-        cleanedChildren[1].entityIds.length === 0) {
-      return cleanedChildren[0]
-    }
-
-    return {
-      ...layout,
-      children: cleanedChildren
-    }
-  }
-
-  return layout
 }
 
 /**

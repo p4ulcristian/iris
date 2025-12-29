@@ -97,7 +97,21 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           sessionId: god.sessionId || null
         }
-        // Auto-focus new god
+
+        // Add to layout
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          if (!tab.layout) {
+            tab.layout = layout.createPane([god.name], god.name)
+          } else {
+            const firstPane = layout.getFirstPane(tab.layout)
+            if (firstPane) {
+              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
+            }
+          }
+          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+        }
+
         appState.focusedEntity = god.name
         saveState()
         broadcastState()
@@ -124,7 +138,21 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           color: terminal.color
         }
-        // Auto-focus new terminal
+
+        // Add to layout
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          if (!tab.layout) {
+            tab.layout = layout.createPane([terminal.name], terminal.name)
+          } else {
+            const firstPane = layout.getFirstPane(tab.layout)
+            if (firstPane) {
+              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, terminal.name)
+            }
+          }
+          appState.focusedPane = layout.findPaneByEntity(tab.layout, terminal.name)?.id || null
+        }
+
         appState.focusedEntity = terminal.name
         saveState()
         broadcastState()
@@ -158,8 +186,12 @@ export function handleMessage(ws, msg, projectRoot) {
 
       delete appState.entities[entityId]
 
-      // Normalize order for remaining entities in the tab
+      // Remove from layout (automatically collapses empty panes)
       if (entityTabId) {
+        const tab = appState.tabs.find(t => t.id === entityTabId)
+        if (tab?.layout) {
+          tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+        }
         normalizeTabOrder(entityTabId)
       }
 
@@ -436,6 +468,20 @@ export function handleMessage(ws, msg, projectRoot) {
         project: data.project || null
       }
 
+      // Add to layout
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (tab) {
+        if (!tab.layout) {
+          tab.layout = layout.createPane([entityId], entityId)
+        } else {
+          const firstPane = layout.getFirstPane(tab.layout)
+          if (firstPane) {
+            tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, entityId)
+          }
+        }
+        appState.focusedPane = layout.findPaneByEntity(tab.layout, entityId)?.id || null
+      }
+
       appState.focusedEntity = entityId
       saveState()
       broadcastState()
@@ -457,6 +503,19 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'focus:set': {
       const entityId = data.entityId || data.godName
       appState.focusedEntity = entityId || null
+
+      // Also update the pane's focusedEntityId in the layout
+      if (entityId) {
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab?.layout) {
+          const pane = layout.findPaneByEntity(tab.layout, entityId)
+          if (pane) {
+            tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, entityId)
+            appState.focusedPane = pane.id
+          }
+        }
+      }
+
       saveState()
       broadcastState()
       break
@@ -479,7 +538,19 @@ export function handleMessage(ws, msg, projectRoot) {
         newIdx = currentIdx < 0 ? entitiesInTab.length - 1 : (currentIdx - 1 + entitiesInTab.length) % entitiesInTab.length
       }
 
-      appState.focusedEntity = entitiesInTab[newIdx][0]
+      const newEntityId = entitiesInTab[newIdx][0]
+      appState.focusedEntity = newEntityId
+
+      // Also update the pane's focusedEntityId in the layout
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (tab?.layout) {
+        const pane = layout.findPaneByEntity(tab.layout, newEntityId)
+        if (pane) {
+          tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, newEntityId)
+          appState.focusedPane = pane.id
+        }
+      }
+
       saveState()
       broadcastState()
       break
@@ -551,6 +622,21 @@ export function handleMessage(ws, msg, projectRoot) {
           mission: data.summary || null,
           spawnedAt: Date.now()
         }
+
+        // Add to layout
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          if (!tab.layout) {
+            tab.layout = layout.createPane([god.name], god.name)
+          } else {
+            const firstPane = layout.getFirstPane(tab.layout)
+            if (firstPane) {
+              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
+            }
+          }
+          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+        }
+
         appState.focusedEntity = god.name
         saveState()
         broadcastState()
@@ -1069,6 +1155,21 @@ export function handleMessage(ws, msg, projectRoot) {
           title: title || null,
           sessionId: sessionId  // Preserve sessionId for re-banish
         }
+
+        // Add to layout
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          if (!tab.layout) {
+            tab.layout = layout.createPane([god.name], god.name)
+          } else {
+            const firstPane = layout.getFirstPane(tab.layout)
+            if (firstPane) {
+              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, god.name)
+            }
+          }
+          appState.focusedPane = layout.findPaneByEntity(tab.layout, god.name)?.id || null
+        }
+
         appState.focusedEntity = god.name
 
         // Remove from cemetery
@@ -1129,6 +1230,20 @@ export function handleMessage(ws, msg, projectRoot) {
         }
         codeEntity = appState.entities[newId]
         isNewEntity = true
+
+        // Add to layout
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          if (!tab.layout) {
+            tab.layout = layout.createPane([newId], newId)
+          } else {
+            const firstPane = layout.getFirstPane(tab.layout)
+            if (firstPane) {
+              tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, newId)
+            }
+          }
+          appState.focusedPane = layout.findPaneByEntity(tab.layout, newId)?.id || null
+        }
       }
 
       // Store pending file in entity (for new entities, CodeView will load on mount)
@@ -1300,12 +1415,18 @@ export function handleMessage(ws, msg, projectRoot) {
       }
 
       // If moving an existing entity, remove it from its current pane first
+      // (removeEntityFromLayout automatically collapses empty panes)
       if (entityId && tab.layout) {
         tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
       }
 
-      // Split the pane
-      tab.layout = layout.splitPane(tab.layout, paneId, direction, position, targetEntityId)
+      // Split the pane (if layout still exists after removal)
+      if (tab.layout) {
+        tab.layout = layout.splitPane(tab.layout, paneId, direction, position, targetEntityId)
+      } else {
+        // Layout was fully cleaned - create fresh with just this entity
+        tab.layout = layout.createPane([targetEntityId])
+      }
 
       // Focus the new pane and entity
       const newPane = layout.findPaneByEntity(tab.layout, targetEntityId)
@@ -1326,9 +1447,6 @@ export function handleMessage(ws, msg, projectRoot) {
 
       const { layout: newLayout, mergedEntityIds } = layout.mergePane(tab.layout, paneId)
       tab.layout = newLayout
-
-      // Clean up any orphaned structure
-      tab.layout = layout.cleanupLayout(tab.layout)
 
       // Update focused pane if it was merged
       if (appState.focusedPane === paneId) {
@@ -1446,6 +1564,9 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now()
         }
         targetEntityId = newId
+      } else if (entityId) {
+        // Moving existing entity - remove from current pane first
+        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
       }
 
       // Add to pane

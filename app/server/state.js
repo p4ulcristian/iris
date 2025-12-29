@@ -2,6 +2,7 @@ import fs from 'fs'
 import { STATE_FILE } from './config.js'
 import { GOD_COLORS } from '../src/themes/generated/palettes.js'
 import { listGodSockets } from './gods.js'
+import * as layout from './layout.js'
 
 // Broadcast function - set by index.js
 let broadcastFn = null
@@ -151,6 +152,42 @@ export function loadState() {
   appState.tabs.forEach(tab => {
     if (tab.layout === undefined) {
       tab.layout = null  // null means use flat entity list (legacy mode)
+    }
+  })
+
+  // Validate layouts: remove references to non-existent entities
+  // (removeEntityFromLayout auto-collapses empty panes)
+  const existingEntityIds = new Set(Object.keys(appState.entities))
+  appState.tabs.forEach(tab => {
+    if (tab.layout) {
+      const layoutEntityIds = layout.getAllEntityIds(tab.layout)
+      for (const entityId of layoutEntityIds) {
+        if (!existingEntityIds.has(entityId)) {
+          tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+        }
+      }
+    }
+  })
+
+  // Ensure all entities are in a pane (add orphans to first pane of their tab)
+  Object.values(appState.entities).forEach(entity => {
+    const tab = appState.tabs.find(t => t.id === entity.tabId)
+    if (!tab) return
+
+    // Initialize layout if null
+    if (!tab.layout) {
+      tab.layout = layout.createPane([entity.id], entity.id)
+      return
+    }
+
+    // Check if entity is in any pane
+    const pane = layout.findPaneByEntity(tab.layout, entity.id)
+    if (!pane) {
+      // Add to first pane
+      const firstPane = layout.getFirstPane(tab.layout)
+      if (firstPane) {
+        tab.layout = layout.addEntityToPane(tab.layout, firstPane.id, entity.id)
+      }
     }
   })
 
