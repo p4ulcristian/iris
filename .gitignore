@@ -1,9 +1,25 @@
+# Secrets and personal data
 secrets/
 shadows/
+memory/
+.env
+.env.*
+
+# Editor/IDE
 .clj-kondo/
 .lsp/
+.vscode/
+.idea/
+
+# Python
 *.pyc
 __pycache__/
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Wake word training
 brain/wake/train/samples/
