@@ -16,6 +16,10 @@ import CemeteryView from './components/CemeteryView'
 import CalendarView from './components/CalendarView'
 import CodeView from './components/CodeView'
 import OracleView from './components/OracleView'
+import SplitLayout from './components/SplitLayout'
+import DraggableTypeButton from './components/DraggableTypeButton'
+import RootDropZone from './components/RootDropZone'
+import { DragProvider } from './contexts/DragContext'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { withViewTransition } from './hooks/useViewTransition'
@@ -39,11 +43,13 @@ export default function App() {
   const activeTabId = useStore(s => s.activeTabId)
   const entities = useStore(s => s.entities)
   const focusedEntity = useStore(s => s.focusedEntity)
+  const focusedPane = useStore(s => s.focusedPane)
   const fullscreenEntity = useStore(s => s.fullscreenEntity)
   const layoutMode = useStore(s => s.layoutMode)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const theme = useStore(s => s.theme)
   const godColors = useStore(s => s.godColors)
+  const getActiveLayout = useStore(s => s.getActiveLayout)
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
@@ -75,6 +81,7 @@ export default function App() {
   const [sidebarShowIcons, setSidebarShowIcons] = useState(getInitialSidebarState)
   const [sidebarShowButtons, setSidebarShowButtons] = useState(() => !getInitialSidebarState())
   const [sidebarAutoMode, setSidebarAutoMode] = useState(true) // Track if user manually toggled
+  const sidebarAutoModeRef = useRef(true) // Ref for stable access in callbacks
   const [sidebarButtonsExpanded, setSidebarButtonsExpanded] = useState(false) // Hover expand for extra buttons
 
   // Sidebar animation timing (in ms)
@@ -91,6 +98,7 @@ export default function App() {
     // If manual toggle, disable auto mode
     if (!auto) {
       setSidebarAutoMode(false)
+      sidebarAutoModeRef.current = false
     }
 
     // Prevent re-triggering during animation
@@ -129,20 +137,22 @@ export default function App() {
   // Auto-collapse sidebar based on container size (works with dev tools too)
   const mainContainerRef = useRef(null)
   const sidebarObserverRef = useRef(null)
+  const sidebarCollapsedRef = useRef(sidebarCollapsed)
+  sidebarCollapsedRef.current = sidebarCollapsed
 
   useEffect(() => {
-    if (!sidebarAutoMode || !mainContainerRef.current) return
+    if (!mainContainerRef.current) return
 
     let resizeTimeout
     const handleResize = (entries) => {
       clearTimeout(resizeTimeout)
       resizeTimeout = setTimeout(() => {
-        // Skip if animation is in progress
-        if (sidebarAnimatingRef.current) return
+        // Skip if auto mode is disabled or animation is in progress
+        if (!sidebarAutoModeRef.current || sidebarAnimatingRef.current) return
 
         const width = entries[0]?.contentRect?.width || window.innerWidth
         const shouldCollapse = width < SIDEBAR_BREAKPOINT
-        if (shouldCollapse !== sidebarCollapsed) {
+        if (shouldCollapse !== sidebarCollapsedRef.current) {
           handleSidebarToggle(true) // true = auto toggle
         }
       }, 150) // Debounce
@@ -157,7 +167,7 @@ export default function App() {
         sidebarObserverRef.current.disconnect()
       }
     }
-  }, [sidebarAutoMode, sidebarCollapsed, handleSidebarToggle])
+  }, [handleSidebarToggle])
 
   // Refs for keyboard handlers (avoid stale closures)
   const tabsRef = useRef(tabs)
@@ -618,6 +628,7 @@ export default function App() {
   const effectiveFocusedType = effectiveFocusedEntityObj?.type || null
 
   return (
+    <DragProvider>
     <div className={`flex flex-col h-screen theme-${theme}`}>
       {/* Animated wallpaper - uses theme colors */}
       <div className="wallpaper">
@@ -649,94 +660,118 @@ export default function App() {
           <div className="flex gap-3 h-full">
             {/* Main focused entity area */}
             <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full" style={{ perspective: '1200px' }}>
-              {activeEntities.length === 0 ? (
-                /* Empty state */
-                <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-                  <p className="text-base">No entities</p>
-                  <p className="text-sm opacity-70">
-                    Press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
-                  </p>
-                </div>
-              ) : (
-                /* Render all entities with EntityCard wrapper */
-                <AnimatePresence mode="popLayout">
-                  {activeEntities.map(entity => {
-                    const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
-                    const style = getStackStyle(position)
+              <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
+              {(() => {
+                const activeLayout = getActiveLayout()
 
-                    return (
-                      <motion.div
-                        key={entity.id}
-                        initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
-                        animate={{
-                          y: style.y,
-                          rotateX: style.rotateX,
-                          scale: style.scale,
-                          opacity: style.opacity,
-                          zIndex: style.zIndex,
-                        }}
-                        exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 250,
-                          damping: 25,
-                          opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
-                        }}
-                        className="absolute inset-0"
-                        style={{
-                          pointerEvents: style.pointerEvents,
-                          transformOrigin: 'center center',
-                        }}
-                      >
-                        {containerSize && (
-                          <EntityCard
-                            entity={entity}
-                            isFocused={position === 0}
-                            onClick={() => handleSetFocus(entity.id)}
-                          >
-                            {/* Render content based on entity type */}
-                            {(entity.type === 'god' || entity.type === 'terminal') && (
-                              <TerminalContent
-                                entity={entity}
-                                isFocused={position === 0}
-                                expectedWidth={containerSize.width}
-                                expectedHeight={containerSize.height}
-                              />
-                            )}
-                            {entity.type === 'browser' && (
-                              <BrowserView entityId={entity.id} />
-                            )}
-                            {entity.type === 'history' && (
-                              <HistoryView send={send} />
-                            )}
-                            {entity.type === 'git' && (
-                              <GitView send={send} />
-                            )}
-                            {entity.type === 'linear' && (
-                              <LinearView send={send} />
-                            )}
-                            {entity.type === 'settings' && (
-                              <SettingsView send={send} />
-                            )}
-                            {entity.type === 'cemetery' && (
-                              <CemeteryView send={send} />
-                            )}
-                            {entity.type === 'calendar' && (
-                              <CalendarView send={send} />
-                            )}
-                            {entity.type === 'code' && (
-                              <CodeView entityId={entity.id} />
-                            )}
-                            {entity.type === 'oracle' && (
-                              <OracleView entityId={entity.id} />
-                            )}
-                          </EntityCard>
-                        )}
-                      </motion.div>
-                    )
-                  })}
-                </AnimatePresence>
-              )}
+                // If we have a layout tree, use SplitLayout
+                if (activeLayout) {
+                  return (
+                    <SplitLayout
+                      node={activeLayout}
+                      tabId={activeTabId}
+                      entities={entities}
+                      focusedPane={focusedPane}
+                      focusedEntity={focusedEntity}
+                      containerSize={containerSize}
+                    />
+                  )
+                }
+
+                // Legacy mode: no layout tree, render flat entity list
+                if (activeEntities.length === 0) {
+                  return (
+                    <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
+                      <p className="text-base">No entities</p>
+                      <p className="text-sm opacity-70">
+                        Drag an entity here or press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
+                      </p>
+                    </div>
+                  )
+                }
+
+                // Legacy entity stack rendering
+                return (
+                  <AnimatePresence mode="popLayout">
+                    {activeEntities.map(entity => {
+                      const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
+                      const style = getStackStyle(position)
+
+                      return (
+                        <motion.div
+                          key={entity.id}
+                          initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
+                          animate={{
+                            y: style.y,
+                            rotateX: style.rotateX,
+                            scale: style.scale,
+                            opacity: style.opacity,
+                            zIndex: style.zIndex,
+                          }}
+                          exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
+                          transition={{
+                            type: 'spring',
+                            stiffness: 250,
+                            damping: 25,
+                            opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
+                          }}
+                          className="absolute inset-0"
+                          style={{
+                            pointerEvents: style.pointerEvents,
+                            transformOrigin: 'center center',
+                          }}
+                        >
+                          {containerSize && (
+                            <EntityCard
+                              entity={entity}
+                              isFocused={position === 0}
+                              onClick={() => handleSetFocus(entity.id)}
+                            >
+                              {/* Render content based on entity type */}
+                              {(entity.type === 'god' || entity.type === 'terminal') && (
+                                <TerminalContent
+                                  entity={entity}
+                                  isFocused={position === 0}
+                                  expectedWidth={containerSize.width}
+                                  expectedHeight={containerSize.height}
+                                />
+                              )}
+                              {entity.type === 'browser' && (
+                                <BrowserView entityId={entity.id} />
+                              )}
+                              {entity.type === 'history' && (
+                                <HistoryView send={send} />
+                              )}
+                              {entity.type === 'git' && (
+                                <GitView send={send} />
+                              )}
+                              {entity.type === 'linear' && (
+                                <LinearView send={send} />
+                              )}
+                              {entity.type === 'settings' && (
+                                <SettingsView send={send} />
+                              )}
+                              {entity.type === 'cemetery' && (
+                                <CemeteryView send={send} />
+                              )}
+                              {entity.type === 'calendar' && (
+                                <CalendarView send={send} />
+                              )}
+                              {entity.type === 'code' && (
+                                <CodeView entityId={entity.id} />
+                              )}
+                              {entity.type === 'oracle' && (
+                                <OracleView entityId={entity.id} />
+                              )}
+                            </EntityCard>
+                          )}
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                )
+              })()}
+              </RootDropZone>
             </div>
 
             {/* Sidebar with all entities as task cards */}
@@ -887,84 +922,66 @@ export default function App() {
                           >
                             {/* Row 3: Settings, Cemetery, Oracle */}
                             <div className="flex gap-1.5">
-                              <button
+                              <DraggableTypeButton
+                                entityType="settings"
+                                icon={faGear}
+                                title="Settings - drag to split"
                                 onClick={() => handleSpawnEntity('settings')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="Settings"
-                              >
-                                <FontAwesomeIcon icon={faGear} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="cemetery"
+                                icon={faSkull}
+                                title="Cemetery - drag to split"
                                 onClick={() => handleSpawnEntity('cemetery')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="Cemetery"
-                              >
-                                <FontAwesomeIcon icon={faSkull} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="oracle"
+                                iconComponent={<span className="text-sm">🔮</span>}
+                                title="Oracle (Local LLM) - drag to split"
                                 onClick={() => handleSpawnEntity('oracle')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="Oracle (Local LLM)"
-                              >
-                                <span className="w-4 h-4 flex items-center justify-center group-hover:opacity-0 transition-opacity duration-150">🔮</span>
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
+                              />
                             </div>
                             {/* Row 2: Calendar, Git, History */}
                             <div className="flex gap-1.5">
-                              <button
+                              <DraggableTypeButton
+                                entityType="calendar"
+                                icon={faCalendar}
+                                title="Calendar - drag to split"
                                 onClick={() => handleSpawnEntity('calendar')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="Calendar"
-                              >
-                                <FontAwesomeIcon icon={faCalendar} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="git"
+                                iconComponent={<img src={gitIcon} alt="Git" className="w-4 h-4 object-contain" />}
+                                title="Git - drag to split"
                                 onClick={() => handleSpawnEntity('git')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="Git"
-                              >
-                                <img src={gitIcon} alt="Git" className="w-4 h-4 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="history"
+                                icon={faClockRotateLeft}
+                                title="History - drag to split"
                                 onClick={() => handleSpawnEntity('history')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="History"
-                              >
-                                <FontAwesomeIcon icon={faClockRotateLeft} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
+                              />
                             </div>
                             {/* Row 1: Terminal, Nvim, Browser */}
                             <div className="flex gap-1.5">
-                              <button
+                              <DraggableTypeButton
+                                entityType="terminal"
+                                icon={faTerminal}
+                                title="New terminal (Ctrl+R) - drag to split"
                                 onClick={handleSpawnTerminal}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="New terminal (Ctrl+R)"
-                              >
-                                <FontAwesomeIcon icon={faTerminal} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="nvim"
+                                iconComponent={<img src={nvimIcon} alt="Nvim" className="w-4 h-4 object-contain" />}
+                                title="New nvim - drag to split"
                                 onClick={() => send({ event: 'nvim:spawn' })}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="New nvim"
-                              >
-                                <img src={nvimIcon} alt="Nvim" className="w-4 h-4 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
-                              <button
+                              />
+                              <DraggableTypeButton
+                                entityType="browser"
+                                iconComponent={<img src={browserIcon} alt="Browser" className="w-4 h-4 object-contain" />}
+                                title="New browser - drag to split"
                                 onClick={() => handleSpawnEntity('browser')}
-                                className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                                title="New browser"
-                              >
-                                <img src={browserIcon} alt="Browser" className="w-4 h-4 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                                <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                              </button>
+                              />
                             </div>
                           </motion.div>
                         )}
@@ -972,30 +989,24 @@ export default function App() {
 
                       {/* Favorites row */}
                       <div className="flex gap-1.5 p-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
-                        <button
+                        <DraggableTypeButton
+                          entityType="god"
+                          iconComponent={<img src={claudeIcon} alt="Claude" className="w-4 h-4 object-contain" />}
+                          title="New god (Ctrl+N) - drag to split"
                           onClick={() => setSummonModalOpen(true)}
-                          className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                          title="New god (Ctrl+N)"
-                        >
-                          <img src={claudeIcon} alt="Claude" className="w-4 h-4 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                          <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                        </button>
-                        <button
+                        />
+                        <DraggableTypeButton
+                          entityType="linear"
+                          iconComponent={<img src={linearIcon} alt="Linear" className="w-4 h-4 object-contain" />}
+                          title="Linear - drag to split"
                           onClick={() => handleSpawnEntity('linear')}
-                          className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                          title="Linear"
-                        >
-                          <img src={linearIcon} alt="Linear" className="w-4 h-4 object-contain group-hover:opacity-0 transition-opacity duration-150" />
-                          <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                        </button>
-                        <button
+                        />
+                        <DraggableTypeButton
+                          entityType="code"
+                          icon={faCode}
+                          title="Code viewer - drag to split"
                           onClick={() => handleSpawnEntity('code')}
-                          className="group relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 border border-white/10 text-white/80 hover:bg-white/15 hover:text-white transition-all cursor-pointer"
-                          title="Code viewer"
-                        >
-                          <FontAwesomeIcon icon={faCode} className="w-4 h-4 group-hover:opacity-0 transition-opacity duration-150" />
-                          <FontAwesomeIcon icon={faPlus} className="absolute w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150" />
-                        </button>
+                        />
                       </div>
                     </motion.div>
                   )}
@@ -1048,5 +1059,6 @@ export default function App() {
       {/* Dev panel */}
       <DevPanel />
     </div>
+    </DragProvider>
   )
 }

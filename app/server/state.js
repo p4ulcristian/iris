@@ -16,14 +16,17 @@ export function broadcast(event, data = {}) {
 
 // App state (source of truth)
 export const appState = {
-  version: 2,
-  tabs: [{ id: 1, name: 'Olympus' }],
+  version: 3,
+  tabs: [{ id: 1, name: 'Olympus', layout: null }],  // layout: LayoutNode | null
   activeTabId: 1,
   tabCounter: 1,
   entities: {},           // All entities: gods, terminals, browsers, git panels, etc.
   entityCounter: 0,       // For generating unique IDs
+  paneCounter: 0,         // For generating unique pane IDs
+  splitCounter: 0,        // For generating unique split IDs
   theme: 'divine-void',
   focusedEntity: null,    // ID of focused entity
+  focusedPane: null,      // ID of focused pane (for multi-pane layouts)
   gitProjects: [],        // [{path, name}]
   cemetery: [],           // Fallen gods: [{id, name, color, voice, mission, title, banishedAt, tabName, sessionId}]
   settings: {             // App settings (API keys, etc.)
@@ -131,6 +134,26 @@ export function loadState() {
     appState.cemetery = []
   }
 
+  // Ensure pane/split counters exist
+  if (!appState.paneCounter) {
+    appState.paneCounter = 0
+  }
+  if (!appState.splitCounter) {
+    appState.splitCounter = 0
+  }
+
+  // Ensure focusedPane exists
+  if (appState.focusedPane === undefined) {
+    appState.focusedPane = null
+  }
+
+  // Ensure all tabs have layout property (migration from v2 to v3)
+  appState.tabs.forEach(tab => {
+    if (tab.layout === undefined) {
+      tab.layout = null  // null means use flat entity list (legacy mode)
+    }
+  })
+
   // Apply settings to environment
   applySettingsToEnv()
 
@@ -218,6 +241,7 @@ export function getStateForBroadcast() {
     theme: appState.theme,
     godColors,
     focusedEntity: appState.focusedEntity,
+    focusedPane: appState.focusedPane,
     gitProjects: appState.gitProjects || [],
     cemetery: appState.cemetery || [],
     settings: {
@@ -246,6 +270,18 @@ export function broadcastState() {
 export function generateEntityId(type) {
   appState.entityCounter++
   return `${type}-${appState.entityCounter}`
+}
+
+// Generate a unique pane ID
+export function generatePaneId() {
+  appState.paneCounter++
+  return `pane-${appState.paneCounter}`
+}
+
+// Generate a unique split ID
+export function generateSplitId() {
+  appState.splitCounter++
+  return `split-${appState.splitCounter}`
 }
 
 // Normalize order values for all entities in a tab (0, 1, 2, ...)

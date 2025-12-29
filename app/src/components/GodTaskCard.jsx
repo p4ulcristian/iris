@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
+import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
 
@@ -74,8 +75,36 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
+  const [isSummoning, setIsSummoning] = useState(true)
+  const [isPaneDragging, setIsPaneDragging] = useState(false)
   const moveMenuRef = useRef(null)
+  const cardRef = useRef(null)
   const dragControls = useDragControls()
+
+  // Clear summon glow after animation completes
+  useEffect(() => {
+    const timer = setTimeout(() => setIsSummoning(false), 500)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Setup pragmatic drag for entire card (pane-level drag)
+  useEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+
+    const cleanup = draggable({
+      element: el,
+      getInitialData: () => ({
+        source: 'move',
+        entityId: id,
+        entityType: type
+      }),
+      onDragStart: () => setIsPaneDragging(true),
+      onDrop: () => setIsPaneDragging(false)
+    })
+
+    return () => cleanup()
+  }, [id, type])
 
   // Get other tabs (tabs we can move to)
   const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
@@ -129,32 +158,61 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
       value={entity}
       dragListener={false}
       dragControls={dragControls}
-      onClick={onClick}
-      className="group relative cursor-pointer overflow-hidden liquid-glass-god-tinted"
+      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
       style={{
-        '--god-color': entityColor,
-        '--god-color-rgb': hexToRgbCss(entityColor),
         borderRadius: '12px 16px 16px 12px',
-        borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
       }}
+      // Summon animation - divine arrival from above
+      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
       animate={{
         opacity: isActive ? 1 : 0.6,
+        y: 0,
+        scale: 1,
         filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
       }}
-      transition={{ duration: 0.15 }}
-      whileDrag={{ scale: 1.02, zIndex: 50 }}
+      // Banish animation - dissolve downward
+      exit={{
+        opacity: 0,
+        y: 30,
+        scale: 0.85,
+        filter: 'blur(12px)',
+        transition: { duration: 0.15, ease: 'easeIn' }
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 25,
+        mass: 0.8,
+      }}
+      layout="position"
     >
+      {/* Draggable card wrapper for pane splitting */}
+      <div
+        ref={cardRef}
+        onClick={onClick}
+        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isPaneDragging ? 'opacity-50' : ''}`}
+        style={{
+          '--god-color': entityColor,
+          '--god-color-rgb': hexToRgbCss(entityColor),
+          borderRadius: '12px 16px 16px 12px',
+          borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
+        }}
+      >
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">
-        {/* Drag handle */}
+        {/* Drag handle for reorder */}
         <div
-          onPointerDown={(e) => dragControls.start(e)}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            dragControls.start(e)
+          }}
           className="w-5 h-5 flex items-center justify-center text-white/30 hover:text-white/70 cursor-grab active:cursor-grabbing transition-colors touch-none"
-          title="Drag to reorder"
+          title="Drag to reorder in list"
         >
           <FontAwesomeIcon icon={faGripVertical} size="sm" />
         </div>
 
+        {/* Type icon */}
         <TypeIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
           {displayName || name}
@@ -255,6 +313,7 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
             )}
           </div>
         )}
+      </div>
       </div>
     </Reorder.Item>
   )

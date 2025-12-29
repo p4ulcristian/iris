@@ -9,6 +9,7 @@ import { listSessions } from './history.js'
 import * as git from './git.js'
 import * as linear from './linear.js'
 import * as calendar from './calendar.js'
+import * as layout from './layout.js'
 
 // Entity type definitions with display info
 const ENTITY_TYPES = {
@@ -1205,6 +1206,256 @@ export function handleMessage(ws, msg, projectRoot) {
 
       fs.appendFileSync(logFile, logEntry)
       console.error('[Frontend Error]', error.message, error.source ? `(${error.source})` : '')
+      break
+    }
+
+    // ============ LAYOUT MANAGEMENT ============
+
+    case 'layout:init': {
+      // Initialize layout with first entity (when dropping on empty root)
+      const { tabId, entityId, entityType } = data
+      const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
+      if (!tab) break
+
+      // Create or get the entity
+      let targetEntityId = entityId
+      if (entityType && !entityId) {
+        // Spawn new entity of this type
+        const newId = generateEntityId(entityType)
+        const num = getNextEntityNumber(entityType)
+
+        if (entityType === 'god') {
+          // For gods, we need to pick a name - use modal instead
+          // For now, spawn with a random available god
+          const godColors = Object.keys(require('../src/themes/generated/palettes.js').godPalettes || {})
+          const usedNames = Object.values(appState.entities).filter(e => e.type === 'god').map(e => e.name?.toLowerCase())
+          const availableGods = godColors.filter(g => !usedNames.includes(g))
+          const godPool = availableGods.length > 0 ? availableGods : godColors
+          const randomGod = godPool[Math.floor(Math.random() * godPool.length)] || 'zeus'
+          const godName = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
+
+          // Trigger god spawn instead
+          handleMessage(ws, { event: 'god:spawn', name: godName, task: '' })
+          break
+        } else if (entityType === 'terminal') {
+          handleMessage(ws, { event: 'terminal:spawn' })
+          break
+        } else {
+          // Other entity types
+          appState.entities[newId] = {
+            id: newId,
+            type: entityType,
+            name: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} ${num}`,
+            displayName: `${entityType.charAt(0).toUpperCase() + entityType.slice(1)} ${num}`,
+            tabId: tab.id,
+            color: '#888888',
+            spawnedAt: Date.now()
+          }
+          targetEntityId = newId
+        }
+      }
+
+      // Create the initial pane with this entity
+      if (targetEntityId) {
+        tab.layout = layout.createPane([targetEntityId])
+        appState.focusedPane = tab.layout.id
+        appState.focusedEntity = targetEntityId
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:split': {
+      const { tabId, paneId, direction, position, entityId, entityType } = data
+      const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
+      if (!tab) break
+
+      // Initialize layout if null (migration from flat entity list)
+      if (!tab.layout) {
+        const entityIds = Object.values(appState.entities)
+          .filter(e => e.tabId === tab.id)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(e => e.id)
+        tab.layout = layout.initializeLayoutFromEntities(entityIds)
+      }
+
+      // Create or get the entity to place in new pane
+      let targetEntityId = entityId
+      if (entityType && !entityId) {
+        // Spawn new entity of this type
+        const newId = generateEntityId(entityType)
+        const num = getNextEntityNumber(entityType)
+
+        appState.entities[newId] = {
+          id: newId,
+          type: entityType,
+          name: `${ENTITY_TYPES[entityType]?.label || entityType}-${num}`,
+          tabId: tab.id,
+          order: getNextOrder(tab.id),
+          spawnedAt: Date.now()
+        }
+        targetEntityId = newId
+      }
+
+      // If moving an existing entity, remove it from its current pane first
+      if (entityId && tab.layout) {
+        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+      }
+
+      // Split the pane
+      tab.layout = layout.splitPane(tab.layout, paneId, direction, position, targetEntityId)
+
+      // Focus the new pane and entity
+      const newPane = layout.findPaneByEntity(tab.layout, targetEntityId)
+      if (newPane) {
+        appState.focusedPane = newPane.id
+        appState.focusedEntity = targetEntityId
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:merge': {
+      const { tabId, paneId } = data
+      const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
+      if (!tab || !tab.layout) break
+
+      const { layout: newLayout, mergedEntityIds } = layout.mergePane(tab.layout, paneId)
+      tab.layout = newLayout
+
+      // Clean up any orphaned structure
+      tab.layout = layout.cleanupLayout(tab.layout)
+
+      // Update focused pane if it was merged
+      if (appState.focusedPane === paneId) {
+        const firstPane = layout.getFirstPane(tab.layout)
+        appState.focusedPane = firstPane?.id || null
+        appState.focusedEntity = firstPane?.focusedEntityId || firstPane?.entityIds?.[0] || null
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:resize': {
+      const { tabId, splitId, ratio } = data
+      const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
+      if (!tab || !tab.layout) break
+
+      tab.layout = layout.updateSplitRatio(tab.layout, splitId, ratio)
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:move-entity': {
+      const { entityId, targetPaneId, dropPosition } = data
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab || !tab.layout || !entityId) break
+
+      if (dropPosition === 'center') {
+        // Add to existing pane stack
+        tab.layout = layout.moveEntityToPane(tab.layout, entityId, targetPaneId)
+      } else {
+        // Split the pane
+        const direction = (dropPosition === 'left' || dropPosition === 'right') ? 'horizontal' : 'vertical'
+
+        // Remove from current location first
+        tab.layout = layout.removeEntityFromLayout(tab.layout, entityId)
+
+        // Split and add to new pane
+        tab.layout = layout.splitPane(tab.layout, targetPaneId, direction, dropPosition, entityId)
+      }
+
+      // Update focus
+      const newPane = layout.findPaneByEntity(tab.layout, entityId)
+      if (newPane) {
+        appState.focusedPane = newPane.id
+        appState.focusedEntity = entityId
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'pane:focus': {
+      const { paneId } = data
+      appState.focusedPane = paneId
+
+      // Also update focusedEntity to the pane's focused entity
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (tab?.layout) {
+        const paneResult = layout.findPane(tab.layout, paneId)
+        if (paneResult) {
+          appState.focusedEntity = paneResult.node.focusedEntityId || paneResult.node.entityIds?.[0] || null
+        }
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'pane:focus-entity': {
+      const { paneId, entityId } = data
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab?.layout) break
+
+      tab.layout = layout.setFocusedEntityInPane(tab.layout, paneId, entityId)
+      appState.focusedPane = paneId
+      appState.focusedEntity = entityId
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:add-entity-to-pane': {
+      const { paneId, entityId, entityType } = data
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab) break
+
+      // Initialize layout if needed
+      if (!tab.layout) {
+        const entityIds = Object.values(appState.entities)
+          .filter(e => e.tabId === tab.id)
+          .sort((a, b) => (a.order || 0) - (b.order || 0))
+          .map(e => e.id)
+        tab.layout = layout.initializeLayoutFromEntities(entityIds)
+      }
+
+      // Create entity if type provided
+      let targetEntityId = entityId
+      if (entityType && !entityId) {
+        const newId = generateEntityId(entityType)
+        const num = getNextEntityNumber(entityType)
+
+        appState.entities[newId] = {
+          id: newId,
+          type: entityType,
+          name: `${ENTITY_TYPES[entityType]?.label || entityType}-${num}`,
+          tabId: tab.id,
+          order: getNextOrder(tab.id),
+          spawnedAt: Date.now()
+        }
+        targetEntityId = newId
+      }
+
+      // Add to pane
+      tab.layout = layout.addEntityToPane(tab.layout, paneId, targetEntityId)
+
+      appState.focusedPane = paneId
+      appState.focusedEntity = targetEntityId
+
+      saveState()
+      broadcastState()
       break
     }
 

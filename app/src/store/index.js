@@ -4,8 +4,8 @@ import { devtools } from 'zustand/middleware'
 
 // Initial state
 const initialState = {
-  // Tabs
-  tabs: [{ id: 1, name: 'Main' }],
+  // Tabs (with layout tree per tab)
+  tabs: [{ id: 1, name: 'Main', layout: null }],
   activeTabId: 1,
   tabCounter: 1,
 
@@ -28,8 +28,9 @@ const initialState = {
     ollama: false
   },
 
-  // UI state (client-only)
+  // UI state
   focusedEntity: null,
+  focusedPane: null,  // For multi-pane layouts
   fullscreenEntity: null,
   layoutMode: 'auto',
   devPanelOpen: false,
@@ -283,6 +284,29 @@ export const useStore = create(
           .map(e => e.id)
       },
 
+      // ============ LAYOUT SELECTORS ============
+
+      // Get layout for active tab
+      getActiveLayout: () => {
+        const state = get()
+        const tab = state.tabs.find(t => t.id === state.activeTabId)
+        return tab?.layout || null
+      },
+
+      // Get layout for a specific tab
+      getLayoutForTab: (tabId) => {
+        const state = get()
+        const tab = state.tabs.find(t => t.id === tabId)
+        return tab?.layout || null
+      },
+
+      // Check if current tab has a split layout
+      hasMultiplePanes: () => {
+        const state = get()
+        const tab = state.tabs.find(t => t.id === state.activeTabId)
+        return tab?.layout?.type === 'split'
+      },
+
       // ============ SYNC FROM SERVER ============
 
       syncState: (serverState) => set((state) => {
@@ -326,9 +350,12 @@ export const useStore = create(
           state.godColors = serverState.godColors
         }
 
-        // Sync focusedEntity from server
+        // Sync focusedEntity and focusedPane from server
         if (serverState.focusedEntity !== undefined) {
           state.focusedEntity = serverState.focusedEntity
+        }
+        if (serverState.focusedPane !== undefined) {
+          state.focusedPane = serverState.focusedPane
         }
 
         // Sync git projects
