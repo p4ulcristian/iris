@@ -521,35 +521,66 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
+    case 'pane:focus': {
+      const { paneId } = data
+      if (!paneId) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab?.layout) break
+
+      const paneResult = layout.findPane(tab.layout, paneId)
+      if (!paneResult) break
+
+      const pane = paneResult.node
+      appState.focusedPane = paneId
+      appState.focusedEntity = pane.focusedEntityId || pane.entityIds[0] || null
+
+      saveState()
+      broadcastState()
+      break
+    }
+
     case 'focus:next':
     case 'focus:prev': {
-      const entitiesInTab = Object.entries(appState.entities)
-        .filter(([_, e]) => e.tabId === appState.activeTabId)
-        .sort((a, b) => a[1].order - b[1].order)
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab?.layout) break
 
-      if (entitiesInTab.length === 0) break
+      // Find the focused pane
+      let pane = null
+      if (appState.focusedPane) {
+        const paneResult = layout.findPane(tab.layout, appState.focusedPane)
+        if (paneResult) pane = paneResult.node
+      }
 
-      const currentIdx = entitiesInTab.findIndex(([id]) => id === appState.focusedEntity)
+      // If no focused pane, find pane containing focused entity
+      if (!pane && appState.focusedEntity) {
+        pane = layout.findPaneByEntity(tab.layout, appState.focusedEntity)
+      }
+
+      // Fallback to first pane
+      if (!pane) {
+        pane = layout.getFirstPane(tab.layout)
+      }
+
+      if (!pane || pane.entityIds.length === 0) break
+
+      // Cycle within this pane's entities
+      const entityIds = pane.entityIds
+      const currentIdx = entityIds.indexOf(appState.focusedEntity)
       let newIdx
 
       if (event === 'focus:next') {
-        newIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % entitiesInTab.length
+        newIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % entityIds.length
       } else {
-        newIdx = currentIdx < 0 ? entitiesInTab.length - 1 : (currentIdx - 1 + entitiesInTab.length) % entitiesInTab.length
+        newIdx = currentIdx < 0 ? entityIds.length - 1 : (currentIdx - 1 + entityIds.length) % entityIds.length
       }
 
-      const newEntityId = entitiesInTab[newIdx][0]
+      const newEntityId = entityIds[newIdx]
       appState.focusedEntity = newEntityId
+      appState.focusedPane = pane.id
 
-      // Also update the pane's focusedEntityId in the layout
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab?.layout) {
-        const pane = layout.findPaneByEntity(tab.layout, newEntityId)
-        if (pane) {
-          tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, newEntityId)
-          appState.focusedPane = pane.id
-        }
-      }
+      // Update pane's focusedEntityId
+      tab.layout = layout.setFocusedEntityInPane(tab.layout, pane.id, newEntityId)
 
       saveState()
       broadcastState()

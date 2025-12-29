@@ -269,6 +269,16 @@ export function getStateForBroadcast() {
 
   entities.sort((a, b) => a.order - b.order)
 
+  // Extract panes from each tab's layout
+  const panes = {}
+  appState.tabs.forEach(tab => {
+    if (tab.layout) {
+      panes[tab.id] = layout.getAllPanes(tab.layout)
+    } else {
+      panes[tab.id] = []
+    }
+  })
+
   const godColors = GOD_COLORS
   return {
     tabs: appState.tabs,
@@ -279,6 +289,7 @@ export function getStateForBroadcast() {
     godColors,
     focusedEntity: appState.focusedEntity,
     focusedPane: appState.focusedPane,
+    panes,
     gitProjects: appState.gitProjects || [],
     cemetery: appState.cemetery || [],
     settings: {

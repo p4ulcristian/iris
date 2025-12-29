@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Reorder, useDragControls } from 'framer-motion'
+import { Reorder, motion, useDragControls } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -70,7 +70,7 @@ function TypeIcon({ type, size = 'sm' }) {
   }
 }
 
-export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
+export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
 
   const [elapsed, setElapsed] = useState(null)
@@ -159,39 +159,41 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
   }
   const statusPill = getStatusPill()
 
+  // Shared motion props
+  const motionProps = {
+    className: `group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`,
+    style: { borderRadius: '12px 16px 16px 12px' },
+    initial: { opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' },
+    animate: {
+      opacity: isActive ? 1 : 0.6,
+      y: 0,
+      scale: 1,
+      filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
+    },
+    exit: {
+      opacity: 0,
+      y: 30,
+      scale: 0.85,
+      filter: 'blur(12px)',
+      transition: { duration: 0.15, ease: 'easeIn' }
+    },
+    transition: {
+      type: 'spring',
+      stiffness: 400,
+      damping: 25,
+      mass: 0.8,
+    },
+    layout: 'position'
+  }
+
+  // Use motion.div when not in a Reorder.Group, otherwise Reorder.Item
+  const Wrapper = disableReorder ? motion.div : Reorder.Item
+  const wrapperProps = disableReorder
+    ? motionProps
+    : { ...motionProps, value: entity, dragListener: false, dragControls }
+
   return (
-    <Reorder.Item
-      value={entity}
-      dragListener={false}
-      dragControls={dragControls}
-      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
-      style={{
-        borderRadius: '12px 16px 16px 12px',
-      }}
-      // Summon animation - divine arrival from above
-      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
-      animate={{
-        opacity: isActive ? 1 : 0.6,
-        y: 0,
-        scale: 1,
-        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
-      }}
-      // Banish animation - dissolve downward
-      exit={{
-        opacity: 0,
-        y: 30,
-        scale: 0.85,
-        filter: 'blur(12px)',
-        transition: { duration: 0.15, ease: 'easeIn' }
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 400,
-        damping: 25,
-        mass: 0.8,
-      }}
-      layout="position"
-    >
+    <Wrapper {...wrapperProps}>
       {/* Draggable card wrapper for pane splitting */}
       <div
         ref={cardRef}
@@ -322,6 +324,6 @@ export default function GodTaskCard({ entity, isActive, onClick, onClose, tabs, 
         )}
       </div>
       </div>
-    </Reorder.Item>
+    </Wrapper>
   )
 }

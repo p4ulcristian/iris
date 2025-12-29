@@ -3,6 +3,7 @@ import { Reorder, AnimatePresence, motion } from 'framer-motion'
 import EntityCard from './components/EntityCard'
 import TerminalContent from './components/TerminalContent'
 import GodTaskCard from './components/GodTaskCard'
+import PaneGroup from './components/PaneGroup'
 import StatusBar from './components/StatusBar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
@@ -49,6 +50,8 @@ export default function App() {
   const theme = useStore(s => s.theme)
   const godColors = useStore(s => s.godColors)
   const getActiveLayout = useStore(s => s.getActiveLayout)
+  const getActivePanes = useStore(s => s.getActivePanes)
+  const panes = useStore(s => s.panes)
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
@@ -263,6 +266,17 @@ export default function App() {
       .filter(e => e.tabId === activeTabId && (e.type === 'god' || e.type === 'terminal'))
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   }, [entities, activeTabId])
+
+  // Get panes for active tab with their entities
+  const activePanes = useMemo(() => {
+    const tabPanes = panes[activeTabId] || []
+    return tabPanes.map(pane => ({
+      ...pane,
+      entities: pane.entityIds
+        .map(id => entities[id])
+        .filter(Boolean)  // Filter out any missing entities
+    }))
+  }, [panes, activeTabId, entities])
 
   // Get focused entity object
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
@@ -784,7 +798,34 @@ export default function App() {
                       exit={{ y: '-100%' }}
                       transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
                     >
-                      {activeEntities.length > 0 && (
+                      {activePanes.length > 0 ? (
+                        <div className="flex flex-col gap-4">
+                          {activePanes.map((pane) => (
+                            <PaneGroup
+                              key={pane.id}
+                              pane={pane}
+                              entities={pane.entities}
+                              isFocused={pane.id === focusedPane}
+                              focusedEntityId={pane.focusedEntityId}
+                              onClick={() => {
+                                // Focus the pane and its focused entity
+                                send({ event: 'pane:focus', paneId: pane.id })
+                              }}
+                              onClose={(entityId) => handleKillEntity(entityId)}
+                              tabs={tabs}
+                              activeTabId={activeTabId}
+                              onMoveToTab={(entityId, tabId) => {
+                                send({ event: 'entity:move', entityId, tabId })
+                                send({ event: 'tab:select', tabId })
+                              }}
+                              onMoveToNewTab={(entityId) => {
+                                send({ event: 'entity:move-to-new-tab', entityId })
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ) : activeEntities.length > 0 ? (
+                        /* Fallback: no panes data, render flat entity list */
                         <Reorder.Group
                           axis="y"
                           values={activeEntities}
@@ -810,7 +851,7 @@ export default function App() {
                             />
                           ))}
                         </Reorder.Group>
-                      )}
+                      ) : null}
                     </motion.div>
                   )}
                 </AnimatePresence>

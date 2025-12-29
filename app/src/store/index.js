@@ -56,6 +56,9 @@ const initialState = {
 
   // Browser URL (from skill)
   browserUrl: null,
+
+  // Panes per tab - extracted from layout tree by server
+  panes: {},  // { [tabId]: [{ id, entityIds, focusedEntityId }, ...] }
 }
 
 // Store
@@ -295,6 +298,18 @@ export const useStore = create(
         return tab?.layout?.type === 'split'
       },
 
+      // Get panes for active tab
+      getActivePanes: () => {
+        const state = get()
+        return state.panes[state.activeTabId] || []
+      },
+
+      // Get panes for a specific tab
+      getPanesForTab: (tabId) => {
+        const state = get()
+        return state.panes[tabId] || []
+      },
+
       // ============ SYNC FROM SERVER ============
 
       syncState: (serverState) => set((state) => {
@@ -364,6 +379,11 @@ export const useStore = create(
         // Sync code highlights
         if (serverState.codeHighlights !== undefined) {
           state.codeHighlights = serverState.codeHighlights
+        }
+
+        // Sync panes
+        if (serverState.panes !== undefined) {
+          state.panes = serverState.panes
         }
       }),
 
