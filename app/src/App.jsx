@@ -23,7 +23,6 @@ import RootDropZone from './components/RootDropZone'
 import { DragProvider } from './contexts/DragContext'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
-import { withViewTransition } from './hooks/useViewTransition'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -239,12 +238,7 @@ export default function App() {
           setInitialLoadDone(true)
         }
 
-        // View transition for focus changes
-        if (initialLoadDone && data.focusedEntity !== focusedEntity) {
-          withViewTransition(doSync)
-        } else {
-          doSync()
-        }
+        doSync()
         break
       }
 
@@ -695,17 +689,36 @@ export default function App() {
               {(() => {
                 const activeLayout = getActiveLayout()
 
-                // If we have a layout tree, use Surface
-                if (activeLayout) {
+                // If we have stages, render all with spring y positions (Apple-style)
+                const activeTab = tabs.find(t => t.id === activeTabId)
+                const stages = activeTab?.stages || []
+                const activeStageId = activeTab?.activeStageId
+                const activeIdx = stages.findIndex(s => s.id === activeStageId)
+
+                if (stages.length > 0) {
                   return (
-                    <Surface
-                      node={activeLayout}
-                      tabId={activeTabId}
-                      entities={entities}
-                      focusedTile={focusedTile}
-                      focusedEntity={focusedEntity}
-                      containerSize={containerSize}
-                    />
+                    <div className="relative h-full overflow-hidden">
+                      {stages.map((stage, idx) => {
+                        const offset = idx - activeIdx
+                        return (
+                          <motion.div
+                            key={stage.id}
+                            className="absolute inset-0"
+                            animate={{ y: `${offset * 100}%` }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                          >
+                            <Surface
+                              node={stage.layout}
+                              tabId={activeTabId}
+                              entities={entities}
+                              focusedTile={focusedTile}
+                              focusedEntity={focusedEntity}
+                              containerSize={containerSize}
+                            />
+                          </motion.div>
+                        )
+                      })}
+                    </div>
                   )
                 }
 

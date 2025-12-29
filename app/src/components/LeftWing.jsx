@@ -7,39 +7,12 @@ import {
   faEarListen,
   faVolumeHigh,
   faCommentDots,
-  faChevronDown,
   faXmark,
   faPlus,
-  faBolt,
-  faSun,
-  faSkull,
-  faScaleBalanced,
-  faHammer,
-  faTree,
-  faWater,
-  faBuildingColumns,
-  faCity,
-  faWineGlass,
-  faCompass,
-  faEye,
   faBrain
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
-
-const REALM_ICONS = {
-  'Olympus': faBolt,
-  'Elysium': faSun,
-  'Tartarus': faSkull,
-  'Agora': faScaleBalanced,
-  'Forge': faHammer,
-  'Grove': faTree,
-  'Styx': faWater,
-  'Temple': faBuildingColumns,
-  'Acropolis': faCity,
-  'Nectar Hall': faWineGlass,
-  'Labyrinth': faCompass,
-  'Oracle': faEye
-}
+import { REALM_COLORS } from '../themes'
 
 function Spinner() {
   return (
@@ -170,7 +143,7 @@ export default function LeftWing({
       <div className="flex flex-col items-center gap-1 overflow-visible">
         {tabs?.map((tab, idx) => {
           const isActive = activeTabId === tab.id
-          const realmIcon = REALM_ICONS[tab.name]
+          const realmColor = REALM_COLORS[tab.name] || '#888888'
 
           return (
             <button
@@ -185,22 +158,20 @@ export default function LeftWing({
               `}
               title={`${tab.name} (Alt+${idx + 1})`}
             >
-              {realmIcon && (
-                <FontAwesomeIcon
-                  icon={realmIcon}
-                  className={`text-xs ${isActive ? 'text-white' : 'opacity-50'}`}
-                />
-              )}
+              <FontAwesomeIcon
+                icon={faCircle}
+                style={{ color: realmColor }}
+                className={`text-[10px] ${isActive ? '' : 'opacity-50'}`}
+              />
               {tabs.length > 1 && (
                 <span
                   onClick={(e) => {
                     e.stopPropagation()
                     onTabClose(tab.id)
                   }}
-                  className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-red-500/80 hover:bg-red-500 text-white transition-all cursor-pointer"
-                  style={{ borderRadius: '12px' }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
                 >
-                  <FontAwesomeIcon icon={faXmark} className="text-[10px]" />
+                  <FontAwesomeIcon icon={faXmark} />
                 </span>
               )}
             </button>

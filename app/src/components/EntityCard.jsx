@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Reorder, motion, useDragControls } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faGripVertical, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull, faCode, faCalendar } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from '../assets/icons/claude.png'
@@ -70,7 +70,7 @@ function TypeIcon({ type, size = 'sm' }) {
   }
 }
 
-export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, disableReorder = false }) {
+export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
 
   const [elapsed, setElapsed] = useState(null)
@@ -79,7 +79,6 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
   const [isTileDragging, setIsTileDragging] = useState(false)
   const moveMenuRef = useRef(null)
   const cardRef = useRef(null)
-  const dragControls = useDragControls()
 
   // Clear summon glow after animation completes
   useEffect(() => {
@@ -94,12 +93,6 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
     const cleanup = draggable({
       element: el,
-      // Don't start drag if clicking on the reorder grip handle
-      canDrag: ({ input }) => {
-        const target = input.target
-        // Check if target or parent has the reorder-handle data attribute
-        return !target?.closest?.('[data-reorder-handle]')
-      },
       getInitialData: () => ({
         source: 'move',
         entityId: id,
@@ -159,41 +152,32 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
   }
   const statusPill = getStatusPill()
 
-  // Shared motion props
-  const motionProps = {
-    className: `group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`,
-    style: { borderRadius: '12px 16px 16px 12px' },
-    initial: { opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' },
-    animate: {
-      opacity: isActive ? 1 : 0.6,
-      y: 0,
-      scale: 1,
-      filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
-    },
-    exit: {
-      opacity: 0,
-      y: 30,
-      scale: 0.85,
-      filter: 'blur(12px)',
-      transition: { duration: 0.15, ease: 'easeIn' }
-    },
-    transition: {
-      type: 'spring',
-      stiffness: 400,
-      damping: 25,
-      mass: 0.8,
-    },
-    layout: 'position'
-  }
-
-  // Use motion.div when not in a Reorder.Group, otherwise Reorder.Item
-  const Wrapper = disableReorder ? motion.div : Reorder.Item
-  const wrapperProps = disableReorder
-    ? motionProps
-    : { ...motionProps, value: entity, dragListener: false, dragControls }
-
   return (
-    <Wrapper {...wrapperProps}>
+    <motion.div
+      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
+      style={{ borderRadius: '12px 16px 16px 12px' }}
+      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
+      animate={{
+        opacity: isActive ? 1 : 0.6,
+        y: 0,
+        scale: 1,
+        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
+      }}
+      exit={{
+        opacity: 0,
+        y: 30,
+        scale: 0.85,
+        filter: 'blur(12px)',
+        transition: { duration: 0.15, ease: 'easeIn' }
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 25,
+        mass: 0.8,
+      }}
+      layout="position"
+    >
       {/* Draggable card wrapper for tile splitting */}
       <div
         ref={cardRef}
@@ -208,19 +192,6 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       >
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">
-        {/* Drag handle for reorder */}
-        <div
-          data-reorder-handle
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            dragControls.start(e)
-          }}
-          className="w-5 h-5 flex items-center justify-center text-white/30 hover:text-white/70 cursor-grab active:cursor-grabbing transition-colors touch-none"
-          title="Drag to reorder in list"
-        >
-          <FontAwesomeIcon icon={faGripVertical} size="sm" />
-        </div>
-
         {/* Type icon */}
         <TypeIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
@@ -338,6 +309,6 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
         )}
       </div>
       </div>
-    </Wrapper>
+    </motion.div>
   )
 }

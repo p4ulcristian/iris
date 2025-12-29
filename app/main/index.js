@@ -38,6 +38,7 @@ function stopServer() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
+    title: 'Iris',
     width: 1400,
     height: 900,
     backgroundColor: '#0a0a0a',

@@ -12,11 +12,19 @@ export const GOD_COLORS = {
   dionysus: '#AA44FF'
 }
 
-// Realms list
-export const REALMS = [
-  'Olympus', 'Elysium', 'Tartarus', 'Agora', 'Forge', 'Grove',
-  'Styx', 'Temple', 'Acropolis', 'Nectar Hall', 'Labyrinth', 'Oracle'
-]
+// Realms with colors (matching god colors)
+export const REALM_COLORS = {
+  'Olympus': '#FFCC00',
+  'Tartarus': '#FF3366',
+  'Grove': '#00FF88',
+  'Styx': '#0088FF',
+  'Agora': '#00DDFF',
+  'Temple': '#FF44AA',
+  'Forge': '#FF6622',
+  'Elysium': '#AA44FF'
+}
+
+export const REALMS = Object.keys(REALM_COLORS)
 
 // Theme definitions
 export const THEMES = [

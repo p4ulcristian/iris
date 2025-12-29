@@ -329,7 +329,7 @@ export function handleMessage(ws, msg, projectRoot) {
     // Tab management
     case 'tab:add': {
       appState.tabCounter++
-      const newTab = { id: appState.tabCounter, name: data.name || getRandomRealmName() }
+      const newTab = { id: appState.tabCounter, name: data.name || getRandomRealmName(), stages: [], activeStageId: null }
       appState.tabs.push(newTab)
       appState.activeTabId = newTab.id
       saveState()

@@ -489,26 +489,6 @@ body {
   animation: divine-banish 0.25s ease-in forwards;
 }
 
-/* View Transitions */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.25s;
-}
-
-/* God card transitions - smooth position and size morphing */
-/* Note: view-transition pseudo-elements don't support wildcards, use * for all */
-::view-transition-group(*) {
-  animation-duration: 0.25s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* No fade - just morph position/size with content visible */
-::view-transition-old(*),
-::view-transition-new(*) {
-  animation-duration: 0.25s;
-  mix-blend-mode: normal;
-}
-
 /* ============================================
    THEME WALLPAPERS - Aurora Blob Animation
    ============================================ */
@@ -735,4 +715,26 @@ body {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+}
+
+/* ============================================
+   TILE FOCUS INDICATORS
+   ============================================ */
+
+/* Focused tile - lifted with deeper shadow */
+.tile-focused {
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 30px rgba(var(--god-color-rgb), 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  z-index: 10;
+  transition: box-shadow 150ms ease, opacity 150ms ease, filter 150ms ease;
+}
+
+/* Unfocused tile - recedes */
+.tile-unfocused {
+  transform: scale(0.98);
+  opacity: 0.7;
+  filter: saturate(0.8);
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease, filter 150ms ease;
 }

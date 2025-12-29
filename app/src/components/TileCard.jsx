@@ -33,12 +33,14 @@ const TileCard = forwardRef(function TileCard({
   // Use entity color if set, otherwise fall back to type default
   const entityColor = color || ENTITY_TYPE_COLORS[type] || '#888888'
 
+  const focusClass = isFocused ? 'tile-focused' : 'tile-unfocused'
+
   return (
     <div
       ref={ref}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className={`relative h-full min-h-0 overflow-hidden rounded-xl liquid-glass-god-tinted ${className}`}
+      className={`relative h-full min-h-0 overflow-hidden rounded-xl liquid-glass-god-tinted ${focusClass} ${className}`}
       style={{
         '--god-color': entityColor,
         '--god-color-rgb': hexToRgbCss(entityColor),

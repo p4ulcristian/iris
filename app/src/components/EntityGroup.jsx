@@ -32,7 +32,6 @@ export default function EntityGroup({
         activeTabId={activeTabId}
         onMoveToTab={onMoveToTab}
         onMoveToNewTab={onMoveToNewTab}
-        disableReorder
       />
     )
   }
@@ -58,7 +57,6 @@ export default function EntityGroup({
           activeTabId={activeTabId}
           onMoveToTab={onMoveToTab}
           onMoveToNewTab={onMoveToNewTab}
-          disableReorder
         />
       ))}
     </motion.div>

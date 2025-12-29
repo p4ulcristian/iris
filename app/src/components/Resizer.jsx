@@ -67,7 +67,7 @@ export default function Resizer({
       className={`
         flex-shrink-0
         ${isHorizontal ? 'w-3 cursor-col-resize' : 'h-3 cursor-row-resize'}
-        ${isDragging ? 'bg-accent/50' : 'bg-transparent'}
+        bg-transparent
         transition-colors
       `}
       onMouseDown={handleMouseDown}

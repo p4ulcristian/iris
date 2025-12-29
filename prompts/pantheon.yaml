@@ -30,17 +30,13 @@ dionysus:
   voice: dionysus
   color: "#AA44FF"
 
-# Realms - places in Greek mythology for tab names
+# Realms - 8 workspaces, each with a god's color
 realms:
-  - Olympus      # Home of the gods
-  - Elysium      # Paradise for heroes
-  - Tartarus     # The abyss
-  - Agora        # The marketplace
-  - Forge        # Hephaestus's workshop
-  - Grove        # Sacred forest
-  - Styx         # River crossing
-  - Temple       # Sanctuary
-  - Acropolis    # High city
-  - Nectar Hall  # Feasting hall
-  - Labyrinth    # The maze
-  - Oracle       # Place of prophecy
+  Olympus: "#FFCC00"   # Zeus gold
+  Tartarus: "#FF3366"  # Ares red
+  Grove: "#00FF88"     # Artemis green
+  Styx: "#0088FF"      # Poseidon blue
+  Agora: "#00DDFF"     # Hermes cyan
+  Temple: "#FF44AA"    # Hera pink
+  Forge: "#FF6622"     # Hephaestus orange
+  Elysium: "#AA44FF"   # Dionysus purple

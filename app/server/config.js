@@ -32,5 +32,7 @@ export const PANTHEON = Object.fromEntries(
     .map(([name, data]) => [name, { color: data.color, voice: data.voice }])
 )
 
-// Build REALMS array from YAML
-export const REALMS = pantheonYaml.realms || []
+// Build REALMS array and REALM_COLORS from YAML
+const realmsData = pantheonYaml.realms || {}
+export const REALMS = Object.keys(realmsData)
+export const REALM_COLORS = realmsData
