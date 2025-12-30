@@ -42,6 +42,9 @@ const initialState = {
   connected: false,
   initialLoadDone: false,
 
+  // Staged loading animation (0=loading, 1=shell, 2=structure, 3=surface, 4=entities, 5=ready)
+  loadStage: 0,
+
   // Git projects
   gitProjects: [],
 
@@ -203,6 +206,25 @@ export const useStore = create(
       setInitialLoadDone: (done) => set((state) => {
         state.initialLoadDone = done
       }),
+
+      setLoadStage: (stage) => set((state) => {
+        state.loadStage = stage
+      }),
+
+      // Trigger staged reveal animation
+      triggerStagedReveal: () => {
+        const { setLoadStage } = get()
+        // Stage 1: Shell (immediate)
+        setLoadStage(1)
+        // Stage 2: Structure (tabs)
+        setTimeout(() => setLoadStage(2), 100)
+        // Stage 3: Surface
+        setTimeout(() => setLoadStage(3), 200)
+        // Stage 4: Entities
+        setTimeout(() => setLoadStage(4), 300)
+        // Stage 5: Ready (all polish)
+        setTimeout(() => setLoadStage(5), 500)
+      },
 
       setServices: (services) => set((state) => {
         state.services = { ...state.services, ...services }

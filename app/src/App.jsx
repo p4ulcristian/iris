@@ -59,6 +59,8 @@ export default function App() {
   const getAllGods = useStore(s => s.getAllGods)
   const getAllEntities = useStore(s => s.getAllEntities)
   const syncState = useStore(s => s.syncState)
+  const triggerStagedReveal = useStore(s => s.triggerStagedReveal)
+  const loadStage = useStore(s => s.loadStage)
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
@@ -201,11 +203,16 @@ export default function App() {
     switch (event) {
       case 'state:sync': {
         const doSync = () => {
+          const isFirstLoad = !initialLoadDone
           syncState(data)
           if (data.services) {
             setServices(data.services)
           }
           setInitialLoadDone(true)
+          // Trigger staged reveal animation on first load
+          if (isFirstLoad) {
+            triggerStagedReveal()
+          }
         }
 
         doSync()
@@ -232,7 +239,7 @@ export default function App() {
         console.warn(`⚠️ ${data.message}`, data.hint ? `\n   ${data.hint}` : '')
         break
     }
-  }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone])
+  }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone, triggerStagedReveal])
 
   // Get entities for active tab - memoized to prevent drag reset
   const activeEntities = useMemo(() => {

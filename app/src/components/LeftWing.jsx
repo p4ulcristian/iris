@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -123,6 +124,8 @@ export default function LeftWing({
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
   const powers = useStore(s => s.settings?.powers ?? true)
+  const loadStage = useStore(s => s.loadStage)
+  const initialLoadDone = useStore(s => s.initialLoadDone)
 
   const handleServiceToggle = (service, isActive) => {
     console.log('handleServiceToggle called:', { service, isActive, hasSend: !!send })
@@ -153,51 +156,82 @@ export default function LeftWing({
     <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pl-3 pr-3">
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
-        {tabs?.map((tab, idx) => {
-          const isActive = activeTabId === tab.id
-          const realmColor = REALM_COLORS[tab.name] || '#888888'
+        <AnimatePresence>
+          {tabs?.map((tab, idx) => {
+            const isActive = activeTabId === tab.id
+            const realmColor = REALM_COLORS[tab.name] || '#888888'
+            // Stagger delay: only on initial load when loadStage >= 2
+            const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 0.05 : 0
 
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabSelect(tab.id)}
-              className={`
-                group relative btn btn-icon btn-icon-md
-                ${isActive
-                  ? 'btn-glass'
-                  : 'btn-ghost'
-                }
-              `}
-              title={`${tab.name} (Alt+${idx + 1})`}
-            >
-              <FontAwesomeIcon
-                icon={faCircle}
-                style={{ color: realmColor }}
-                className={`text-[10px] ${isActive ? '' : 'opacity-50'}`}
-              />
-              {tabs.length > 1 && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onTabClose(tab.id)
-                  }}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
-                >
-                  <FontAwesomeIcon icon={faXmark} />
-                </span>
-              )}
-            </button>
-          )
-        })}
+            return (
+              <motion.button
+                key={tab.id}
+                onClick={() => onTabSelect(tab.id)}
+                className={`
+                  group relative btn btn-icon btn-icon-md
+                  ${isActive
+                    ? 'btn-glass'
+                    : 'btn-ghost'
+                  }
+                `}
+                title={`${tab.name} (Alt+${idx + 1})`}
+                initial={{ opacity: 0, x: -20, scale: 0.8 }}
+                animate={{
+                  opacity: loadStage >= 2 ? 1 : 0,
+                  x: loadStage >= 2 ? 0 : -20,
+                  scale: loadStage >= 2 ? 1 : 0.8
+                }}
+                exit={{ opacity: 0, x: -20, scale: 0.8 }}
+                transition={{
+                  type: 'spring',
+                  stiffness: 400,
+                  damping: 25,
+                  delay: staggerDelay
+                }}
+              >
+                <FontAwesomeIcon
+                  icon={faCircle}
+                  style={{ color: realmColor }}
+                  className={`text-[10px] ${isActive ? '' : 'opacity-50'}`}
+                />
+                {tabs.length > 1 && (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onTabClose(tab.id)
+                    }}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
+                  >
+                    <FontAwesomeIcon icon={faXmark} />
+                  </span>
+                )}
+              </motion.button>
+            )
+          })}
+        </AnimatePresence>
 
         {/* Add tab button */}
-        <IconButton
-          icon={faPlus}
-          size="md"
-          variant="ghost"
-          onClick={onTabNew}
-          title="New tab (Alt+N)"
-        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{
+            opacity: loadStage >= 2 ? 1 : 0,
+            scale: loadStage >= 2 ? 1 : 0.8
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 400,
+            damping: 25,
+            delay: (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 0.05 : 0
+          }}
+        >
+          <IconButton
+            icon={faPlus}
+            size="md"
+            variant="ghost"
+            onClick={onTabNew}
+            title="New tab (Alt+N)"
+          />
+        </motion.div>
       </div>
 
       {/* IRIS branding */}
