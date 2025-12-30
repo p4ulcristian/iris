@@ -116,38 +116,45 @@ export function startService(name, projectRoot) {
 
   let proc
 
-  // Ollama is a direct command, not a uv script
-  if (name === 'ollama') {
-    proc = spawn('ollama', ['serve'], {
-      detached: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        CUDA_VISIBLE_DEVICES: '0',
-        OLLAMA_ORIGINS: '*'  // Allow CORS for browser/Electron access
-      }
-    })
-  } else {
-    const scriptPath = `${projectRoot}/${script}`
-    const uvPath = process.env.HOME + '/.local/bin/uv'
+  try {
+    // Ollama is a direct command, not a uv script
+    // Use setsid to create independent session that survives parent exit
+    if (name === 'ollama') {
+      proc = spawn('setsid', ['ollama', 'serve'], {
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          CUDA_VISIBLE_DEVICES: '0',
+          OLLAMA_ORIGINS: '*'  // Allow CORS for browser/Electron access
+        }
+      })
+    } else {
+      const scriptPath = `${projectRoot}/${script}`
+      const uvPath = process.env.HOME + '/.local/bin/uv'
 
-    proc = spawn(uvPath, ['run', '--script', scriptPath], {
-      cwd: projectRoot,
-      detached: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        CUDA_VISIBLE_DEVICES: '0'
-      }
+      proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
+        cwd: projectRoot,
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          CUDA_VISIBLE_DEVICES: '0'
+        }
+      })
+    }
+
+    proc.on('error', (err) => {
+      console.error(`Service ${name} spawn error:`, err.message)
+      delete serviceProcesses[name]
     })
+
+    proc.unref()
+    serviceProcesses[name] = proc.pid
+  } catch (err) {
+    console.error(`Failed to start service ${name}:`, err.message)
+    return
   }
-
-  proc.on('error', () => {
-    delete serviceProcesses[name]
-  })
-
-  proc.unref()
-  serviceProcesses[name] = proc.pid
 
   setTimeout(() => checkAllServices(), 2000)
 }
@@ -161,15 +168,15 @@ export function stopService(name) {
     delete serviceProcesses[name]
   }
 
-  // Also try to kill by port
+  // Kill by port (only LISTENING processes, not connections TO the port)
   const port = SERVICES[name]?.port
   if (port) {
     try {
-      execSync(`lsof -ti:${port} | xargs -r kill`, { stdio: 'ignore' })
+      execSync(`lsof -ti:${port} -sTCP:LISTEN | xargs -r kill`, { stdio: 'ignore' })
     } catch {}
   }
 
-  // Also kill by script name (catches zombies not listening on port)
+  // Kill by script name (catches zombies not listening on port)
   const script = SERVICES[name]?.script
   if (script) {
     try {

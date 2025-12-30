@@ -5,6 +5,14 @@ import { spawn } from 'child_process'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Prevent multiple instances
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  console.log('Another Iris instance is already running. Exiting.')
+  app.quit()
+}
+
 let mainWindow = null
 let serverProcess = null
 
@@ -140,6 +148,14 @@ ipcMain.handle('select-folder', async () => {
 ipcMain.handle('open-external', async (_, url) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url)
+  }
+})
+
+// Focus existing window when second instance tries to launch
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
   }
 })
 

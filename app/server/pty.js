@@ -119,17 +119,9 @@ export function attachPty(godName, ws, cols, rows) {
     entry.clients.add(ws)
     ptyLog(`[pty:attach] ${godName}: PTY exists, now ${entry.clients.size} clients`)
 
-    // Send buffered output to new client after short delay (let initial PTY output settle)
-    const buffer = getFullBuffer(godName)
-    ptyLog(`[pty:attach] ${godName}: will send existing buffer (${buffer ? buffer.length + ' chars' : 'none'})`)
-    if (buffer) {
-      setTimeout(() => {
-        if (ws.readyState === 1) {
-          ptyLog(`[pty:attach] ${godName}: sending ${buffer.length} chars (delayed)`)
-          ws.send(JSON.stringify({ event: 'pty:output', godName, data: '\x1b[2J\x1b[H' + buffer }))
-        }
-      }, 200)
-    }
+    // Buffer replay disabled - was causing duplicate/glitched output
+    // New clients will just see ongoing output from here
+    ptyLog(`[pty:attach] ${godName}: new client added, skipping buffer replay`)
     return
   }
 
@@ -176,31 +168,8 @@ export function attachPty(godName, ws, cols, rows) {
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, socketPath })
 
-  // Trigger redraw with resize jiggle, then send buffer AFTER (so bash redraw doesn't overwrite it)
-  const actualCols = cols || 120
-  const actualRows = rows || 40
-  setTimeout(() => {
-    const entry = ptyProcesses.get(godName)
-    if (entry?.terminal) {
-      entry.terminal.resize(actualCols - 1, actualRows - 1)
-      setTimeout(() => {
-        if (entry?.terminal) {
-          entry.terminal.resize(actualCols, actualRows)
-        }
-        // Send buffer AFTER resize jiggle completes
-        setTimeout(() => {
-          if (pendingBuffer) {
-            ptyLog(`[pty:attach] ${godName}: sending ${pendingBuffer.length} chars AFTER resize`)
-            entry.clients.forEach(client => {
-              if (client.readyState === 1) {
-                client.send(JSON.stringify({ event: 'pty:output', godName, data: '\x1b[2J\x1b[H' + pendingBuffer }))
-              }
-            })
-          }
-        }, 50)
-      }, 50)
-    }
-  }, 100)
+  // Resize jiggle disabled - was causing visual glitches
+  // dtach -r winch already triggers a redraw via SIGWINCH
 
   // Handle process exit
   proc.exited.then((exitCode) => {

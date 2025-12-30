@@ -389,6 +389,8 @@ export function getStateForBroadcast() {
       name: entity.name,
       tabId: entity.tabId || 1,
       order: entity.order || 0,
+      title: entity.title || null,
+      status: entity.status || null,
       spawnedAt: entity.spawnedAt || null,
       // View-specific data
       url: entity.url || null,        // for browser

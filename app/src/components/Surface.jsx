@@ -19,8 +19,7 @@ export default function Surface({
   depth = 0,
   entities,
   focusedTile,
-  focusedEntity,
-  containerSize
+  focusedEntity
 }) {
   const { send } = useWebSocket(WS_URL)
 
@@ -53,7 +52,6 @@ export default function Surface({
         isChapter={depth > 0}  // Has parent split = is a chapter
         entities={entities}
         tabId={tabId}
-        containerSize={containerSize}
         globalFocusedEntity={focusedEntity}
       />
     )
@@ -89,10 +87,6 @@ export default function Surface({
             entities={entities}
             focusedTile={focusedTile}
             focusedEntity={focusedEntity}
-            containerSize={containerSize ? {
-              width: isHorizontal ? containerSize.width * firstFlex : containerSize.width,
-              height: isHorizontal ? containerSize.height : containerSize.height * firstFlex
-            } : null}
           />
         </div>
 
@@ -120,10 +114,6 @@ export default function Surface({
             entities={entities}
             focusedTile={focusedTile}
             focusedEntity={focusedEntity}
-            containerSize={containerSize ? {
-              width: isHorizontal ? containerSize.width * secondFlex : containerSize.width,
-              height: isHorizontal ? containerSize.height : containerSize.height * secondFlex
-            } : null}
           />
         </div>
       </div>

@@ -15,11 +15,12 @@ function hexToRgb(hex) {
 const APPROX_CELL_WIDTH = 8.4
 const APPROX_CELL_HEIGHT = 17
 
-export default function TerminalContent({ entity, isFocused, isHidden, expectedWidth, expectedHeight }) {
+export default function TerminalContent({ entity, isFocused, isHidden }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const wsRef = useRef(null)
   const cellDimsRef = useRef(null) // Cache cell dimensions once available
+  const resizeTimeoutRef = useRef(null)
 
   // Track which container the terminal is attached to (for hot reload detection)
   const attachedContainerRef = useRef(null)
@@ -92,21 +93,6 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     }
   }, [palette, isGod])
 
-  // Resize when expected dimensions change (driven by parent's stable measurement)
-  useEffect(() => {
-    if (!termRef.current || !expectedWidth || !expectedHeight) return
-
-    try {
-      // Try to get actual cell dimensions from xterm
-      const dims = termRef.current._core?._renderService?.dimensions
-      if (dims?.css?.cell) {
-        cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
-      }
-
-      const { cols, rows } = calcDimensions(expectedWidth, expectedHeight)
-      resizeTerminal(cols, rows)
-    } catch {}
-  }, [expectedWidth, expectedHeight, godName])
 
   // Focus when becoming focused
   useEffect(() => {
@@ -120,18 +106,20 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     }
   }, [isFocused])
 
-  // Resize when becoming visible (tab switch) - dimensions might have changed while hidden
+  // Resize when becoming visible (tab switch) - trigger a refit
   const wasHiddenRef = useRef(isHidden)
   useEffect(() => {
-    if (wasHiddenRef.current && !isHidden && termRef.current && expectedWidth && expectedHeight) {
+    if (wasHiddenRef.current && !isHidden && termRef.current && containerRef.current) {
       const timeout = setTimeout(() => {
         try {
-          // Re-acquire cell dimensions in case they were lost
+          const { width, height } = containerRef.current.getBoundingClientRect()
+          if (width < 50 || height < 50) return
+
           const dims = termRef.current?._core?._renderService?.dimensions
           if (dims?.css?.cell) {
             cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
           }
-          const { cols, rows } = calcDimensions(expectedWidth, expectedHeight)
+          const { cols, rows } = calcDimensions(width, height)
           resizeTerminal(cols, rows)
         } catch {}
       }, 50)
@@ -139,7 +127,7 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
       return () => clearTimeout(timeout)
     }
     wasHiddenRef.current = isHidden
-  }, [isHidden, expectedWidth, expectedHeight, godName])
+  }, [isHidden, godName])
 
   // Main terminal setup
   useEffect(() => {
@@ -148,10 +136,11 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     // Track current container for hot reload detection
     attachedContainerRef.current = containerRef.current
 
-    // Initial size from expected dimensions
+    // Initial size from actual container measurement
+    const rect = containerRef.current.getBoundingClientRect()
     const { cols: initialCols, rows: initialRows } = calcDimensions(
-      expectedWidth || 800,
-      expectedHeight || 600
+      rect.width || 800,
+      rect.height || 600
     )
 
     // Gods (no displayName) hide cursor, terminals show it
@@ -166,26 +155,20 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
       rows: initialRows,
       cols: initialCols,
       theme: termTheme,
-      allowTransparency: true
+      allowTransparency: true,
+      scrollback: 10000
     })
 
     term.open(containerRef.current)
     termRef.current = term
 
-    // After first render, capture actual cell dimensions and resize accurately
+    // Capture cell dimensions after first render for accurate sizing
     const onFirstRender = term.onRender(() => {
       onFirstRender.dispose()
-
       try {
         const dims = term._core?._renderService?.dimensions
         if (dims?.css?.cell) {
           cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
-
-          // Now resize with accurate cell dimensions
-          if (expectedWidth && expectedHeight) {
-            const { cols, rows } = calcDimensions(expectedWidth, expectedHeight)
-            resizeTerminal(cols, rows)
-          }
         }
       } catch {}
     })
@@ -222,15 +205,27 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
     const container = containerRef.current
     container.addEventListener('keydown', handleShortcut, true)
 
-    // Listen for global refit event (god count changes)
-    const handleRefit = () => {
-      try {
-        if (!expectedWidth || !expectedHeight) return
-        const { cols, rows } = calcDimensions(expectedWidth, expectedHeight)
-        resizeTerminal(cols, rows)
-      } catch {}
-    }
-    window.addEventListener('iris:refit', handleRefit)
+    // ResizeObserver: measure actual container size and resize terminal
+    const resizeObserver = new ResizeObserver((entries) => {
+      // Debounce to avoid excessive resize events during animations/drags
+      clearTimeout(resizeTimeoutRef.current)
+      resizeTimeoutRef.current = setTimeout(() => {
+        const { width, height } = entries[0].contentRect
+        if (width < 50 || height < 50) return // Too small, skip
+
+        try {
+          // Update cell dimensions from xterm if available
+          const dims = term._core?._renderService?.dimensions
+          if (dims?.css?.cell) {
+            cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
+          }
+
+          const { cols, rows } = calcDimensions(width, height)
+          resizeTerminal(cols, rows)
+        } catch {}
+      }, 50)
+    })
+    resizeObserver.observe(container)
 
     // Send user input to PTY
     term.onData((data) => {
@@ -253,7 +248,6 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
         const msg = JSON.parse(event.data)
         if (msg.event === 'pty:output' && msg.godName === godName) {
           if (typeof msg.data === 'string') {
-            console.log(`[TerminalContent] ${godName}: received ${msg.data.length} chars`)
             term.write(msg.data)
           }
         }
@@ -269,7 +263,8 @@ export default function TerminalContent({ entity, isFocused, isHidden, expectedW
 
     return () => {
       onFirstRender.dispose()
-      window.removeEventListener('iris:refit', handleRefit)
+      clearTimeout(resizeTimeoutRef.current)
+      resizeObserver.disconnect()
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
       }

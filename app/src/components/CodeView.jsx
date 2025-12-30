@@ -383,18 +383,21 @@ export default function CodeView({ entityId }) {
 
   // Sync open files to server when they change
   useEffect(() => {
+    console.log('[CodeView sync check]', { initialLoadDone, hasSend: !!send, activeFilePath, rootPath })
     if (!initialLoadDone || !send) return
 
     // Only send path and name, not content (too large)
     const filesToSync = openFiles.map(f => ({ path: f.path, name: f.name }))
 
+    console.log('[CodeView sync SENDING]', { entityId, activeFilePath, rootPath })
     send({
       event: 'code:files:sync',
       entityId,
       openFiles: filesToSync,
-      activeFilePath
+      activeFilePath,
+      rootPath
     })
-  }, [openFiles, activeFilePath, entityId, send, initialLoadDone])
+  }, [openFiles, activeFilePath, rootPath, entityId, send, initialLoadDone])
 
   // Apply decorations for highlights
   useEffect(() => {

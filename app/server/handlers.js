@@ -1419,11 +1419,25 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'code:files:sync': {
       // Sync open files from code viewer to entity state
-      const { entityId, openFiles, activeFilePath } = data
+      const { entityId, openFiles, activeFilePath, rootPath } = data
+      const logLine = `[${new Date().toISOString()}] [code:files:sync] entityId=${entityId} rootPath=${rootPath} activeFilePath=${activeFilePath}\n`
+      fs.appendFileSync(path.join(LOGS_DIR, 'code-sync.log'), logLine)
       if (!entityId || !appState.entities[entityId]) break
 
       appState.entities[entityId].openFiles = openFiles || []
       appState.entities[entityId].activeFilePath = activeFilePath || null
+
+      // Update name and title to project root folder name
+      if (rootPath) {
+        const folderName = path.basename(rootPath)
+        appState.entities[entityId].name = folderName
+        appState.entities[entityId].title = folderName
+      }
+
+      // Update status to current file path
+      if (activeFilePath) {
+        appState.entities[entityId].status = activeFilePath
+      }
 
       saveState()
       broadcastState()

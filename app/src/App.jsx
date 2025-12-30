@@ -188,30 +188,6 @@ export default function App() {
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
 
-  // Ref and state for measuring god card container
-  const [containerSize, setContainerSize] = useState(null) // null = not measured yet
-  const observerRef = useRef(null)
-
-  // Callback ref that sets up ResizeObserver when element mounts
-  const godContainerRef = useCallback((node) => {
-    // Cleanup old observer
-    if (observerRef.current) {
-      observerRef.current.disconnect()
-      observerRef.current = null
-    }
-
-    if (node) {
-      const measure = () => {
-        const rect = node.getBoundingClientRect()
-        console.log('[App] Container size:', rect.width, 'x', rect.height)
-        setContainerSize({ width: rect.width, height: rect.height })
-      }
-
-      measure()
-      observerRef.current = new ResizeObserver(measure)
-      observerRef.current.observe(node)
-    }
-  }, [])
 
   // Update connection status in store
   useEffect(() => {
@@ -312,30 +288,6 @@ export default function App() {
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
   const focusedEntityType = focusedEntityObj?.type || 'god'
 
-  // Dispatch refit event when entity count changes (for terminal resizing)
-  useEffect(() => {
-    // Small delay to let layout settle
-    const timeout = setTimeout(() => {
-      window.dispatchEvent(new Event('iris:refit'))
-    }, 100)
-    return () => clearTimeout(timeout)
-  }, [activeEntities.length])
-
-  // Dispatch refit on window resize
-  useEffect(() => {
-    let timeout
-    const handleResize = () => {
-      clearTimeout(timeout)
-      timeout = setTimeout(() => {
-        window.dispatchEvent(new Event('iris:refit'))
-      }, 100)
-    }
-    window.addEventListener('resize', handleResize)
-    return () => {
-      clearTimeout(timeout)
-      window.removeEventListener('resize', handleResize)
-    }
-  }, [])
 
   // Summon a new god (with specific name)
   const handleSummonGod = useCallback((name, task = '') => {
@@ -689,7 +641,7 @@ export default function App() {
           {/* Main layout: focused entity + sidebar */}
           <div className="flex h-full">
             {/* Main focused entity area */}
-            <div ref={godContainerRef} className="flex-[2] min-w-0 relative h-full">
+            <div className="flex-[2] min-w-0 relative h-full">
               <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
               {(() => {
                 const activeLayout = getActiveLayout()
@@ -718,7 +670,6 @@ export default function App() {
                               entities={entities}
                               focusedTile={focusedTile}
                               focusedEntity={focusedEntity}
-                              containerSize={containerSize}
                             />
                           </motion.div>
                         )
@@ -787,21 +738,18 @@ export default function App() {
                             transformOrigin: 'center center',
                           }}
                         >
-                          {containerSize && (
-                            <TileCard
-                              entity={entity}
-                              isFocused={position === 0}
-                              onClick={() => handleSetFocus(entity.id)}
-                            >
-                              {/* Render content based on entity type */}
-                              {(entity.type === 'god' || entity.type === 'terminal') && (
-                                <TerminalContent
-                                  entity={entity}
-                                  isFocused={position === 0}
-                                  expectedWidth={containerSize.width}
-                                  expectedHeight={containerSize.height}
-                                />
-                              )}
+                          <TileCard
+                            entity={entity}
+                            isFocused={position === 0}
+                            onClick={() => handleSetFocus(entity.id)}
+                          >
+                            {/* Render content based on entity type */}
+                            {(entity.type === 'god' || entity.type === 'terminal') && (
+                              <TerminalContent
+                                entity={entity}
+                                isFocused={position === 0}
+                              />
+                            )}
                               {entity.type === 'browser' && (
                                 <BrowserView entityId={entity.id} />
                               )}
@@ -829,8 +777,7 @@ export default function App() {
                               {entity.type === 'oracle' && (
                                 <OracleView entityId={entity.id} />
                               )}
-                            </TileCard>
-                          )}
+                          </TileCard>
                         </motion.div>
                       )
                     })}
@@ -1119,8 +1066,6 @@ export default function App() {
                 entity={god}
                 isFocused={false}
                 isHidden={true}
-                expectedWidth={800}
-                expectedHeight={600}
               />
             </TileCard>
           </div>

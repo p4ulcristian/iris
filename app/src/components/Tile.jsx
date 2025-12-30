@@ -28,7 +28,6 @@ export default function Tile({
   isChapter = false,  // True when tile has a parent split (is part of a chapter)
   entities,
   tabId,
-  containerSize,
   globalFocusedEntity
 }) {
   const { send, connected } = useWebSocket(WS_URL)
@@ -111,8 +110,6 @@ export default function Tile({
           <TerminalContent
             entity={entity}
             isFocused={isEntityFocused}
-            expectedWidth={containerSize?.width || 800}
-            expectedHeight={containerSize?.height || 600}
           />
         )
       case 'browser':
@@ -181,7 +178,7 @@ export default function Tile({
       )}
 
       {/* Entity display - single entity per tile */}
-      {tileEntity && containerSize && (
+      {tileEntity && (
         <TileCard
           entity={tileEntity}
           isFocused={isFocused}

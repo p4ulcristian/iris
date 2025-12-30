@@ -286,6 +286,16 @@ startHealthChecks()
 process.on('SIGTERM', cleanup)
 process.on('SIGINT', cleanup)
 
+// Prevent unhandled errors from crashing the server
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err.message)
+  console.error(err.stack)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled rejection at:', promise, 'reason:', reason)
+})
+
 function cleanup() {
   console.log('Shutting down server...')
   stopHealthChecks()
