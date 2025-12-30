@@ -26,7 +26,7 @@
   "build": {
     "appId": "com.paulcristian.iris",
     "productName": "Iris",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "artifactName": "${productName}-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },

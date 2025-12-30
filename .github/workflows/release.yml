@@ -85,8 +85,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          repository: p4ulcristian/iris-releases
+          token: ${{ secrets.RELEASES_TOKEN }}
           files: artifacts/*
-          generate_release_notes: true
+          generate_release_notes: false
           body: |
             ## Requirements
 
@@ -103,11 +105,12 @@ jobs:
 
             ## macOS Installation
 
-            1. Open the DMG and drag Iris to Applications
-            2. Run in terminal:
+            1. Extract the zip
+            2. Move Iris.app to Applications
+            3. Run in terminal:
                ```bash
                xattr -cr /Applications/Iris.app
                ```
-            3. Open Iris from Applications
+            4. Open Iris from Applications
 
             > The `xattr` command removes the quarantine flag since the app isn't code-signed.
