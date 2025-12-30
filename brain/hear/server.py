@@ -9,6 +9,7 @@
 #     "resampy",
 #     "nemo_toolkit[asr]",
 #     "torch",
+#     "torchaudio",
 # ]
 # ///
 """

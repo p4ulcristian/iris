@@ -29,8 +29,10 @@ function formatElapsed(ms) {
 }
 
 
-export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
+export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0 }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
+  const loadStage = useStore(s => s.loadStage)
+  const initialLoadDone = useStore(s => s.initialLoadDone)
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
@@ -111,16 +113,21 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
   }
   const statusPill = getStatusPill()
 
+  // Calculate stagger delay: only apply on initial load before stage 5
+  const staggerDelay = (!initialLoadDone || loadStage < 5) ? staggerIndex * 0.08 : 0
+  // Should be visible based on load stage (entities appear at stage 4)
+  const shouldShow = loadStage >= 4
+
   return (
     <motion.div
       className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
       style={{ borderRadius: '12px 16px 16px 12px' }}
       initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
       animate={{
-        opacity: isActive ? 1 : 0.6,
-        y: 0,
-        scale: 1,
-        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
+        opacity: shouldShow ? (isActive ? 1 : 0.6) : 0,
+        y: shouldShow ? 0 : -40,
+        scale: shouldShow ? 1 : 0.9,
+        filter: shouldShow ? (isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)') : 'blur(8px)',
       }}
       exit={{
         opacity: 0,
@@ -134,6 +141,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
         stiffness: 400,
         damping: 25,
         mass: 0.8,
+        delay: staggerDelay,
       }}
       layout="position"
     >

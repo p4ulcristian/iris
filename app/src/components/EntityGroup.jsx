@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { useStore } from '../store'
 import EntityCard from './EntityCard'
 
 /**
@@ -6,6 +7,8 @@ import EntityCard from './EntityCard'
  *
  * Solo stage (1 entity): Renders EntityCard directly
  * Multi-entity stage (2+ entities): Vertical list inside a group container
+ *
+ * staggerOffset: The number of entities that come before this group (for stagger animation)
  */
 export default function EntityGroup({
   stage,
@@ -18,8 +21,15 @@ export default function EntityGroup({
   tabs,
   activeTabId,
   onMoveToTab,
-  onMoveToNewTab
+  onMoveToNewTab,
+  staggerOffset = 0
 }) {
+  const loadStage = useStore(s => s.loadStage)
+  const initialLoadDone = useStore(s => s.initialLoadDone)
+
+  // Calculate stagger delay for the group container
+  const groupStaggerDelay = (!initialLoadDone || loadStage < 5) ? staggerOffset * 0.08 : 0
+
   // Solo stage - just render EntityCard directly
   if (entities.length === 1) {
     return (
@@ -32,6 +42,7 @@ export default function EntityGroup({
         activeTabId={activeTabId}
         onMoveToTab={onMoveToTab}
         onMoveToNewTab={onMoveToNewTab}
+        staggerIndex={staggerOffset}
       />
     )
   }
@@ -41,11 +52,19 @@ export default function EntityGroup({
     <motion.div
       className="flex flex-col gap-2 p-2 rounded-2xl border border-white/20 bg-white/5"
       initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{
+        opacity: loadStage >= 4 ? 1 : 0,
+        y: loadStage >= 4 ? 0 : -20
+      }}
       exit={{ opacity: 0, y: 20 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 25,
+        delay: groupStaggerDelay
+      }}
     >
-      {entities.map((entity) => (
+      {entities.map((entity, idx) => (
         <EntityCard
           key={entity.id}
           entity={entity}
@@ -57,6 +76,7 @@ export default function EntityGroup({
           activeTabId={activeTabId}
           onMoveToTab={onMoveToTab}
           onMoveToNewTab={onMoveToNewTab}
+          staggerIndex={staggerOffset + idx}
         />
       ))}
     </motion.div>

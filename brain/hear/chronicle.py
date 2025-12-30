@@ -6,11 +6,15 @@ import logging
 import numpy as np
 import sounddevice as sd
 import resampy
+import sys
 from pathlib import Path
 from datetime import datetime, date
 
-from .vad import VAD, SAMPLE_RATE as VAD_SAMPLE_RATE, CHUNK_SIZE as VAD_CHUNK_SIZE
-from .audio import get_input_device, TARGET_SAMPLE_RATE
+# Add this directory to path for sibling imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+from vad import VAD, SAMPLE_RATE as VAD_SAMPLE_RATE, CHUNK_SIZE as VAD_CHUNK_SIZE
+from audio import get_input_device, TARGET_SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,7 @@ class Chronicle:
         Returns:
             Audio as float32 numpy array at 16kHz, or None if no speech.
         """
+        logger.debug(f"Starting utterance recording (device={self.device}, rate={self.native_rate})")
         need_resample = self.native_rate != VAD_SAMPLE_RATE
         record_chunk = int(0.1 * self.native_rate)  # 100ms chunks
 
@@ -167,8 +172,13 @@ class Chronicle:
     def _run_loop(self):
         """Main chronicle loop - runs in background thread."""
         logger.info("Chronicle loop started")
-        self._ensure_vad()
+        try:
+            self._ensure_vad()
+        except Exception as e:
+            logger.error(f"Failed to load VAD: {e}")
+            return
 
+        logger.info("Entering main recording loop")
         while self.running:
             if self.paused:
                 time.sleep(0.1)

@@ -659,7 +659,19 @@ export default function App() {
 
                 if (activeStages.length > 0) {
                   return (
-                    <div className="relative h-full overflow-hidden">
+                    <motion.div
+                      className="relative h-full overflow-hidden"
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{
+                        opacity: loadStage >= 3 ? 1 : 0,
+                        scale: loadStage >= 3 ? 1 : 0.98
+                      }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 300,
+                        damping: 30
+                      }}
+                    >
                       {activeStages.map((stage, idx) => {
                         const offset = idx - activeIdx
                         return (
@@ -679,14 +691,26 @@ export default function App() {
                           </motion.div>
                         )
                       })}
-                    </div>
+                    </motion.div>
                   )
                 }
 
                 // Legacy mode: no layout tree, render flat entity list
                 if (activeEntities.length === 0) {
                   return (
-                    <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
+                    <motion.div
+                      className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{
+                        opacity: loadStage >= 3 ? 1 : 0,
+                        y: loadStage >= 3 ? 0 : 20
+                      }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 300,
+                        damping: 30
+                      }}
+                    >
                       <div className="text-center">
                         <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
                         <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
@@ -708,7 +732,7 @@ export default function App() {
                       </div>
 
                       <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
-                    </div>
+                    </motion.div>
                   )
                 }
 
@@ -818,9 +842,13 @@ export default function App() {
                     >
                       {activeStages.length > 0 ? (
                         <div className="flex flex-col gap-3">
-                          {activeStages.map((stage) => {
+                          {activeStages.map((stage, stageIdx) => {
                             const activeTab = tabs.find(t => t.id === activeTabId)
                             const isActiveStage = stage.id === activeTab?.activeStageId
+                            // Calculate stagger offset: sum of entities in previous stages
+                            const staggerOffset = activeStages
+                              .slice(0, stageIdx)
+                              .reduce((sum, s) => sum + s.entities.length, 0)
                             return (
                               <EntityGroup
                                 key={stage.id}
@@ -844,6 +872,7 @@ export default function App() {
                                 onMoveToNewTab={(entityId) => {
                                   send({ event: 'entity:move-to-new-tab', entityId })
                                 }}
+                                staggerOffset={staggerOffset}
                               />
                             )
                           })}
@@ -856,7 +885,7 @@ export default function App() {
                           onReorder={handleEntityReorder}
                           className="flex flex-col gap-3"
                         >
-                          {activeEntities.map((entity) => (
+                          {activeEntities.map((entity, idx) => (
                             <EntityCard
                               key={entity.id}
                               entity={entity}
@@ -872,6 +901,7 @@ export default function App() {
                               onMoveToNewTab={(entityId) => {
                                 send({ event: 'entity:move-to-new-tab', entityId })
                               }}
+                              staggerIndex={idx}
                             />
                           ))}
                         </Reorder.Group>
@@ -938,9 +968,16 @@ export default function App() {
                     <motion.div
                       className="absolute bottom-0 right-0 z-10 flex flex-col items-end"
                       initial={{ x: '100%', opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
+                      animate={{
+                        x: loadStage >= 5 ? 0 : '100%',
+                        opacity: loadStage >= 5 ? 1 : 0
+                      }}
                       exit={{ x: '100%', opacity: 0 }}
-                      transition={{ duration: BUTTON_DURATION / 1000, ease: 'easeInOut' }}
+                      transition={{
+                        duration: BUTTON_DURATION / 1000,
+                        ease: 'easeInOut',
+                        delay: (!initialLoadDone || loadStage < 5) ? 0.2 : 0
+                      }}
                       onMouseEnter={() => setSidebarButtonsExpanded(true)}
                       onMouseLeave={() => setSidebarButtonsExpanded(false)}
                     >

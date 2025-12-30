@@ -243,12 +243,26 @@ export default function LeftWing({
 
       {/* Services dropdown - only show when powers are enabled */}
       {powers && (
-        <ServicesDropdown
-          connected={connected}
-          services={services}
-          servicesLoading={servicesLoading}
-          onToggle={handleServiceToggle}
-        />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{
+            opacity: loadStage >= 2 ? 1 : 0,
+            scale: loadStage >= 2 ? 1 : 0.8
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 400,
+            damping: 25,
+            delay: (!initialLoadDone || loadStage < 5) ? 0.15 : 0
+          }}
+        >
+          <ServicesDropdown
+            connected={connected}
+            services={services}
+            servicesLoading={servicesLoading}
+            onToggle={handleServiceToggle}
+          />
+        </motion.div>
       )}
     </aside>
   )
