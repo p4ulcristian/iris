@@ -1,54 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faGlobe, faClockRotateLeft, faGear, faSkull } from '@fortawesome/free-solid-svg-icons'
+import { EntityIcon, ENTITY_TYPE_LIST } from '../entities'
 
-// Type icons
-import claudeIcon from '../assets/icons/claude.png'
-import linearIcon from '../assets/icons/linear.png'
-import gitIcon from '../assets/icons/git.png'
-import nvimIcon from '../assets/icons/nvim.png'
-import browserIcon from '../assets/icons/browser.png'
-
-// Icon component for entity types
-function EntityIcon({ type, className = "" }) {
-  const imgClass = `w-5 h-5 object-contain ${className}`
-
-  switch (type) {
-    case 'god':
-      return <img src={claudeIcon} alt="Claude" className={imgClass} />
-    case 'linear':
-      return <img src={linearIcon} alt="Linear" className={imgClass} />
-    case 'git':
-      return <img src={gitIcon} alt="Git" className={imgClass} />
-    case 'nvim':
-      return <img src={nvimIcon} alt="Nvim" className={imgClass} />
-    case 'browser':
-      return <img src={browserIcon} alt="Browser" className={imgClass} />
-    case 'terminal':
-      return <FontAwesomeIcon icon={faTerminal} className="text-lg" />
-    case 'history':
-      return <FontAwesomeIcon icon={faClockRotateLeft} className="text-lg" />
-    case 'settings':
-      return <FontAwesomeIcon icon={faGear} className="text-lg" />
-    case 'cemetery':
-      return <FontAwesomeIcon icon={faSkull} className="text-lg" />
-    default:
-      return <FontAwesomeIcon icon={faTerminal} className="text-lg" />
-  }
-}
-
-const ENTITY_TYPES = [
-  { type: 'god', label: 'God', description: 'Claude AI assistant' },
-  { type: 'terminal', label: 'Terminal', description: 'Raw shell session' },
-  { type: 'nvim', label: 'Nvim', description: 'Neovim editor' },
-  { type: 'browser', label: 'Browser', description: 'Web browser' },
-  { type: 'git', label: 'Git', description: 'Git repository view' },
-  { type: 'linear', label: 'Linear', description: 'Linear issues' },
-  { type: 'history', label: 'History', description: 'Session history' },
-  { type: 'cemetery', label: 'Cemetery', description: 'Fallen gods' },
-  { type: 'settings', label: 'Settings', description: 'App settings' },
-]
+// Filter entity types for the picker (exclude code, calendar, oracle which are spawned via other means)
+const PICKER_ENTITY_TYPES = ENTITY_TYPE_LIST.filter(e =>
+  ['god', 'terminal', 'nvim', 'browser', 'git', 'linear', 'history', 'cemetery', 'settings', 'youtube-music'].includes(e.type)
+)
 
 export default function EntityPickerModal({
   isOpen,
@@ -135,14 +92,14 @@ export default function EntityPickerModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl w-[420px] p-5 overflow-hidden">
+      <div className="relative bg-black/80 backdrop-blur-xl border border-white/20 rounded-2xl shadow-xl w-[420px] p-5 max-h-[80vh] overflow-y-auto">
         {mode === 'pick' ? (
           <>
             <h3 className="text-white font-medium mb-4 text-lg">Add to workspace</h3>
 
             {/* Entity type grid */}
             <div className="grid grid-cols-2 gap-3">
-              {ENTITY_TYPES.map(entity => (
+              {PICKER_ENTITY_TYPES.map(entity => (
                 <button
                   key={entity.type}
                   onClick={() => handleEntityClick(entity.type)}

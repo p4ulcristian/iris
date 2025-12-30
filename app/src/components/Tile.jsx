@@ -10,6 +10,7 @@ import CemeteryView from './CemeteryView'
 import CalendarView from './CalendarView'
 import CodeView from './CodeView'
 import OracleView from './OracleView'
+import YouTubeMusicView from './YouTubeMusicView'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -130,6 +131,8 @@ export default function Tile({
         return <CodeView entityId={entity.id} />
       case 'oracle':
         return <OracleView entityId={entity.id} />
+      case 'youtube-music':
+        return <YouTubeMusicView />
       default:
         return (
           <div className="h-full flex items-center justify-center text-text-secondary">

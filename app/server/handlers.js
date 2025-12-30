@@ -24,7 +24,8 @@ const ENTITY_TYPES = {
   calendar: { icon: '📅', label: 'Calendar' },
   settings: { icon: '⚙️', label: 'Settings' },
   cemetery: { icon: '🪦', label: 'Cemetery' },
-  oracle: { icon: '🔮', label: 'Oracle' }
+  oracle: { icon: '🔮', label: 'Oracle' },
+  'youtube-music': { icon: '🎵', label: 'YouTube Music' }
 }
 
 // Add a god to the cemetery before banishing
