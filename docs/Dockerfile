@@ -7,8 +7,7 @@ COPY . /usr/share/nginx/html
 RUN rm -f /usr/share/nginx/html/Dockerfile
 
 # Create nginx config that uses PORT env variable
-RUN echo 'server { listen ${PORT}; location / { root /usr/share/nginx/html; index index.html; } }' > /etc/nginx/templates/default.conf.template
-
-EXPOSE 80
+RUN mkdir -p /etc/nginx/templates && \
+    echo 'server { listen ${PORT}; location / { root /usr/share/nginx/html; index index.html; } }' > /etc/nginx/templates/default.conf.template
 
 CMD ["nginx", "-g", "daemon off;"]
