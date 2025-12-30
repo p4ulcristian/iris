@@ -325,6 +325,106 @@
       }
     }
 
+    /* Concepts */
+    .concepts {
+      margin-bottom: 100px;
+    }
+
+    .concepts h2 {
+      font-size: 2rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--accent) 0%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .concepts-intro {
+      text-align: center;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 48px;
+      font-size: 1.1rem;
+    }
+
+    .concept-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .concept {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+
+    .concept-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .concept-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+
+    .concept-icon.gold { background: linear-gradient(135deg, #FFCC00 0%, #FFE066 100%); }
+    .concept-icon.purple { background: linear-gradient(135deg, #AA44FF 0%, #CC88FF 100%); }
+    .concept-icon.blue { background: linear-gradient(135deg, #0088FF 0%, #44AAFF 100%); }
+    .concept-icon.green { background: linear-gradient(135deg, #00FF88 0%, #66FFAA 100%); }
+    .concept-icon.pink { background: linear-gradient(135deg, #FF44AA 0%, #FF88CC 100%); }
+    .concept-icon.cyan { background: linear-gradient(135deg, #00DDFF 0%, #66EEFF 100%); }
+
+    .concept h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .concept p {
+      font-size: 0.9375rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .concept .term {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* Layout diagram */
+    .layout-diagram {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 48px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      overflow-x: auto;
+      color: var(--text-muted);
+    }
+
+    .layout-diagram pre {
+      margin: 0;
+    }
+
+    .layout-diagram .highlight {
+      color: var(--accent);
+    }
+
     /* Features */
     .features {
       display: grid;
@@ -558,6 +658,78 @@
           <h3>Stages & Entities</h3>
           <p>Each workspace contains stages that can hold different entity types. Split your view between Claude instances, embedded browsers, YouTube Music, or code viewers. Switch between stages instantly while sessions persist in the background.</p>
         </div>
+      </div>
+    </section>
+
+    <!-- Concepts -->
+    <section class="concepts">
+      <h2 class="animate-on-scroll">The Pantheon</h2>
+      <p class="concepts-intro animate-on-scroll">Iris draws from Greek mythology. Each Claude instance is a <strong>god</strong>, workspaces are <strong>realms</strong>, and the UI elements follow the divine theme.</p>
+
+      <div class="concept-grid">
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon gold">&#9889;</div>
+            <h3>Gods</h3>
+          </div>
+          <p>Each Claude Code instance is a <span class="term">god</span> from the Greek pantheon &mdash; Zeus, Artemis, Poseidon, and more. Gods work independently in their own terminals, each with a unique color. <span class="term">Summon</span> a god with <code>Ctrl+N</code>, <span class="term">banish</span> one with <code>Ctrl+K</code>.</p>
+        </div>
+
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon purple">&#9707;</div>
+            <h3>Realms</h3>
+          </div>
+          <p><span class="term">Realms</span> are workspace tabs &mdash; Olympus, Tartarus, Elysium, and more. Each realm has its own layout and set of entities. Switch between realms to organize different projects or contexts. The left sidebar shows all available realms.</p>
+        </div>
+
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon blue">&#9638;</div>
+            <h3>Stage & Tiles</h3>
+          </div>
+          <p>The <span class="term">stage</span> is the main content area. It contains a <span class="term">surface</span> that can be split into <span class="term">tiles</span>. Each tile holds one entity &mdash; a god, browser, terminal, or code viewer. Split horizontally or vertically to create your ideal layout.</p>
+        </div>
+
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon green">&#10010;</div>
+            <h3>Summon Menu</h3>
+          </div>
+          <p>The bottom-right <span class="term">summon menu</span> lets you spawn new entities. Click the [+] or press <code>Ctrl+N</code> to summon a god. You can also spawn terminals, browsers, YouTube Music, or code viewers in any tile.</p>
+        </div>
+
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon pink">&#128220;</div>
+            <h3>Scrolls</h3>
+          </div>
+          <p>The right sidebar shows <span class="term">scrolls</span> &mdash; status cards for each god. Scrolls display the god's name, current task, status (working, done, stuck), and elapsed time. Click a scroll to focus that god's tile.</p>
+        </div>
+
+        <div class="concept animate-on-scroll">
+          <div class="concept-header">
+            <div class="concept-icon cyan">&#9881;</div>
+            <h3>Powers</h3>
+          </div>
+          <p>Optional voice services live in the left sidebar under <span class="term">Powers</span>. These include speech-to-text, text-to-speech, and wake word detection. Powers require additional setup and are disabled by default.</p>
+        </div>
+      </div>
+
+      <div class="layout-diagram animate-on-scroll">
+        <pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│ ┌──────────┐ ┌─────────────────────────────────┐ ┌────────────────┐ │
+│ │          │ │             <span class="highlight">STAGE</span>               │ │                │ │
+│ │   LEFT   │ │ ┌───────────────┬─────────────┐ │ │     RIGHT      │ │
+│ │   WING   │ │ │     <span class="highlight">TILE</span>      │     <span class="highlight">TILE</span>    │ │ │      WING      │ │
+│ │          │ │ │    (Zeus)     │   (Artemis) │ │ │                │ │
+│ │  Realms  │ │ │               │             │ │ │    <span class="highlight">Scrolls</span>     │ │
+│ │    +     │ │ ├───────────────┴─────────────┤ │ │       +        │ │
+│ │  Powers  │ │ │           <span class="highlight">TILE</span>              │ │ │  Summon Menu   │ │
+│ │          │ │ │        (Poseidon)           │ │ │                │ │
+│ └──────────┘ └─────────────────────────────────┘ └────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘</pre>
       </div>
     </section>
 
