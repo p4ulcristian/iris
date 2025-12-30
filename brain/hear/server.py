@@ -8,6 +8,7 @@
 #     "soundfile",
 #     "resampy",
 #     "nemo_toolkit[asr]",
+#     "torch",
 # ]
 # ///
 """
@@ -18,6 +19,14 @@ Endpoints:
   POST /start      - Start recording
   POST /stop       - Stop recording and return transcription
   POST /transcribe - Upload audio file and get transcription
+
+Chronicle (continuous transcription):
+  POST /chronicle/start  - Start continuous VAD-driven logging
+  POST /chronicle/stop   - Stop continuous logging
+  POST /chronicle/pause  - Temporarily pause (for PTT)
+  POST /chronicle/resume - Resume after PTT
+  GET  /chronicle/status - Get chronicle status
+  POST /chronicle/log    - Log external text (PTT inputs)
 """
 
 from flask import Flask, request, jsonify
@@ -63,13 +72,14 @@ PORT = 8766
 # State
 stt_model = None
 recorder = None
+chronicle = None
 is_ready = False
 recording_lock = threading.Lock()
 
 
 def init_models():
     """Initialize STT model on startup"""
-    global stt_model, recorder, is_ready
+    global stt_model, recorder, chronicle, is_ready
 
     if STT_AVAILABLE:
         logger.info("Initializing STT model...")
@@ -78,6 +88,16 @@ def init_models():
 
     stt_model = SpeechToText()
     recorder = AudioRecorder()
+
+    # Initialize chronicle with shared STT model
+    try:
+        from chronicle import Chronicle
+        chronicle = Chronicle(stt_model)
+        logger.info("Chronicle initialized")
+    except Exception as e:
+        logger.warning(f"Chronicle not available: {e}")
+        chronicle = None
+
     is_ready = True
 
     if STT_AVAILABLE:
@@ -89,7 +109,10 @@ def init_models():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({"ready": is_ready})
+    result = {"ready": is_ready}
+    if chronicle:
+        result["chronicle"] = chronicle.status()
+    return jsonify(result)
 
 
 @app.route('/start', methods=['POST'])
@@ -167,6 +190,90 @@ def transcribe():
 
     finally:
         os.unlink(temp_path)
+
+
+# Chronicle endpoints
+
+@app.route('/chronicle/start', methods=['POST'])
+def chronicle_start():
+    """Start continuous transcription logging"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    if chronicle.start():
+        return jsonify({"status": "ok", "message": "Chronicle started"})
+    else:
+        return jsonify({"status": "ok", "message": "Chronicle already running"})
+
+
+@app.route('/chronicle/stop', methods=['POST'])
+def chronicle_stop():
+    """Stop continuous transcription logging"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    if chronicle.stop():
+        return jsonify({"status": "ok", "message": "Chronicle stopped"})
+    else:
+        return jsonify({"status": "ok", "message": "Chronicle not running"})
+
+
+@app.route('/chronicle/pause', methods=['POST'])
+def chronicle_pause():
+    """Pause continuous transcription (for PTT)"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    chronicle.pause()
+    return jsonify({"status": "ok", "message": "Chronicle paused"})
+
+
+@app.route('/chronicle/resume', methods=['POST'])
+def chronicle_resume():
+    """Resume continuous transcription (after PTT)"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    chronicle.resume()
+    return jsonify({"status": "ok", "message": "Chronicle resumed"})
+
+
+@app.route('/chronicle/status', methods=['GET'])
+def chronicle_status():
+    """Get chronicle status"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    return jsonify(chronicle.status())
+
+
+@app.route('/chronicle/log', methods=['POST'])
+def chronicle_log():
+    """Log external text (PTT inputs)"""
+    global chronicle
+
+    if chronicle is None:
+        return jsonify({"error": "Chronicle not available"}), 503
+
+    data = request.get_json() or {}
+    text = data.get("text", "")
+    source = data.get("source", "input")
+
+    if not text:
+        return jsonify({"error": "No text provided"}), 400
+
+    chronicle.log(text, source=source)
+    return jsonify({"status": "ok", "message": "Logged"})
 
 
 def main():

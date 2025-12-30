@@ -385,6 +385,44 @@
     .concept-icon.green { background: linear-gradient(135deg, #00FF88 0%, #66FFAA 100%); }
     .concept-icon.pink { background: linear-gradient(135deg, #FF44AA 0%, #FF88CC 100%); }
 
+    /* Gods showcase */
+    .gods-showcase {
+      margin: 48px 0;
+    }
+
+    .gods-showcase h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 24px;
+      color: var(--text);
+    }
+
+    .gods-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .god-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .god-badge .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
     .concept h3 {
       font-size: 1.1rem;
       font-weight: 600;
@@ -613,7 +651,7 @@
           macOS
         </a>
       </div>
-      <p class="download-note">Also available: <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-linux-amd64.deb">.deb</a> · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest">All releases</a></p>
+      <p class="download-note">v0.7.0 · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-linux-amd64.deb">.deb</a> · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest">All releases</a></p>
     </section>
 
     <!-- Showcase -->
@@ -641,7 +679,21 @@
     <!-- Concepts -->
     <section class="concepts">
       <h2 class="animate-on-scroll">The Pantheon</h2>
-      <p class="concepts-intro animate-on-scroll">Iris draws from Greek mythology. Each Claude instance is a <strong>god</strong>, workspaces are <strong>realms</strong>, and the UI elements follow the divine theme.</p>
+      <p class="concepts-intro animate-on-scroll">In Greek mythology, <strong>Iris</strong> is the messenger of the gods &mdash; the rainbow bridge between Olympus and the mortal world. Here, Iris is your bridge to multiple Claude instances working in parallel. Each instance is a <strong>god</strong> from the pantheon, ready to be summoned.</p>
+
+      <div class="gods-showcase animate-on-scroll">
+        <h3>Meet the Gods</h3>
+        <div class="gods-grid">
+          <div class="god-badge"><span class="dot" style="background: #FFCC00;"></span> Zeus</div>
+          <div class="god-badge"><span class="dot" style="background: #FF3366;"></span> Ares</div>
+          <div class="god-badge"><span class="dot" style="background: #00FF88;"></span> Artemis</div>
+          <div class="god-badge"><span class="dot" style="background: #0088FF;"></span> Poseidon</div>
+          <div class="god-badge"><span class="dot" style="background: #00DDFF;"></span> Hermes</div>
+          <div class="god-badge"><span class="dot" style="background: #FF44AA;"></span> Hera</div>
+          <div class="god-badge"><span class="dot" style="background: #FF6622;"></span> Hephaestus</div>
+          <div class="god-badge"><span class="dot" style="background: #AA44FF;"></span> Dionysus</div>
+        </div>
+      </div>
 
       <div class="concept-grid">
         <div class="concept animate-on-scroll">

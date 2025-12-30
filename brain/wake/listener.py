@@ -44,6 +44,12 @@ def on_capslock_press(mode):
 
     logger.info(f"CapsLock PRESSED (mode={mode})")
 
+    # Pause chronicle before recording
+    try:
+        requests.post(f"{HEAR_SERVER}/chronicle/pause", timeout=1)
+    except Exception as e:
+        logger.debug(f"Chronicle pause: {e}")
+
     # Mute TTS - stops current playback AND prevents new speech
     try:
         requests.post(f"{SPEAK_SERVER}/mute", timeout=1)
@@ -80,6 +86,16 @@ def on_capslock_release(mode):
             if text:
                 logger.info(f"Transcribed: {text}")
 
+                # Log PTT input to chronicle
+                try:
+                    requests.post(
+                        f"{HEAR_SERVER}/chronicle/log",
+                        json={"text": text, "source": "input"},
+                        timeout=1
+                    )
+                except Exception as e:
+                    logger.debug(f"Chronicle log: {e}")
+
                 # Output text based on mode
                 if actual_mode == "iris":
                     send_to_iris(text)
@@ -102,6 +118,12 @@ def on_capslock_release(mode):
             requests.post(f"{SPEAK_SERVER}/unmute", timeout=1)
         except Exception as e:
             logger.warning(f"Failed to unmute speak server: {e}")
+
+        # Resume chronicle after PTT
+        try:
+            requests.post(f"{HEAR_SERVER}/chronicle/resume", timeout=1)
+        except Exception as e:
+            logger.debug(f"Chronicle resume: {e}")
 
     # Process in background thread
     threading.Thread(target=process, daemon=True).start()

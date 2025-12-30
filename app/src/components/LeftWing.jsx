@@ -9,7 +9,8 @@ import {
   faCommentDots,
   faXmark,
   faPlus,
-  faBrain
+  faBrain,
+  faScroll
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import { REALM_COLORS } from '../themes'
@@ -39,6 +40,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   const serviceList = [
     { name: 'Wake', key: 'wake', icon: faKeyboard },
     { name: 'Hear', key: 'hear', icon: faEarListen },
+    { name: 'Chronicle', key: 'chronicle', icon: faScroll, parent: 'hear' },
     { name: 'Speak', key: 'speak', icon: faVolumeHigh },
     { name: 'Express', key: 'express', icon: faCommentDots },
     { name: 'Ollama', key: 'ollama', icon: faBrain },
@@ -64,20 +66,29 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
           {serviceList.map((service) => {
             const isActive = services[service.key]
             const isLoading = servicesLoading[service.key]
+            const hasParent = service.parent
+            const parentActive = hasParent ? services[service.parent] : true
+            const isDisabled = isLoading || (hasParent && !parentActive)
 
             return (
               <button
                 key={service.key}
-                onClick={() => !isLoading && onToggle(service.key, isActive)}
-                disabled={isLoading}
+                onClick={() => !isDisabled && onToggle(service.key, isActive)}
+                disabled={isDisabled}
                 className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 transition-all rounded-lg mx-auto ${
-                  isLoading
-                    ? 'text-yellow-400 cursor-wait'
-                    : isActive
-                      ? 'liquid-glass-text hover:bg-white/10'
-                      : 'liquid-glass-text-muted hover:bg-white/10'
+                  isDisabled && !isLoading
+                    ? 'text-white/20 cursor-not-allowed'
+                    : isLoading
+                      ? 'text-yellow-400 cursor-wait'
+                      : isActive
+                        ? 'liquid-glass-text hover:bg-white/10'
+                        : 'liquid-glass-text-muted hover:bg-white/10'
                 }`}
-                style={{ width: 'calc(100% - 8px)', marginLeft: '4px' }}
+                style={{
+                  width: 'calc(100% - 8px)',
+                  marginLeft: hasParent ? '16px' : '4px',
+                  paddingLeft: hasParent ? '8px' : undefined
+                }}
               >
                 {isLoading ? (
                   <Spinner />

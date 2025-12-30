@@ -14,6 +14,7 @@ export function setBroadcast(fn) {
 export const serviceStatus = {
   speak: false,
   hear: false,
+  chronicle: false,
   express: false,
   wake: false,
   ollama: false
@@ -23,6 +24,34 @@ export const serviceStatus = {
 const serviceProcesses = {}
 
 let healthCheckInterval = null
+
+async function checkChronicleStatus() {
+  // Only check chronicle if hear is running
+  if (!serviceStatus.hear) {
+    return false
+  }
+
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${SERVICES.hear.port}/chronicle/status`, { timeout: 1000 }, (res) => {
+      if (res.statusCode === 200) {
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => {
+          try {
+            const status = JSON.parse(data)
+            resolve(status.running === true)
+          } catch {
+            resolve(false)
+          }
+        })
+      } else {
+        resolve(false)
+      }
+    })
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => { req.destroy(); resolve(false) })
+  })
+}
 
 async function checkServiceHealth(name, port) {
   // For services without a port, check if process is running
@@ -74,19 +103,25 @@ export async function checkAllServices() {
     checkServiceHealth('ollama', SERVICES.ollama.port)
   ])
 
-  const changed = (
-    serviceStatus.speak !== results[0] ||
-    serviceStatus.hear !== results[1] ||
-    serviceStatus.express !== results[2] ||
-    serviceStatus.wake !== results[3] ||
-    serviceStatus.ollama !== results[4]
-  )
-
   serviceStatus.speak = results[0]
   serviceStatus.hear = results[1]
   serviceStatus.express = results[2]
   serviceStatus.wake = results[3]
   serviceStatus.ollama = results[4]
+
+  // Check chronicle status (depends on hear being up)
+  const chronicleStatus = await checkChronicleStatus()
+
+  const changed = (
+    serviceStatus.speak !== results[0] ||
+    serviceStatus.hear !== results[1] ||
+    serviceStatus.chronicle !== chronicleStatus ||
+    serviceStatus.express !== results[2] ||
+    serviceStatus.wake !== results[3] ||
+    serviceStatus.ollama !== results[4]
+  )
+
+  serviceStatus.chronicle = chronicleStatus
 
   if (changed && broadcastFn) {
     broadcastFn('services:status', { services: serviceStatus })
@@ -189,4 +224,40 @@ export function stopService(name) {
   }
 
   setTimeout(() => checkAllServices(), 500)
+}
+
+export function startChronicle() {
+  // Chronicle is a mode within hear, not a separate service
+  const port = SERVICES.hear.port
+  const req = http.request({
+    hostname: '127.0.0.1',
+    port,
+    path: '/chronicle/start',
+    method: 'POST',
+    timeout: 2000
+  }, (res) => {
+    if (res.statusCode === 200) {
+      setTimeout(() => checkAllServices(), 500)
+    }
+  })
+  req.on('error', () => {})
+  req.end()
+}
+
+export function stopChronicle() {
+  // Chronicle is a mode within hear, not a separate service
+  const port = SERVICES.hear.port
+  const req = http.request({
+    hostname: '127.0.0.1',
+    port,
+    path: '/chronicle/stop',
+    method: 'POST',
+    timeout: 2000
+  }, (res) => {
+    if (res.statusCode === 200) {
+      setTimeout(() => checkAllServices(), 500)
+    }
+  })
+  req.on('error', () => {})
+  req.end()
 }

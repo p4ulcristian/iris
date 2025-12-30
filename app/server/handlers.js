@@ -3,7 +3,7 @@ import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
 import { GOD_COLORS } from '../src/themes/index.js'
 import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty } from './state.js'
-import { startService, stopService } from './services.js'
+import { startService, stopService, startChronicle, stopChronicle } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
 import { listSessions } from './history.js'
@@ -311,7 +311,10 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'service:start': {
       const service = data.service
-      if (service && SERVICES[service]) {
+      if (service === 'chronicle') {
+        // Chronicle is a mode within hear, not a separate service
+        startChronicle()
+      } else if (service && SERVICES[service]) {
         startService(service, projectRoot)
       }
       break
@@ -319,7 +322,10 @@ export function handleMessage(ws, msg, projectRoot) {
 
     case 'service:stop': {
       const service = data.service
-      if (service && SERVICES[service]) {
+      if (service === 'chronicle') {
+        // Chronicle is a mode within hear, not a separate service
+        stopChronicle()
+      } else if (service && SERVICES[service]) {
         stopService(service)
       }
       break
