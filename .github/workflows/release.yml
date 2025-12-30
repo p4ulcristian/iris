@@ -90,10 +90,26 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
           body: |
-            ## macOS Users
+            ## Requirements
 
-            If macOS says the app is "damaged", run:
-            ```bash
-            xattr -cr ~/Downloads/Iris-*.dmg
-            ```
-            Then open the DMG and drag to Applications.
+            **All platforms:**
+            - [Claude CLI](https://github.com/anthropics/claude-code) - `npm install -g @anthropic-ai/claude-code && claude login`
+
+            **Linux:**
+            - `dtach` - for session persistence
+            - Voice features (optional): `uv`, `wtype`, `gtk4-layer-shell`
+
+            **macOS:**
+            - `dtach` - `brew install dtach`
+            - Voice features not yet supported on macOS
+
+            ## macOS Installation
+
+            1. Open the DMG and drag Iris to Applications
+            2. Run in terminal:
+               ```bash
+               xattr -cr /Applications/Iris.app
+               ```
+            3. Open Iris from Applications
+
+            > The `xattr` command removes the quarantine flag since the app isn't code-signed.
