@@ -26,7 +26,7 @@ import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faChevronLeft, faChevronRight, faRobot } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faChevronLeft, faChevronRight, faRobot, faCode } from '@fortawesome/free-solid-svg-icons'
 
 // Type icons
 import claudeIcon from './assets/icons/claude.png'
@@ -730,11 +730,28 @@ export default function App() {
                 // Legacy mode: no layout tree, render flat entity list
                 if (activeEntities.length === 0) {
                   return (
-                    <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary">
-                      <p className="text-base">No entities</p>
-                      <p className="text-sm opacity-70">
-                        Drag an entity here or press <kbd className="px-1.5 py-0.5 bg-bg-tertiary border border-border rounded text-xs font-mono">Ctrl+N</kbd> to add
-                      </p>
+                    <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
+                      <div className="text-center">
+                        <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
+                        <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
+                      </div>
+
+                      <div className="flex flex-col gap-3 text-sm">
+                        <p className="flex items-center gap-3">
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Ctrl+N</kbd>
+                          <span>Summon a god</span>
+                        </p>
+                        <p className="flex items-center gap-3">
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Ctrl+R</kbd>
+                          <span>Open terminal</span>
+                        </p>
+                        <p className="flex items-center gap-3">
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+                          <span>New realm</span>
+                        </p>
+                      </div>
+
+                      <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
                     </div>
                   )
                 }
@@ -906,7 +923,11 @@ export default function App() {
                             />
                           ))}
                         </Reorder.Group>
-                      ) : null}
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-text-secondary text-sm">
+                          <p>Add an entity</p>
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

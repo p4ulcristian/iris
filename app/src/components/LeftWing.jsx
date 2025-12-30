@@ -188,8 +188,12 @@ export default function LeftWing({
         />
       </div>
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      {/* IRIS branding */}
+      <div className="flex-1 flex flex-col items-center justify-center">
+        {'IRIS'.split('').map((letter, i) => (
+          <span key={i} className="text-white/50 text-lg font-mono font-bold leading-tight">{letter}</span>
+        ))}
+      </div>
 
       {/* Services dropdown */}
       <ServicesDropdown

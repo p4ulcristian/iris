@@ -1,13 +1,17 @@
 """Code skill - open and highlight code in the Iris code viewer.
 
 Commands:
-  open <file> [line]     - Open a file in the code viewer
+  open <file> [line] [--new]  - Open a file in the code viewer
   highlight <file> <lines> <color> [note] - Highlight lines
-  clear [file]           - Clear highlights
+  clear [file]                - Clear highlights
+
+Options:
+  --new    Create a new code entity instead of reusing an existing one
 
 Examples:
   python -m brain.skills.code open src/App.jsx
   python -m brain.skills.code open src/App.jsx 42
+  python -m brain.skills.code open ~/Work/ironrainbow --new    # New instance for project
   python -m brain.skills.code highlight src/App.jsx 10-20 yellow "This is the auth logic"
   python -m brain.skills.code highlight src/App.jsx 5 red "Bug here"
   python -m brain.skills.code clear
@@ -23,12 +27,13 @@ from brain.skills.ws import send_message
 VALID_COLORS = ('yellow', 'red', 'green', 'blue', 'orange', 'purple', 'cyan')
 
 
-def open_file(file_path: str, line: int = None) -> bool:
+def open_file(file_path: str, line: int = None, force_new: bool = False) -> bool:
     """Open a file in the Iris code viewer.
 
     Args:
         file_path: Path to the file (absolute or relative)
         line: Line number to jump to (optional)
+        force_new: If True, always create a new code entity instead of reusing
 
     Returns:
         True if successful, False otherwise
@@ -43,6 +48,8 @@ def open_file(file_path: str, line: int = None) -> bool:
     }
     if line:
         msg["line"] = line
+    if force_new:
+        msg["forceNew"] = True
 
     result = send_message(msg)
 
@@ -162,11 +169,16 @@ def main():
 
     if command == 'open':
         if len(sys.argv) < 3:
-            print("Usage: python -m brain.skills.code open <file> [line]")
+            print("Usage: python -m brain.skills.code open <file> [line] [--new]")
             sys.exit(1)
-        file_path = sys.argv[2]
-        line = int(sys.argv[3]) if len(sys.argv) > 3 else None
-        result = open_file(file_path, line)
+        # Parse args - check for --new flag
+        args = sys.argv[2:]
+        force_new = '--new' in args
+        args = [a for a in args if a != '--new']
+
+        file_path = args[0]
+        line = int(args[1]) if len(args) > 1 else None
+        result = open_file(file_path, line, force_new)
         sys.exit(0 if result else 1)
 
     elif command == 'highlight':

@@ -8,6 +8,26 @@ const isMac = process.platform === 'darwin'
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
+// Find the actual dtach master PID by querying who owns the socket
+// dtach forks internally, so the spawned child.pid is NOT the master process
+function getDtachMasterPid(socketPath) {
+  try {
+    if (isMac) {
+      // macOS: use lsof to find process using the socket
+      const output = execSync(`lsof -t "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
+      const pid = parseInt(output.trim().split('\n')[0])
+      return pid > 0 ? pid : null
+    } else {
+      // Linux: use fuser (returns PIDs using the socket)
+      const output = execSync(`fuser "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
+      const pid = parseInt(output.trim().split(/\s+/)[0])
+      return pid > 0 ? pid : null
+    }
+  } catch {
+    return null
+  }
+}
+
 // Re-export for pty.js
 export { SOCKET_DIR }
 
@@ -137,15 +157,18 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     })
     child.unref()
 
-    // Get PID directly from spawn result - no pgrep needed
-    const pid = child.pid
+    // Wait for dtach to fork and create the socket
+    Bun.sleepSync(300)
+
+    // Get the ACTUAL dtach master PID (dtach forks, so child.pid is the parent that exits)
+    const pid = getDtachMasterPid(socketPath)
     const pidFile = getPidPath(godKey)
     if (pid) {
       fs.writeFileSync(pidFile, String(pid))
     }
 
-    // Wait briefly for Claude to create its session file
-    Bun.sleepSync(500)
+    // Wait for Claude to create its session file
+    Bun.sleepSync(200)
 
     // Find the new session ID (one that wasn't there before)
     let sessionId = resumeSessionId || null
@@ -230,13 +253,14 @@ export function createTerminalSession(options = {}, projectRoot) {
     })
     child.unref()
 
-    // Get PID directly from spawn result
-    const pid = child.pid
+    // Wait for dtach to fork and create the socket
+    Bun.sleepSync(300)
+
+    // Get the ACTUAL dtach master PID (dtach forks, so child.pid is the parent that exits)
+    const pid = getDtachMasterPid(socketPath)
     if (pid) {
       fs.writeFileSync(pidFile, String(pid))
     }
-
-    Bun.sleepSync(200)
 
     return {
       name,
@@ -257,23 +281,45 @@ export function killGodSession(godName) {
   const socketPath = getSocketPath(sanitized)
   const pidFile = getPidPath(sanitized)
 
-  // Fast path: kill process group using stored PID (works on both Linux and macOS)
+  let killed = false
+
+  // Try stored PID first
   if (fs.existsSync(pidFile)) {
     try {
       const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
       if (pid > 0) {
         // Kill entire process group (negative PID) - POSIX standard
         process.kill(-pid, 'SIGTERM')
+        killed = true
       }
-    } catch {}
-  } else {
-    // Fallback for old sessions without PID file
+    } catch (e) {
+      // PID might be stale, continue to socket-based lookup
+    }
+  }
+
+  // If stored PID didn't work, try to find the actual process via socket
+  if (!killed && fs.existsSync(socketPath)) {
+    const livePid = getDtachMasterPid(socketPath)
+    if (livePid) {
+      try {
+        process.kill(-livePid, 'SIGTERM')
+        killed = true
+      } catch {
+        // Try killing just the process if group kill fails
+        try {
+          process.kill(livePid, 'SIGTERM')
+          killed = true
+        } catch {}
+      }
+    }
+  }
+
+  // Last resort: use fuser/lsof to kill anything using the socket
+  if (!killed && fs.existsSync(socketPath)) {
     try {
       if (isMac) {
-        // macOS: use lsof to find process using the socket
         execSync(`lsof -t "${socketPath}" 2>/dev/null | xargs kill 2>/dev/null`, { encoding: 'utf-8' })
       } else {
-        // Linux: use fuser (faster)
         execSync(`fuser -k "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
       }
     } catch {}

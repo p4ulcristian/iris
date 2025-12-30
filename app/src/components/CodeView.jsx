@@ -12,7 +12,8 @@ import {
   faFolderTree
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
-import { API_URL } from '../config'
+import { useWebSocket } from '../hooks/useWebSocket'
+import { API_URL, WS_URL } from '../config'
 
 // File icons by extension
 const FILE_ICONS = {
@@ -44,6 +45,7 @@ const HIGHLIGHT_COLORS = {
 
 // Get language from file extension
 function getLanguage(filename) {
+  if (!filename) return 'plaintext'
   const ext = filename.split('.').pop()?.toLowerCase()
   const langMap = {
     js: 'javascript',
@@ -65,12 +67,14 @@ function getLanguage(filename) {
 
 // Get file icon
 function getFileIcon(filename) {
+  if (!filename) return FILE_ICONS.default
   const ext = filename.split('.').pop()?.toLowerCase()
   return FILE_ICONS[ext] || FILE_ICONS.default
 }
 
 // File tree node component
 function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder }) {
+  if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
 
@@ -162,10 +166,12 @@ export default function CodeView({ entityId }) {
   const [highlights, setHighlights] = useState({}) // {filePath: [{line, endLine, color, note}]}
   const [loading, setLoading] = useState(false)
   const [pendingFileHandled, setPendingFileHandled] = useState(null)
+  const [initialLoadDone, setInitialLoadDone] = useState(false)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
 
+  const { send } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
   const entities = useStore(s => s.entities)
   const entity = entities[entityId]
@@ -227,16 +233,39 @@ export default function CodeView({ entityId }) {
     if (pendingFileHandled === entity.pendingFile) return
 
     setPendingFileHandled(entity.pendingFile)
-    loadFile({ path: entity.pendingFile, name: entity.pendingFile.split('/').pop() })
 
-    // Jump to line if specified
-    if (entity.pendingLine) {
-      setTimeout(() => {
-        editorRef.current?.revealLineInCenter(entity.pendingLine)
-        editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
-      }, 200)
+    const path = entity.pendingFile.replace(/\/$/, '')
+    const name = path.split('/').pop()
+
+    // Try to load as file first, fall back to directory if it fails
+    const tryLoadFile = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(path)}`)
+        if (response.ok) {
+          const content = await response.text()
+          // Check if it looks like an error response (directory read fails differently)
+          if (!content.startsWith('Error:') && !content.startsWith('EISDIR')) {
+            setOpenFiles([{ path, name, content }])
+            setActiveFilePath(path)
+            // Jump to line if specified
+            if (entity.pendingLine) {
+              setTimeout(() => {
+                editorRef.current?.revealLineInCenter(entity.pendingLine)
+                editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
+              }, 200)
+            }
+            return
+          }
+        }
+      } catch (err) {
+        // File load failed, try as directory
+      }
+      // Fall back to directory
+      loadDirectory(path)
     }
-  }, [entity?.pendingFile, entity?.pendingLine, loadFile, pendingFileHandled])
+
+    tryLoadFile()
+  }, [entity?.pendingFile, entity?.pendingLine, loadDirectory, pendingFileHandled])
 
   // Listen for file open events (from gods)
   useEffect(() => {
@@ -320,6 +349,53 @@ export default function CodeView({ entityId }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeFilePath, saveFile])
 
+  // Restore persisted open files on mount
+  useEffect(() => {
+    if (initialLoadDone) return
+
+    // No persisted files - mark as done so syncing can begin
+    if (!entity?.openFiles?.length) {
+      setInitialLoadDone(true)
+      return
+    }
+
+    // Load persisted files
+    const loadPersistedFiles = async () => {
+      const loaded = []
+      for (const f of entity.openFiles) {
+        try {
+          const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(f.path)}`)
+          const content = await response.text()
+          loaded.push({ path: f.path, name: f.name, content })
+        } catch (err) {
+          console.error('Failed to load persisted file:', f.path, err)
+        }
+      }
+      if (loaded.length > 0) {
+        setOpenFiles(loaded)
+        setActiveFilePath(entity.activeFilePath || loaded[0].path)
+      }
+      setInitialLoadDone(true)
+    }
+
+    loadPersistedFiles()
+  }, [entity?.openFiles, entity?.activeFilePath, initialLoadDone])
+
+  // Sync open files to server when they change
+  useEffect(() => {
+    if (!initialLoadDone || !send) return
+
+    // Only send path and name, not content (too large)
+    const filesToSync = openFiles.map(f => ({ path: f.path, name: f.name }))
+
+    send({
+      event: 'code:files:sync',
+      entityId,
+      openFiles: filesToSync,
+      activeFilePath
+    })
+  }, [openFiles, activeFilePath, entityId, send, initialLoadDone])
+
   // Apply decorations for highlights
   useEffect(() => {
     if (!editorRef.current || !monacoRef.current || !activeFilePath) return
@@ -374,11 +450,13 @@ export default function CodeView({ entityId }) {
   // Get active file
   const activeFile = openFiles.find(f => f.path === activeFilePath)
 
-  // Default: load iris project directory
+  // Default: load iris project directory (only if no pending file)
   useEffect(() => {
+    // Skip if there's a pending file - that effect will handle loading
+    if (entity?.pendingFile) return
     // Start with iris project by default
     loadDirectory('/home/p4ulcristian/Work/iris')
-  }, [loadDirectory])
+  }, [loadDirectory, entity?.pendingFile])
 
   return (
     <div className="absolute inset-0 flex overflow-hidden bg-bg-secondary">

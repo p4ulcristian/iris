@@ -99,7 +99,11 @@ Open and highlight code in the Iris code viewer. Use this to show Paul specific 
 ```bash
 python -m brain.skills.code open src/App.jsx           # Open file
 python -m brain.skills.code open src/App.jsx 42        # Open and jump to line 42
+python -m brain.skills.code open ~/Work/ironrainbow --new  # New instance for a project
 ```
+
+Options:
+- `--new` - Create a new code entity instead of reusing an existing one. Useful when opening a different project.
 
 **Highlight lines:**
 ```bash

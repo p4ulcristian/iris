@@ -509,12 +509,12 @@ body {
   background: var(--wallpaper-base, #050508);
 }
 
-/* Aurora blobs - enhanced for liquid glass */
+/* Aurora blobs - radial gradients for smooth rendering */
 .wallpaper .blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.4;
+  filter: blur(30px);
+  opacity: 0.5;
   mix-blend-mode: screen;
   will-change: transform;
 }
@@ -522,28 +522,28 @@ body {
 .wallpaper .blob-1 {
   width: 50vmax;
   height: 50vmax;
-  background: var(--blob-1, #505050);
+  background: radial-gradient(circle, var(--blob-1, #505050) 0%, transparent 70%);
   animation: blob-1 120s ease-in-out infinite;
 }
 
 .wallpaper .blob-2 {
   width: 45vmax;
   height: 45vmax;
-  background: var(--blob-2, #404040);
+  background: radial-gradient(circle, var(--blob-2, #404040) 0%, transparent 70%);
   animation: blob-2 135s ease-in-out infinite;
 }
 
 .wallpaper .blob-3 {
   width: 40vmax;
   height: 40vmax;
-  background: var(--blob-3, #606060);
+  background: radial-gradient(circle, var(--blob-3, #606060) 0%, transparent 70%);
   animation: blob-3 105s ease-in-out infinite;
 }
 
 .wallpaper .blob-4 {
   width: 35vmax;
   height: 35vmax;
-  background: var(--blob-4, #383838);
+  background: radial-gradient(circle, var(--blob-4, #383838) 0%, transparent 70%);
   animation: blob-4 150s ease-in-out infinite;
 }
 
@@ -570,14 +570,14 @@ body {
 .wallpaper .blob-5 {
   width: 30vmax;
   height: 30vmax;
-  background: var(--blob-5, #484848);
+  background: radial-gradient(circle, var(--blob-5, #484848) 0%, transparent 70%);
   animation: blob-5 165s ease-in-out infinite;
 }
 
 .wallpaper .blob-6 {
   width: 25vmax;
   height: 25vmax;
-  background: var(--blob-6, #585858);
+  background: radial-gradient(circle, var(--blob-6, #585858) 0%, transparent 70%);
   animation: blob-6 180s ease-in-out infinite;
 }
 

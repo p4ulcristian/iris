@@ -8,7 +8,7 @@ from typing import Dict, Iterator, Optional
 
 # Must set before any torch imports
 os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # RTX 3080
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # RTX 3080 (10GB)
 
 import warnings
 warnings.filterwarnings('ignore')

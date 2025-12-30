@@ -1323,15 +1323,15 @@ export function handleMessage(ws, msg, projectRoot) {
 
     // Code viewer management
     case 'code:open': {
-      const { filePath, line, entityId } = data
+      const { filePath, line, entityId, forceNew } = data
       if (!filePath) break
 
       // Find or create a code entity
       let codeEntity = entityId ? appState.entities[entityId] : null
       let isNewEntity = false
 
-      if (!codeEntity) {
-        // Find first code entity in active tab
+      if (!codeEntity && !forceNew) {
+        // Find first code entity in active tab (skip if forceNew)
         codeEntity = Object.values(appState.entities).find(
           e => e.type === 'code' && e.tabId === appState.activeTabId
         )
@@ -1411,6 +1411,19 @@ export function handleMessage(ws, msg, projectRoot) {
       } else {
         appState.codeHighlights = {}
       }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'code:files:sync': {
+      // Sync open files from code viewer to entity state
+      const { entityId, openFiles, activeFilePath } = data
+      if (!entityId || !appState.entities[entityId]) break
+
+      appState.entities[entityId].openFiles = openFiles || []
+      appState.entities[entityId].activeFilePath = activeFilePath || null
 
       saveState()
       broadcastState()
