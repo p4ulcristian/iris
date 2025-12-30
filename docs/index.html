@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iris - Parallel Claude Orchestrator</title>
+  <meta name="description" content="Run multiple Claude Code instances in parallel with persistence and tiling.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --bg-subtle: #12121a;
+      --border: #1e1e2e;
+      --text: #e4e4e7;
+      --text-muted: #71717a;
+      --accent: #a78bfa;
+      --accent-dim: #7c3aed;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 60px;
+      text-align: center;
+    }
+
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 4rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: center;
+      gap: 0.05em;
+    }
+
+    .logo span {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--accent) 0%, #c4b5fd 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      opacity: 0;
+      transform: translateY(30px) scale(0.8);
+      animation: letterReveal 0.6s ease-out forwards;
+    }
+
+    .logo span:nth-child(1) { animation-delay: 0.1s; }
+    .logo span:nth-child(2) { animation-delay: 0.2s; }
+    .logo span:nth-child(3) { animation-delay: 0.3s; }
+    .logo span:nth-child(4) { animation-delay: 0.4s; }
+
+    @keyframes letterReveal {
+      0% {
+        opacity: 0;
+        transform: translateY(30px) scale(0.8);
+      }
+      50% {
+        transform: translateY(-5px) scale(1.05);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .tagline {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 500px;
+      margin: 0 auto 40px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeSlideUp 0.6s ease-out 0.6s forwards;
+    }
+
+    .download-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeSlideUp 0.6s ease-out 0.8s forwards;
+    }
+
+    .cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-dim);
+      color: white;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .cta-secondary {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+    }
+
+    .cta-secondary:hover {
+      background: var(--border);
+    }
+
+    .download-note {
+      margin-top: 16px;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      opacity: 0;
+      animation: fadeSlideUp 0.6s ease-out 1s forwards;
+    }
+
+    .download-note a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .download-note a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Scroll animations */
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+    }
+
+    .animate-on-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .animate-on-scroll.delay-1 { transition-delay: 0.1s; }
+    .animate-on-scroll.delay-2 { transition-delay: 0.2s; }
+    .animate-on-scroll.delay-3 { transition-delay: 0.3s; }
+    .animate-on-scroll.delay-4 { transition-delay: 0.4s; }
+
+    /* Showcase special animation */
+    .showcase-item.animate-on-scroll {
+      transform: translateY(60px);
+    }
+
+    .showcase-item.animate-on-scroll.visible .showcase-screenshot img {
+      animation: tiltIn 0.8s ease-out forwards;
+    }
+
+    .showcase-item:nth-child(odd).animate-on-scroll.visible .showcase-screenshot img {
+      animation: tiltInLeft 0.8s ease-out forwards;
+    }
+
+    .showcase-item:nth-child(even).animate-on-scroll.visible .showcase-screenshot img {
+      animation: tiltInRight 0.8s ease-out forwards;
+    }
+
+    @keyframes tiltInLeft {
+      from {
+        opacity: 0;
+        transform: rotateY(-20deg) rotateX(5deg) translateX(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: rotateY(-8deg) rotateX(2deg) translateX(0);
+      }
+    }
+
+    @keyframes tiltInRight {
+      from {
+        opacity: 0;
+        transform: rotateY(20deg) rotateX(5deg) translateX(30px);
+      }
+      to {
+        opacity: 1;
+        transform: rotateY(8deg) rotateX(2deg) translateX(0);
+      }
+    }
+
+    /* Showcase text animation */
+    .showcase-item .showcase-text {
+      opacity: 0;
+      transform: translateX(30px);
+      transition: opacity 0.6s ease-out 0.3s, transform 0.6s ease-out 0.3s;
+    }
+
+    .showcase-item:nth-child(even) .showcase-text {
+      transform: translateX(-30px);
+    }
+
+    .showcase-item.animate-on-scroll.visible .showcase-text {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .cta:hover {
+      background: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .cta svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Screenshots */
+    .showcase {
+      margin: 60px 0 100px;
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+    }
+
+    .showcase-item {
+      display: flex;
+      align-items: center;
+      gap: 48px;
+    }
+
+    .showcase-item:nth-child(even) {
+      flex-direction: row-reverse;
+    }
+
+    .showcase-screenshot {
+      flex: 1.2;
+      perspective: 1000px;
+    }
+
+    .showcase-screenshot img {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transition: transform 0.4s ease;
+    }
+
+    .showcase-item:nth-child(odd) .showcase-screenshot img {
+      transform: rotateY(-8deg) rotateX(2deg);
+    }
+
+    .showcase-item:nth-child(even) .showcase-screenshot img {
+      transform: rotateY(8deg) rotateX(2deg);
+    }
+
+    .showcase-item:hover .showcase-screenshot img {
+      transform: rotateY(0deg) rotateX(0deg);
+    }
+
+    .showcase-text {
+      flex: 1;
+    }
+
+    .showcase-text h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .showcase-text p {
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    @media (max-width: 800px) {
+      .showcase-item,
+      .showcase-item:nth-child(even) {
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .showcase-item:nth-child(odd) .showcase-screenshot img,
+      .showcase-item:nth-child(even) .showcase-screenshot img {
+        transform: none;
+      }
+    }
+
+    /* Features */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 80px;
+    }
+
+    .feature {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .feature-icon {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+    }
+
+    .feature h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .feature p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Requirements */
+    .requirements {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 80px;
+    }
+
+    .requirements h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+    }
+
+    .req-list {
+      list-style: none;
+    }
+
+    .req-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 0.9375rem;
+    }
+
+    .req-list li:last-child {
+      margin-bottom: 0;
+    }
+
+    .req-list .check {
+      color: #22c55e;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .req-list code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      background: var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .req-list a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .req-list a:hover {
+      text-decoration: underline;
+    }
+
+    /* Install */
+    .install {
+      margin-bottom: 80px;
+    }
+
+    .install h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .install-steps {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .install-step {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .install-step:last-child {
+      border-bottom: none;
+    }
+
+    .step-num {
+      background: var(--accent-dim);
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-content p {
+      margin-bottom: 8px;
+      font-size: 0.9375rem;
+    }
+
+    .step-content code {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      padding: 12px 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 40px 0;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: var(--text);
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .hero {
+        padding: 60px 0 40px;
+      }
+
+      .logo {
+        font-size: 2.5rem;
+      }
+
+      .tagline {
+        font-size: 1.1rem;
+      }
+
+      .features {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Hero -->
+    <section class="hero">
+      <h1 class="logo"><span>I</span><span>R</span><span>I</span><span>S</span></h1>
+      <p class="tagline">Run multiple Claude Code instances in parallel with persistence and tiling.</p>
+      <div class="download-buttons">
+        <a href="https://github.com/p4ulcristian/iris/releases/download/v2.0.0/Iris-2.0.0-linux-x86_64.AppImage" class="cta">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Linux
+        </a>
+        <a href="https://github.com/p4ulcristian/iris/releases/download/v2.0.0/Iris-2.0.0-mac-x64.zip" class="cta cta-secondary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          macOS
+        </a>
+      </div>
+      <p class="download-note">Also available: <a href="https://github.com/p4ulcristian/iris/releases/download/v2.0.0/Iris-2.0.0-linux-amd64.deb">.deb</a></p>
+    </section>
+
+    <!-- Showcase -->
+    <section class="showcase">
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-screenshot">
+          <img src="screenshot-1.png" alt="Iris - Multiple Claude instances working in parallel">
+        </div>
+        <div class="showcase-text">
+          <h3>Parallel Workspaces</h3>
+          <p>Run multiple Claude Code instances side-by-side. Each god works independently in its own terminal, with colored borders and status indicators. The right panel shows task cards tracking what each instance is working on.</p>
+        </div>
+      </div>
+      <div class="showcase-item animate-on-scroll">
+        <div class="showcase-screenshot">
+          <img src="screenshot-2.png" alt="Iris - Stage system with embedded apps">
+        </div>
+        <div class="showcase-text">
+          <h3>Stages & Entities</h3>
+          <p>Each workspace contains stages that can hold different entity types. Split your view between Claude instances, embedded browsers, YouTube Music, or code viewers. Switch between stages instantly while sessions persist in the background.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <div class="feature animate-on-scroll delay-1">
+        <div class="feature-icon">&#9638;</div>
+        <h3>Parallel Terminals</h3>
+        <p>Run multiple Claude Code instances side-by-side in a tiled workspace.</p>
+      </div>
+      <div class="feature animate-on-scroll delay-2">
+        <div class="feature-icon">&#8635;</div>
+        <h3>Session Persistence</h3>
+        <p>Sessions survive app restarts via dtach. Pick up where you left off.</p>
+      </div>
+      <div class="feature animate-on-scroll delay-3">
+        <div class="feature-icon">&#9707;</div>
+        <h3>Workspaces</h3>
+        <p>Organize work across multiple tabs. Each workspace has its own layout.</p>
+      </div>
+      <div class="feature animate-on-scroll delay-4">
+        <div class="feature-icon">&#9000;</div>
+        <h3>Keyboard-First</h3>
+        <p>Spawn, focus, and manage instances without leaving the keyboard.</p>
+      </div>
+    </section>
+
+    <!-- Requirements -->
+    <section class="requirements animate-on-scroll">
+      <h2>Requirements</h2>
+      <ul class="req-list">
+        <li>
+          <span class="check">&#10003;</span>
+          <span><strong>macOS or Linux</strong> &mdash; Windows not supported (no dtach)</span>
+        </li>
+        <li>
+          <span class="check">&#10003;</span>
+          <span><a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank">Claude Code</a> &mdash; Anthropic's CLI for Claude</span>
+        </li>
+        <li>
+          <span class="check">&#10003;</span>
+          <span><strong>dtach</strong> &mdash; Session persistence<br>
+            <code style="display: inline; margin-top: 4px;">brew install dtach</code> (Mac) or <code style="display: inline;">apt install dtach</code> (Linux)
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Install -->
+    <section class="install animate-on-scroll">
+      <h2>Quick Start</h2>
+      <div class="install-steps">
+        <div class="install-step">
+          <span class="step-num">1</span>
+          <div class="step-content">
+            <p>Download the latest release for your platform</p>
+            <code>https://github.com/p4ulcristian/iris/releases</code>
+          </div>
+        </div>
+        <div class="install-step">
+          <span class="step-num">2</span>
+          <div class="step-content">
+            <p>Install dtach if you haven't already</p>
+            <code>brew install dtach  # macOS</code>
+          </div>
+        </div>
+        <div class="install-step">
+          <span class="step-num">3</span>
+          <div class="step-content">
+            <p>Run Iris and press <strong>Ctrl+N</strong> to spawn your first instance</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      <a href="https://github.com/p4ulcristian/iris">GitHub</a>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll animation observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: '0px 0px -50px 0px'
+    });
+
+    // Observe all animated elements
+    document.querySelectorAll('.animate-on-scroll').forEach(el => {
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>

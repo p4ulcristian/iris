@@ -31,6 +31,10 @@ const FILE_ICONS = {
   yaml: '⚙️',
   yml: '⚙️',
   sh: '🔧',
+  clj: '🟣',
+  cljs: '🟣',
+  cljc: '🟣',
+  edn: '🟣',
   default: '📄'
 }
 
@@ -62,7 +66,11 @@ function getLanguage(filename) {
     yaml: 'yaml',
     yml: 'yaml',
     sh: 'shell',
-    bash: 'shell'
+    bash: 'shell',
+    clj: 'clojure',
+    cljs: 'clojure',
+    cljc: 'clojure',
+    edn: 'clojure'
   }
   return langMap[ext] || 'plaintext'
 }

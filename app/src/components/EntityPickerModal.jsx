@@ -4,7 +4,7 @@ import { EntityIcon, ENTITY_TYPE_LIST } from '../entities'
 
 // Filter entity types for the picker (exclude code, calendar, oracle which are spawned via other means)
 const PICKER_ENTITY_TYPES = ENTITY_TYPE_LIST.filter(e =>
-  ['god', 'terminal', 'nvim', 'browser', 'git', 'linear', 'history', 'cemetery', 'settings', 'youtube-music'].includes(e.type)
+  ['god', 'terminal', 'nvim', 'browser', 'git', 'linear', 'history', 'cemetery', 'settings', 'youtube-music', 'messenger', 'discord'].includes(e.type)
 )
 
 export default function EntityPickerModal({

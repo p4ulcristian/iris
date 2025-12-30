@@ -111,6 +111,7 @@ export default function LeftWing({
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
+  const powers = useStore(s => s.settings?.powers ?? true)
 
   const handleServiceToggle = (service, isActive) => {
     console.log('handleServiceToggle called:', { service, isActive, hasSend: !!send })
@@ -195,13 +196,15 @@ export default function LeftWing({
         ))}
       </div>
 
-      {/* Services dropdown */}
-      <ServicesDropdown
-        connected={connected}
-        services={services}
-        servicesLoading={servicesLoading}
-        onToggle={handleServiceToggle}
-      />
+      {/* Services dropdown - only show when powers are enabled */}
+      {powers && (
+        <ServicesDropdown
+          connected={connected}
+          services={services}
+          servicesLoading={servicesLoading}
+          onToggle={handleServiceToggle}
+        />
+      )}
     </aside>
   )
 }

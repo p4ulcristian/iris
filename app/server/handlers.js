@@ -25,7 +25,9 @@ const ENTITY_TYPES = {
   settings: { icon: '⚙️', label: 'Settings' },
   cemetery: { icon: '🪦', label: 'Cemetery' },
   oracle: { icon: '🔮', label: 'Oracle' },
-  'youtube-music': { icon: '🎵', label: 'YouTube Music' }
+  'youtube-music': { icon: '🎵', label: 'YouTube Music' },
+  messenger: { icon: '💬', label: 'Messenger' },
+  discord: { icon: '🎮', label: 'Discord' }
 }
 
 // Add a god to the cemetery before banishing
@@ -212,14 +214,31 @@ export function handleMessage(ws, msg, projectRoot) {
       }
 
       if (appState.focusedEntity === entityId) {
-        // Find another entity in the same tab to focus
-        const remaining = Object.entries(appState.entities)
-          .filter(([_, e]) => e.tabId === appState.activeTabId)
-          .sort((a, b) => a[1].order - b[1].order)
-        appState.focusedEntity = remaining.length > 0 ? remaining[0][0] : null
+        // Get the killed entity's order to find its neighbor
+        const killedOrder = entity?.order || 0
 
-        // Switch to that entity's stage
-        if (appState.focusedEntity) {
+        // Find remaining entities in the ENTITY'S tab (not active tab), sorted by order
+        const remaining = Object.entries(appState.entities)
+          .filter(([_, e]) => e.tabId === entityTabId)
+          .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
+
+        // Find previous entity (highest order that's < killedOrder)
+        // Falls back to next if no previous exists
+        let newFocused = null
+        for (let i = remaining.length - 1; i >= 0; i--) {
+          if ((remaining[i][1].order || 0) < killedOrder) {
+            newFocused = remaining[i][0]
+            break
+          }
+        }
+        if (!newFocused && remaining.length > 0) {
+          newFocused = remaining[0][0]  // fallback to first remaining
+        }
+
+        appState.focusedEntity = newFocused
+
+        // Switch to that entity's stage (if entity was in active tab)
+        if (appState.focusedEntity && entityTabId === appState.activeTabId) {
           const tab = appState.tabs.find(t => t.id === appState.activeTabId)
           if (tab) {
             const stage = findStageByEntity(tab, appState.focusedEntity)

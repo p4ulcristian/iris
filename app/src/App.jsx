@@ -263,6 +263,7 @@ export default function App() {
   }, [])
 
   // Get stages for active tab with their entities (grouped by stage)
+  // Sorted by first entity's order so Ctrl+Up/Down matches visual order
   const activeStages = useMemo(() => {
     const activeTab = tabs.find(t => t.id === activeTabId)
     const stages = activeTab?.stages || []
@@ -274,6 +275,10 @@ export default function App() {
           .map(id => entities[id])
           .filter(Boolean)
       }
+    }).sort((a, b) => {
+      const aOrder = a.entities[0]?.order ?? Infinity
+      const bOrder = b.entities[0]?.order ?? Infinity
+      return aOrder - bOrder
     })
   }, [tabs, activeTabId, entities, collectEntityIds])
 
@@ -640,15 +645,15 @@ export default function App() {
                 const activeLayout = getActiveLayout()
 
                 // If we have stages, render all with spring y positions (Apple-style)
+                // Use activeStages (sorted by entity order) for consistent Ctrl+Up/Down navigation
                 const activeTab = tabs.find(t => t.id === activeTabId)
-                const stages = activeTab?.stages || []
                 const activeStageId = activeTab?.activeStageId
-                const activeIdx = stages.findIndex(s => s.id === activeStageId)
+                const activeIdx = activeStages.findIndex(s => s.id === activeStageId)
 
-                if (stages.length > 0) {
+                if (activeStages.length > 0) {
                   return (
                     <div className="relative h-full overflow-hidden">
-                      {stages.map((stage, idx) => {
+                      {activeStages.map((stage, idx) => {
                         const offset = idx - activeIdx
                         return (
                           <motion.div
@@ -978,7 +983,7 @@ export default function App() {
                                 onClick={() => handleSpawnEntity('history')}
                               />
                             </div>
-                            {/* Row 1: Terminal, Nvim, Browser */}
+                            {/* Row 2: Terminal, Nvim, Browser */}
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="terminal"
@@ -995,10 +1000,23 @@ export default function App() {
                                 title="New browser - drag to split"
                                 onClick={() => handleSpawnEntity('browser')}
                               />
+                            </div>
+                            {/* Row 1: YouTube Music, Messenger, Discord */}
+                            <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="youtube-music"
                                 title="YouTube Music - drag to split"
                                 onClick={() => handleSpawnEntity('youtube-music')}
+                              />
+                              <DraggableTypeButton
+                                entityType="messenger"
+                                title="Messenger - drag to split"
+                                onClick={() => handleSpawnEntity('messenger')}
+                              />
+                              <DraggableTypeButton
+                                entityType="discord"
+                                title="Discord - drag to split"
+                                onClick={() => handleSpawnEntity('discord')}
                               />
                             </div>
                           </motion.div>

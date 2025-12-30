@@ -1,6 +1,7 @@
 import http from 'http'
 import { spawn, execSync } from 'child_process'
 import { SERVICES } from './config.js'
+import { isPowersEnabled } from './state.js'
 
 // Broadcast function - set by index.js
 let broadcastFn = null
@@ -60,6 +61,11 @@ async function checkServiceHealth(name, port) {
 }
 
 export async function checkAllServices() {
+  // Skip health checks if powers are disabled
+  if (!isPowersEnabled()) {
+    return
+  }
+
   const results = await Promise.all([
     checkServiceHealth('speak', SERVICES.speak.port),
     checkServiceHealth('hear', SERVICES.hear.port),
@@ -88,6 +94,10 @@ export async function checkAllServices() {
 }
 
 export function startHealthChecks() {
+  // Skip if powers are disabled
+  if (!isPowersEnabled()) {
+    return
+  }
   checkAllServices()
   healthCheckInterval = setInterval(checkAllServices, 3000)
 }

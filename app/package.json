@@ -42,7 +42,7 @@
       "icon": "assets/icon.png"
     },
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": ["zip"],
       "category": "public.app-category.utilities",
       "icon": "assets/icon.png"
     }

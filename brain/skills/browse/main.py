@@ -17,12 +17,17 @@ def open_browser(url: str) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    # Add protocol if missing
-    if not url.startswith('http://') and not url.startswith('https://'):
+    # Handle local file paths
+    if url.startswith('/'):
+        url = 'file://' + url
+    # Add https if no protocol specified
+    elif not url.startswith(('http://', 'https://', 'file://')):
         url = 'https://' + url
 
+    # Spawn a browser entity with the URL
     result = send_message({
-        "event": "browser:navigate",
+        "event": "entity:spawn",
+        "type": "browser",
         "url": url
     })
 

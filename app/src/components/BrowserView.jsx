@@ -43,13 +43,15 @@ function BrowserTab({ tab, isActive, onClick, onClose }) {
   )
 }
 
-export default function BrowserView() {
+export default function BrowserView({ entityId }) {
   const browserUrl = useStore(s => s.browserUrl)
+  const entity = useStore(s => s.entities[entityId])
+  const initialUrl = entity?.url || 'https://duckduckgo.com'
   const [tabs, setTabs] = useState([
-    { id: 1, url: 'https://duckduckgo.com', title: 'DuckDuckGo', favicon: null, canGoBack: false, canGoForward: false }
+    { id: 1, url: initialUrl, title: 'Loading...', favicon: null, canGoBack: false, canGoForward: false }
   ])
   const [activeTabId, setActiveTabId] = useState(1)
-  const [urlInput, setUrlInput] = useState('https://duckduckgo.com')
+  const [urlInput, setUrlInput] = useState(initialUrl)
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const containerRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -89,8 +91,8 @@ export default function BrowserView() {
     let finalUrl = url.trim()
     if (!finalUrl) return
 
-    // Add protocol if missing
-    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+    // Add protocol if missing (but preserve file:// URLs)
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://') && !finalUrl.startsWith('file://')) {
       // Check if it looks like a URL
       if (finalUrl.includes('.') && !finalUrl.includes(' ')) {
         finalUrl = 'https://' + finalUrl

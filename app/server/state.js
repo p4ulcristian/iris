@@ -36,7 +36,8 @@ export const appState = {
   settings: {             // App settings (API keys, etc.)
     linearApiKey: '',
     userName: '',
-    startPrompt: ''
+    startPrompt: '',
+    powers: true           // Enable voice/brain services (speak, hear, wake, express, ollama)
   }
 }
 
@@ -147,6 +148,11 @@ export function loadState() {
   // Ensure settings object exists
   if (!appState.settings) {
     appState.settings = { linearApiKey: '' }
+  }
+
+  // Ensure powers setting exists (default to true for backwards compatibility)
+  if (appState.settings.powers === undefined) {
+    appState.settings.powers = true
   }
 
   // Ensure cemetery array exists
@@ -440,6 +446,7 @@ export function getStateForBroadcast() {
       hasLinearApiKey: !!appState.settings?.linearApiKey,
       userName: appState.settings?.userName || '',
       startPrompt: appState.settings?.startPrompt || '',
+      powers: appState.settings?.powers ?? true,
       googleClientId: maskApiKey(appState.settings?.googleClientId),
       hasGoogleClientId: !!appState.settings?.googleClientId,
       googleClientSecret: maskApiKey(appState.settings?.googleClientSecret),
@@ -532,6 +539,11 @@ export function getNextEntityNumber(type) {
       return match ? parseInt(match[1]) : 0
     })
   return existing.length > 0 ? Math.max(...existing) + 1 : 1
+}
+
+// Check if powers (voice services) are enabled
+export function isPowersEnabled() {
+  return appState.settings?.powers ?? true
 }
 
 // Check if a tab is empty (no stages) and delete it if so
