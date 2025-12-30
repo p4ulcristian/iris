@@ -19,10 +19,11 @@ let serverProcess = null
 function startServer() {
   const serverPath = path.join(__dirname, '../server/index.js')
 
-  serverProcess = spawn('bun', ['run', serverPath], {
+  // Use Node instead of bun - macOS apps don't have terminal PATH
+  serverProcess = spawn(process.execPath, [serverPath], {
     cwd: path.join(__dirname, '../..'),
     stdio: ['ignore', 'inherit', 'inherit'],
-    env: process.env
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
   })
 
   serverProcess.on('error', (err) => {
