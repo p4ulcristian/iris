@@ -3,15 +3,8 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faRobot } from '@fortawesome/free-solid-svg-icons'
-
-// Type icons
-import claudeIcon from '../assets/icons/claude.png'
-import linearIcon from '../assets/icons/linear.png'
-import gitIcon from '../assets/icons/git.png'
-import nvimIcon from '../assets/icons/nvim.png'
-import browserIcon from '../assets/icons/browser.png'
-import vscodeIcon from '../assets/icons/vscode.svg'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { EntityIcon } from '../entities'
 
 // Convert hex to RGB for CSS (comma-separated)
 function hexToRgbCss(hex) {
@@ -35,41 +28,6 @@ function formatElapsed(ms) {
   }
 }
 
-// Get type icon component
-function TypeIcon({ type, size = 'sm' }) {
-  const iconClass = size === 'sm' ? "w-4 h-4 object-contain" : "w-5 h-5 object-contain"
-  const faIconClass = "text-white/70"
-  const faSize = size === 'sm' ? 'sm' : 'lg'
-
-  switch (type) {
-    case 'god':
-      return <img src={claudeIcon} alt="Claude" className={iconClass} />
-    case 'linear':
-      return <img src={linearIcon} alt="Linear" className={iconClass} />
-    case 'git':
-      return <img src={gitIcon} alt="Git" className={iconClass} />
-    case 'nvim':
-      return <img src={nvimIcon} alt="Nvim" className={iconClass} />
-    case 'browser':
-      return <img src={browserIcon} alt="Browser" className={iconClass} />
-    case 'terminal':
-      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size={faSize} />
-    case 'history':
-      return <FontAwesomeIcon icon={faClockRotateLeft} className={faIconClass} size={faSize} />
-    case 'settings':
-      return <FontAwesomeIcon icon={faGear} className={faIconClass} size={faSize} />
-    case 'cemetery':
-      return <FontAwesomeIcon icon={faSkull} className={faIconClass} size={faSize} />
-    case 'code':
-      return <img src={vscodeIcon} alt="Code" className={iconClass} />
-    case 'calendar':
-      return <FontAwesomeIcon icon={faCalendar} className={faIconClass} size={faSize} />
-    case 'oracle':
-      return <FontAwesomeIcon icon={faRobot} className={faIconClass} size={faSize} />
-    default:
-      return <FontAwesomeIcon icon={faTerminal} className={faIconClass} size={faSize} />
-  }
-}
 
 export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
@@ -194,7 +152,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       {/* Header row */}
       <div className="flex items-center h-8 px-3 gap-2">
         {/* Type icon */}
-        <TypeIcon type={type} />
+        <EntityIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
           {displayName || name}
         </span>

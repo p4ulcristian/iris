@@ -509,86 +509,169 @@ body {
   background: var(--wallpaper-base, #050508);
 }
 
-/* Aurora blobs - radial gradients for smooth rendering */
+/* Lava lamp blobs - organic morphing with vertical rise/fall */
 .wallpaper .blob {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(30px);
+  top: 0;
+  left: 0;
+  filter: blur(40px);
   opacity: 0.5;
   mix-blend-mode: screen;
-  will-change: transform;
+  will-change: transform, border-radius, opacity;
 }
 
+/* Blob 1: Primary - rises left to right */
 .wallpaper .blob-1 {
   width: 50vmax;
   height: 50vmax;
   background: radial-gradient(circle, var(--blob-1, #505050) 0%, transparent 70%);
-  animation: blob-1 120s ease-in-out infinite;
+  animation:
+    blob-1-move 30s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-1-morph 8s ease-in-out infinite;
 }
 
+/* Blob 2: Secondary - rises right to left */
 .wallpaper .blob-2 {
   width: 45vmax;
   height: 45vmax;
   background: radial-gradient(circle, var(--blob-2, #404040) 0%, transparent 70%);
-  animation: blob-2 135s ease-in-out infinite;
+  animation:
+    blob-2-move 38s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-2-morph 10s ease-in-out infinite;
+  animation-delay: -12s;
 }
 
+/* Blob 3: Accent - center float */
 .wallpaper .blob-3 {
   width: 40vmax;
   height: 40vmax;
   background: radial-gradient(circle, var(--blob-3, #606060) 0%, transparent 70%);
-  animation: blob-3 105s ease-in-out infinite;
+  animation:
+    blob-3-move 25s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-3-morph 7s ease-in-out infinite;
+  animation-delay: -5s;
 }
 
+/* Blob 4: Background - slow diagonal */
 .wallpaper .blob-4 {
   width: 35vmax;
   height: 35vmax;
   background: radial-gradient(circle, var(--blob-4, #383838) 0%, transparent 70%);
-  animation: blob-4 150s ease-in-out infinite;
+  animation:
+    blob-4-move 42s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-4-morph 12s ease-in-out infinite;
+  animation-delay: -20s;
 }
 
-@keyframes blob-1 {
-  0%, 100% { top: -10%; left: 0%; transform: scale(1) translateZ(0); }
-  50% { top: 0%; left: 10%; transform: scale(1.03) translateZ(0); }
-}
-
-@keyframes blob-2 {
-  0%, 100% { top: 60%; left: 70%; transform: scale(1) translateZ(0); }
-  50% { top: 50%; left: 60%; transform: scale(0.97) translateZ(0); }
-}
-
-@keyframes blob-3 {
-  0%, 100% { top: 40%; left: -5%; transform: scale(1) translateZ(0); }
-  50% { top: 30%; left: 5%; transform: scale(1.02) translateZ(0); }
-}
-
-@keyframes blob-4 {
-  0%, 100% { top: 70%; left: 40%; transform: scale(1) translateZ(0); }
-  50% { top: 60%; left: 50%; transform: scale(0.98) translateZ(0); }
-}
-
+/* Blob 5: Subtle - edge hugger */
 .wallpaper .blob-5 {
   width: 30vmax;
   height: 30vmax;
   background: radial-gradient(circle, var(--blob-5, #484848) 0%, transparent 70%);
-  animation: blob-5 165s ease-in-out infinite;
+  animation:
+    blob-5-move 35s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-5-morph 9s ease-in-out infinite;
+  animation-delay: -8s;
 }
 
+/* Blob 6: Dynamic - fast riser */
 .wallpaper .blob-6 {
   width: 25vmax;
   height: 25vmax;
   background: radial-gradient(circle, var(--blob-6, #585858) 0%, transparent 70%);
-  animation: blob-6 180s ease-in-out infinite;
+  animation:
+    blob-6-move 28s cubic-bezier(0.4, 0, 0.2, 1) infinite,
+    blob-6-morph 6s ease-in-out infinite;
+  animation-delay: -15s;
 }
 
-@keyframes blob-5 {
-  0%, 100% { top: 20%; left: 50%; transform: scale(1) translateZ(0); }
-  50% { top: 25%; left: 55%; transform: scale(1.02) translateZ(0); }
+/* Movement keyframes - vertical lava lamp paths (GPU-accelerated) */
+@keyframes blob-1-move {
+  0% { transform: translate(-10vw, 80vh) scale(1, 1.1); opacity: 0.4; }
+  25% { transform: translate(5vw, 30vh) scale(1.1, 0.9); opacity: 0.6; }
+  50% { transform: translate(20vw, -10vh) scale(0.95, 1.05); opacity: 0.5; }
+  75% { transform: translate(10vw, 40vh) scale(1.05, 0.95); opacity: 0.55; }
+  100% { transform: translate(-10vw, 80vh) scale(1, 1.1); opacity: 0.4; }
 }
 
-@keyframes blob-6 {
-  0%, 100% { top: 75%; left: 60%; transform: scale(1) translateZ(0); }
-  50% { top: 70%; left: 65%; transform: scale(0.98) translateZ(0); }
+@keyframes blob-2-move {
+  0% { transform: translate(80vw, 70vh) scale(1.05, 0.95); opacity: 0.45; }
+  25% { transform: translate(60vw, 20vh) scale(0.9, 1.1); opacity: 0.6; }
+  50% { transform: translate(40vw, -5vh) scale(1.1, 0.9); opacity: 0.5; }
+  75% { transform: translate(70vw, 50vh) scale(0.95, 1.05); opacity: 0.5; }
+  100% { transform: translate(80vw, 70vh) scale(1.05, 0.95); opacity: 0.45; }
+}
+
+@keyframes blob-3-move {
+  0% { transform: translate(30vw, 90vh) scale(0.95, 1.1); opacity: 0.4; }
+  33% { transform: translate(45vw, 40vh) scale(1.1, 0.85); opacity: 0.65; }
+  66% { transform: translate(35vw, 10vh) scale(1, 1); opacity: 0.5; }
+  100% { transform: translate(30vw, 90vh) scale(0.95, 1.1); opacity: 0.4; }
+}
+
+@keyframes blob-4-move {
+  0% { transform: translate(60vw, 85vh) scale(1, 1); opacity: 0.35; }
+  25% { transform: translate(45vw, 55vh) scale(1.08, 0.92); opacity: 0.5; }
+  50% { transform: translate(25vw, 25vh) scale(0.92, 1.08); opacity: 0.55; }
+  75% { transform: translate(40vw, 60vh) scale(1.05, 0.95); opacity: 0.45; }
+  100% { transform: translate(60vw, 85vh) scale(1, 1); opacity: 0.35; }
+}
+
+@keyframes blob-5-move {
+  0% { transform: translate(-5vw, 50vh) scale(1.05, 0.95); opacity: 0.4; }
+  50% { transform: translate(10vw, 15vh) scale(0.9, 1.1); opacity: 0.55; }
+  100% { transform: translate(-5vw, 50vh) scale(1.05, 0.95); opacity: 0.4; }
+}
+
+@keyframes blob-6-move {
+  0% { transform: translate(70vw, 95vh) scale(0.9, 1.15); opacity: 0.35; }
+  30% { transform: translate(55vw, 45vh) scale(1.15, 0.85); opacity: 0.6; }
+  60% { transform: translate(65vw, 5vh) scale(1, 1); opacity: 0.45; }
+  100% { transform: translate(70vw, 95vh) scale(0.9, 1.15); opacity: 0.35; }
+}
+
+/* Morph keyframes - organic border-radius wobble */
+@keyframes blob-1-morph {
+  0%, 100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  25% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  50% { border-radius: 50% 60% 30% 60% / 40% 50% 60% 50%; }
+  75% { border-radius: 40% 60% 60% 40% / 70% 30% 50% 60%; }
+}
+
+@keyframes blob-2-morph {
+  0%, 100% { border-radius: 40% 60% 60% 40% / 70% 30% 50% 60%; }
+  25% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  75% { border-radius: 50% 60% 30% 60% / 40% 50% 60% 50%; }
+}
+
+@keyframes blob-3-morph {
+  0%, 100% { border-radius: 50% 50% 40% 60% / 60% 40% 60% 40%; }
+  33% { border-radius: 40% 60% 50% 50% / 50% 50% 40% 60%; }
+  66% { border-radius: 60% 40% 60% 40% / 40% 60% 50% 50%; }
+}
+
+@keyframes blob-4-morph {
+  0%, 100% { border-radius: 45% 55% 55% 45% / 55% 45% 55% 45%; }
+  50% { border-radius: 55% 45% 45% 55% / 45% 55% 45% 55%; }
+}
+
+@keyframes blob-5-morph {
+  0%, 100% { border-radius: 35% 65% 50% 50% / 65% 35% 50% 50%; }
+  50% { border-radius: 65% 35% 50% 50% / 35% 65% 50% 50%; }
+}
+
+@keyframes blob-6-morph {
+  0%, 100% { border-radius: 50% 50% 35% 65% / 50% 50% 65% 35%; }
+  33% { border-radius: 35% 65% 50% 50% / 65% 35% 50% 50%; }
+  66% { border-radius: 65% 35% 65% 35% / 35% 65% 35% 65%; }
+}
+
+/* Reduced motion - slow everything down significantly */
+@media (prefers-reduced-motion: reduce) {
+  .wallpaper .blob {
+    animation-duration: 120s !important;
+  }
 }
 
 /* Theme-specific blob colors - all neutral grays */

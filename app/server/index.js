@@ -95,7 +95,7 @@ wss.on('connection', (ws) => {
 console.log(`WebSocket server on :${WS_PORT}`)
 
 // Helper: Read directory tree
-async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0) {
+async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden = false) {
   const stats = await fs.promises.stat(dirPath)
   const name = path.basename(dirPath)
 
@@ -116,16 +116,19 @@ async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0) {
       return a.name.localeCompare(b.name)
     })
 
-    // Filter hidden files and common ignores
-    const filtered = entries.filter(e =>
-      !e.name.startsWith('.') &&
-      !['node_modules', '__pycache__', 'dist', 'build', '.git'].includes(e.name)
-    )
+    // Filter common ignores, optionally show hidden files
+    const filtered = entries.filter(e => {
+      // Always filter out these directories
+      if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) return false
+      // Filter hidden files unless showHidden is true
+      if (!showHidden && e.name.startsWith('.')) return false
+      return true
+    })
 
     for (const entry of filtered) {
       const childPath = path.join(dirPath, entry.name)
       if (entry.isDirectory()) {
-        node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1))
+        node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1, showHidden))
       } else {
         node.children.push({ name: entry.name, path: childPath, type: 'file' })
       }
@@ -155,8 +158,9 @@ const oauthServer = http.createServer(async (req, res) => {
   // API: Get directory tree
   if (url.pathname === '/api/files') {
     const dirPath = url.searchParams.get('path') || process.env.HOME
+    const showHidden = url.searchParams.get('showHidden') === 'true'
     try {
-      const tree = await readDirectoryTree(dirPath)
+      const tree = await readDirectoryTree(dirPath, 3, 0, showHidden)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(tree))
     } catch (err) {

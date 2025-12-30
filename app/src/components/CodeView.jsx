@@ -9,7 +9,9 @@ import {
   faChevronRight,
   faChevronDown,
   faRefresh,
-  faFolderTree
+  faFolderTree,
+  faEye,
+  faEyeSlash
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -167,6 +169,7 @@ export default function CodeView({ entityId }) {
   const [loading, setLoading] = useState(false)
   const [pendingFileHandled, setPendingFileHandled] = useState(null)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
+  const [showHidden, setShowHidden] = useState(false)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
@@ -184,10 +187,10 @@ export default function CodeView({ entityId }) {
   }, [codeHighlights])
 
   // Load directory tree from server
-  const loadDirectory = useCallback(async (dirPath) => {
+  const loadDirectory = useCallback(async (dirPath, hidden = showHidden) => {
     setLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/files?path=${encodeURIComponent(dirPath)}`)
+      const response = await fetch(`${API_URL}/api/files?path=${encodeURIComponent(dirPath)}&showHidden=${hidden}`)
       const data = await response.json()
       setFileTree(data)
       setRootPath(dirPath)
@@ -200,7 +203,7 @@ export default function CodeView({ entityId }) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [showHidden])
 
   // Load file content
   const loadFile = useCallback(async (node) => {
@@ -468,13 +471,26 @@ export default function CodeView({ entityId }) {
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
           <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">Explorer</span>
-          <button
-            onClick={() => rootPath && loadDirectory(rootPath)}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
-            title="Refresh"
-          >
-            <FontAwesomeIcon icon={faRefresh} className="w-3 h-3 text-text-tertiary" />
-          </button>
+          <div className="flex gap-1">
+            <button
+              onClick={() => {
+                const newVal = !showHidden
+                setShowHidden(newVal)
+                if (rootPath) loadDirectory(rootPath, newVal)
+              }}
+              className={`p-1 hover:bg-white/10 rounded transition-colors ${showHidden ? 'text-accent' : ''}`}
+              title={showHidden ? "Hide hidden files" : "Show hidden files"}
+            >
+              <FontAwesomeIcon icon={showHidden ? faEye : faEyeSlash} className="w-3 h-3 text-text-tertiary" />
+            </button>
+            <button
+              onClick={() => rootPath && loadDirectory(rootPath)}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
+              title="Refresh"
+            >
+              <FontAwesomeIcon icon={faRefresh} className="w-3 h-3 text-text-tertiary" />
+            </button>
+          </div>
         </div>
 
         {/* Path input with folder picker */}

@@ -1,14 +1,13 @@
 import { useRef, useEffect, useState } from 'react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
+import { EntityIcon } from '../entities'
 
 /**
  * DraggableTypeButton - A button that can be dragged to spawn entities
  */
 export default function DraggableTypeButton({
   entityType,
-  icon,
-  iconComponent,
+  iconComponent, // Optional override - prefer using entityType for icon
   title,
   onClick
 }) {
@@ -53,9 +52,7 @@ export default function DraggableTypeButton({
       style={{ touchAction: 'none' }}
       title={title}
     >
-      {iconComponent || (
-        <FontAwesomeIcon icon={icon} className="text-sm" />
-      )}
+      {iconComponent || <EntityIcon type={entityType} />}
     </button>
   )
 }

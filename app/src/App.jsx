@@ -26,15 +26,8 @@ import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faChevronLeft, faChevronRight, faRobot, faCode } from '@fortawesome/free-solid-svg-icons'
-
-// Type icons
-import claudeIcon from './assets/icons/claude.png'
-import linearIcon from './assets/icons/linear.png'
-import gitIcon from './assets/icons/git.png'
-import nvimIcon from './assets/icons/nvim.png'
-import browserIcon from './assets/icons/browser.png'
-import vscodeIcon from './assets/icons/vscode.svg'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
+import { EntityIcon } from './entities'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -907,18 +900,7 @@ export default function App() {
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.95 }}
                           >
-                            {entity.type === 'god' && <img src={claudeIcon} alt="Claude" className="w-4 h-4 object-contain" />}
-                            {entity.type === 'terminal' && <FontAwesomeIcon icon={faTerminal} className="text-white/70 text-sm" />}
-                            {entity.type === 'nvim' && <img src={nvimIcon} alt="Nvim" className="w-4 h-4 object-contain" />}
-                            {entity.type === 'browser' && <img src={browserIcon} alt="Browser" className="w-4 h-4 object-contain" />}
-                            {entity.type === 'linear' && <img src={linearIcon} alt="Linear" className="w-4 h-4 object-contain" />}
-                            {entity.type === 'git' && <img src={gitIcon} alt="Git" className="w-4 h-4 object-contain" />}
-                            {entity.type === 'code' && <FontAwesomeIcon icon={faCode} className="text-white/70 text-sm" />}
-                            {entity.type === 'calendar' && <FontAwesomeIcon icon={faCalendar} className="text-white/70 text-sm" />}
-                            {entity.type === 'history' && <FontAwesomeIcon icon={faClockRotateLeft} className="text-white/70 text-sm" />}
-                            {entity.type === 'settings' && <FontAwesomeIcon icon={faGear} className="text-white/70 text-sm" />}
-                            {entity.type === 'cemetery' && <FontAwesomeIcon icon={faSkull} className="text-white/70 text-sm" />}
-                            {entity.type === 'oracle' && <span className="text-sm">🔮</span>}
+                            <EntityIcon type={entity.type} />
                           </motion.button>
                         )
                       })}
@@ -964,19 +946,16 @@ export default function App() {
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="settings"
-                                icon={faGear}
                                 title="Settings - drag to split"
                                 onClick={() => handleSpawnEntity('settings')}
                               />
                               <DraggableTypeButton
                                 entityType="cemetery"
-                                icon={faSkull}
                                 title="Cemetery - drag to split"
                                 onClick={() => handleSpawnEntity('cemetery')}
                               />
                               <DraggableTypeButton
                                 entityType="oracle"
-                                icon={faRobot}
                                 title="Oracle (Local LLM) - drag to split"
                                 onClick={() => handleSpawnEntity('oracle')}
                               />
@@ -985,19 +964,16 @@ export default function App() {
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="calendar"
-                                icon={faCalendar}
                                 title="Calendar - drag to split"
                                 onClick={() => handleSpawnEntity('calendar')}
                               />
                               <DraggableTypeButton
                                 entityType="git"
-                                iconComponent={<img src={gitIcon} alt="Git" className="w-4 h-4 object-contain" />}
                                 title="Git - drag to split"
                                 onClick={() => handleSpawnEntity('git')}
                               />
                               <DraggableTypeButton
                                 entityType="history"
-                                icon={faClockRotateLeft}
                                 title="History - drag to split"
                                 onClick={() => handleSpawnEntity('history')}
                               />
@@ -1006,21 +982,23 @@ export default function App() {
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="terminal"
-                                icon={faTerminal}
                                 title="New terminal (Ctrl+R) - drag to split"
                                 onClick={handleSpawnTerminal}
                               />
                               <DraggableTypeButton
                                 entityType="nvim"
-                                iconComponent={<img src={nvimIcon} alt="Nvim" className="w-4 h-4 object-contain" />}
                                 title="New nvim - drag to split"
                                 onClick={() => send({ event: 'nvim:spawn' })}
                               />
                               <DraggableTypeButton
                                 entityType="browser"
-                                iconComponent={<img src={browserIcon} alt="Browser" className="w-4 h-4 object-contain" />}
                                 title="New browser - drag to split"
                                 onClick={() => handleSpawnEntity('browser')}
+                              />
+                              <DraggableTypeButton
+                                entityType="youtube-music"
+                                title="YouTube Music - drag to split"
+                                onClick={() => handleSpawnEntity('youtube-music')}
                               />
                             </div>
                           </motion.div>
@@ -1031,19 +1009,16 @@ export default function App() {
                       <div className="flex gap-1.5 p-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
                         <DraggableTypeButton
                           entityType="god"
-                          iconComponent={<img src={claudeIcon} alt="Claude" className="w-4 h-4 object-contain" />}
                           title="New god (Ctrl+N) - drag to split"
                           onClick={() => setSummonModalOpen(true)}
                         />
                         <DraggableTypeButton
                           entityType="linear"
-                          iconComponent={<img src={linearIcon} alt="Linear" className="w-4 h-4 object-contain" />}
                           title="Linear - drag to split"
                           onClick={() => handleSpawnEntity('linear')}
                         />
                         <DraggableTypeButton
                           entityType="code"
-                          iconComponent={<img src={vscodeIcon} alt="Code" className="w-4 h-4 object-contain" />}
                           title="Code viewer - drag to split"
                           onClick={() => handleSpawnEntity('code')}
                         />
