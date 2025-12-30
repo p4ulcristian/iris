@@ -117,32 +117,25 @@ export function startService(name, projectRoot) {
   let proc
 
   try {
-    // Ollama is a direct command, not a uv script
-    // Use setsid to create independent session that survives parent exit
+    // Ollama runs as a systemd service
     if (name === 'ollama') {
-      proc = spawn('setsid', ['ollama', 'serve'], {
-        detached: true,
-        stdio: 'ignore',
-        env: {
-          ...process.env,
-          CUDA_VISIBLE_DEVICES: '0',
-          OLLAMA_ORIGINS: '*'  // Allow CORS for browser/Electron access
-        }
-      })
-    } else {
-      const scriptPath = `${projectRoot}/${script}`
-      const uvPath = process.env.HOME + '/.local/bin/uv'
-
-      proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
-        cwd: projectRoot,
-        detached: true,
-        stdio: 'ignore',
-        env: {
-          ...process.env,
-          CUDA_VISIBLE_DEVICES: '0'
-        }
-      })
+      execSync('systemctl start ollama', { stdio: 'ignore' })
+      setTimeout(() => checkAllServices(), 2000)
+      return
     }
+
+    const scriptPath = `${projectRoot}/${script}`
+    const uvPath = process.env.HOME + '/.local/bin/uv'
+
+    proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
+      cwd: projectRoot,
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        CUDA_VISIBLE_DEVICES: '0'
+      }
+    })
 
     proc.on('error', (err) => {
       console.error(`Service ${name} spawn error:`, err.message)
@@ -168,15 +161,16 @@ export function stopService(name) {
     delete serviceProcesses[name]
   }
 
-  // Kill by port (only LISTENING processes, not connections TO the port)
-  const port = SERVICES[name]?.port
-  if (port) {
+  // Ollama runs as a systemd service, use systemctl to stop it
+  if (name === 'ollama') {
     try {
-      execSync(`lsof -ti:${port} -sTCP:LISTEN | xargs -r kill`, { stdio: 'ignore' })
+      execSync('systemctl stop ollama', { stdio: 'ignore' })
     } catch {}
+    setTimeout(() => checkAllServices(), 500)
+    return
   }
 
-  // Kill by script name (catches zombies not listening on port)
+  // Kill by script name for other services
   const script = SERVICES[name]?.script
   if (script) {
     try {
