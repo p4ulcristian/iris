@@ -660,7 +660,7 @@
           </svg>
           Linux
         </a>
-        <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-mac-arm64.zip" class="cta cta-secondary">
+        <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-mac-arm64.dmg" class="cta cta-secondary">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
@@ -669,7 +669,7 @@
           macOS
         </a>
       </div>
-      <p class="download-note">v0.7.1 · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-linux-amd64.deb">.deb</a> · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest">All releases</a></p>
+      <p class="download-note"><span id="version"></span> <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-linux-amd64.deb">.deb</a> · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest">All releases</a></p>
     </section>
 
     <!-- Demo Video -->
@@ -832,6 +832,13 @@
         <div class="install-step">
           <span class="step-num">3</span>
           <div class="step-content">
+            <p><strong>macOS only:</strong> Remove quarantine flag (app isn't code-signed)</p>
+            <code>xattr -cr /Applications/Iris.app</code>
+          </div>
+        </div>
+        <div class="install-step">
+          <span class="step-num">4</span>
+          <div class="step-content">
             <p>Run Iris and press <strong>Ctrl+N</strong> to spawn your first instance</p>
           </div>
         </div>
@@ -846,6 +853,14 @@
   </footer>
 
   <script>
+    // Fetch latest version from GitHub
+    fetch('https://api.github.com/repos/p4ulcristian/iris-releases/releases/latest')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('version').textContent = data.tag_name + ' ·';
+      })
+      .catch(() => {});
+
     // Scroll animation observer
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
