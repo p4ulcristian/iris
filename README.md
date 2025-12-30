@@ -22,7 +22,7 @@ Download the `.AppImage` or `.deb` and run it.
    ```
 4. Open Iris from Applications
 
-> The `xattr` command is required because the app isn't code-signed.
+> The `xattr` command removes the quarantine flag since the app isn't code-signed.
 
 ## The Mythology
 
@@ -70,12 +70,18 @@ bun run dev
 
 ## Requirements
 
-### System Tools
+### Required
+
+| Tool | Package (Arch) | macOS | Purpose |
+|------|----------------|-------|---------|
+| `claude` CLI | `npm i -g @anthropic-ai/claude-code` | same | Spawning gods |
+| `dtach` | `dtach` | `brew install dtach` | Session persistence |
+
+### Voice Features (Linux only)
 
 | Tool | Package (Arch) | Purpose |
 |------|----------------|---------|
-| `bun` | `bun` | Package manager / runtime |
-| `dtach` | `dtach` | Session persistence |
+| `uv` | `uv` | Python package manager |
 | `wtype` | `wtype` | Wayland text input (PTT) |
 | `gtk4-layer-shell` | `gtk4-layer-shell` | Speech bubble overlay |
 
@@ -84,7 +90,6 @@ bun run dev
 | Tool | Purpose |
 |------|---------|
 | NVIDIA GPU + CUDA | Faster TTS/STT |
-| `claude` CLI | Required for spawning gods |
 
 ### Python
 
