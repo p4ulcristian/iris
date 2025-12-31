@@ -29,6 +29,18 @@ export const SOCKET_DIR = path.join(DATA_DIR, 'sockets')
 export const STATE_FILE = path.join(DATA_DIR, 'state.json')
 export const LOGS_DIR = path.join(DATA_DIR, 'logs')
 
+// Zellij config directory (bundled with app)
+function getZellijConfigDir() {
+  // Check if running from packaged app
+  const resourcesPath = process.resourcesPath
+  if (resourcesPath && fs.existsSync(path.join(resourcesPath, 'zellij'))) {
+    return path.join(resourcesPath, 'zellij')
+  }
+  // Development mode - use resources folder
+  return path.join(__dirname, '../resources/zellij')
+}
+export const ZELLIJ_CONFIG_DIR = getZellijConfigDir()
+
 export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },

@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync, spawnSync } from 'child_process'
-import { SOCKET_DIR, PANTHEON } from './config.js'
+import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR } from './config.js'
 
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
@@ -185,13 +185,16 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
 
     // Step 1: Create detached zellij session in background
+    const zellijEnv = {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      ZELLIJ_CONFIG_DIR
+    }
+
     spawnSync('zellij', ['attach', sessionName, '-b'], {
       cwd: projectRoot,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor'
-      },
+      env: zellijEnv,
       stdio: 'ignore'
     })
 
@@ -204,6 +207,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       'run', '-i', '--',
       'bash', '-c', `cd "${projectRoot}" && ${claudeCmd}`
     ], {
+      env: zellijEnv,
       stdio: 'ignore'
     })
 
@@ -260,13 +264,16 @@ export function createTerminalSession(options = {}, projectRoot) {
     const shellCmd = command || 'bash'
 
     // Step 1: Create detached zellij session in background
+    const zellijEnv = {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      ZELLIJ_CONFIG_DIR
+    }
+
     spawnSync('zellij', ['attach', sessionName, '-b'], {
       cwd: workDir,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor'
-      },
+      env: zellijEnv,
       stdio: 'ignore'
     })
 
@@ -280,6 +287,7 @@ export function createTerminalSession(options = {}, projectRoot) {
         'run', '-i', '--',
         'bash', '-c', `cd "${workDir}" && ${shellCmd}`
       ], {
+        env: zellijEnv,
         stdio: 'ignore'
       })
     }

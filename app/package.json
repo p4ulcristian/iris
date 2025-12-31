@@ -1,6 +1,6 @@
 {
   "name": "iris",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
@@ -43,6 +43,13 @@
       {
         "from": "resources/bun/${os}-${arch}",
         "to": "bun",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/zellij",
+        "to": "zellij",
         "filter": [
           "**/*"
         ]

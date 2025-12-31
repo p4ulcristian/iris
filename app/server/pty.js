@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
+import { ZELLIJ_CONFIG_DIR } from './config.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -142,7 +143,8 @@ export function attachPty(godName, ws, cols, rows) {
       env: {
         ...process.env,
         TERM: 'xterm-256color',
-        COLORTERM: 'truecolor'
+        COLORTERM: 'truecolor',
+        ZELLIJ_CONFIG_DIR
       },
       terminal: {
         cols: cols || 120,
