@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
+import { getSessionName, sanitizeName, sessionExists } from './gods.js'
 import { ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
@@ -18,20 +18,6 @@ export const ptyProcesses = new Map()
 // godName -> string (raw output buffer - preserves ANSI codes)
 const outputBuffers = new Map()
 const MAX_BUFFER_SIZE = 100000 // ~100KB per terminal
-
-function getBufferPath(godName) {
-  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)
-}
-
-function loadBufferFromDisk(godName) {
-  const bufferPath = getBufferPath(godName)
-  try {
-    if (fs.existsSync(bufferPath)) {
-      return fs.readFileSync(bufferPath, 'utf-8')
-    }
-  } catch {}
-  return ''
-}
 
 function getZellijScrollback(godName) {
   const sessionName = getSessionName(godName)
@@ -57,30 +43,6 @@ function getZellijScrollback(godName) {
   return ''
 }
 
-function saveBufferToDisk(godName) {
-  const buffer = outputBuffers.get(godName) || ''
-  const bufferPath = getBufferPath(godName)
-  ptyLog(`[buffer] ${godName}: saving to ${bufferPath}`)
-  try {
-    fs.writeFileSync(bufferPath, buffer)
-    ptyLog(`[buffer] ${godName}: saved ${buffer.length} chars to disk`)
-  } catch (e) {
-    ptyLog(`[buffer] ${godName}: FAILED to save - ${e.message}`)
-  }
-}
-
-// Debounced save - don't write on every output
-const saveTimeouts = new Map()
-function debouncedSave(godName) {
-  if (saveTimeouts.has(godName)) {
-    clearTimeout(saveTimeouts.get(godName))
-  }
-  saveTimeouts.set(godName, setTimeout(() => {
-    saveBufferToDisk(godName)
-    saveTimeouts.delete(godName)
-  }, 1000))
-}
-
 function appendToBuffer(godName, data) {
   let buffer = outputBuffers.get(godName) || ''
   buffer += data
@@ -91,19 +53,10 @@ function appendToBuffer(godName, data) {
   }
 
   outputBuffers.set(godName, buffer)
-  debouncedSave(godName)
 }
 
 export function getOutputBuffer(godName, lines = 50) {
-  // First try memory, then disk
-  let buffer = outputBuffers.get(godName)
-  if (!buffer) {
-    buffer = loadBufferFromDisk(godName)
-    if (buffer) {
-      outputBuffers.set(godName, buffer)
-    }
-  }
-
+  const buffer = outputBuffers.get(godName)
   if (!buffer) return ''
 
   // Return last N lines
@@ -113,24 +66,11 @@ export function getOutputBuffer(godName, lines = 50) {
 }
 
 export function getFullBuffer(godName) {
-  let buffer = outputBuffers.get(godName)
-  if (!buffer) {
-    buffer = loadBufferFromDisk(godName)
-    if (buffer) {
-      outputBuffers.set(godName, buffer)
-    }
-  }
-  return buffer || ''
+  return outputBuffers.get(godName) || ''
 }
 
 export function clearOutputBuffer(godName) {
   outputBuffers.delete(godName)
-  const bufferPath = getBufferPath(godName)
-  try {
-    if (fs.existsSync(bufferPath)) {
-      fs.unlinkSync(bufferPath)
-    }
-  } catch {}
 }
 
 export function attachPty(godName, ws, cols, rows) {
@@ -159,22 +99,13 @@ export function attachPty(godName, ws, cols, rows) {
     return
   }
 
-  // Try to get scrollback: memory buffer > zellij scrollback > disk buffer
+  // Try to get scrollback: memory buffer first, then Zellij
   let buffer = outputBuffers.get(godName)
   ptyLog(`[pty:attach] ${godName}: memory buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
 
   if (!buffer) {
-    // Try to get scrollback directly from Zellij (most reliable on reconnect)
+    // Get scrollback directly from Zellij
     buffer = getZellijScrollback(godName)
-    if (buffer) {
-      outputBuffers.set(godName, buffer)
-    }
-  }
-
-  if (!buffer) {
-    // Fall back to disk buffer
-    buffer = loadBufferFromDisk(godName)
-    ptyLog(`[pty:attach] ${godName}: disk buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
     if (buffer) {
       outputBuffers.set(godName, buffer)
     }
@@ -224,7 +155,7 @@ export function attachPty(godName, ws, cols, rows) {
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, sessionName })
 
-  // Send buffered content to client (from Zellij scrollback or disk)
+  // Send buffered content to client (from Zellij scrollback)
   if (buffer && ws.readyState === 1) {
     ws.send(JSON.stringify({ event: 'pty:output', godName, data: buffer }))
     ptyLog(`[pty:attach] ${godName}: sent ${buffer.length} chars of scrollback to client`)
@@ -255,7 +186,6 @@ export function detachPty(godName, ws) {
   // The PTY will be killed explicitly when the god is banished via killPty()
   if (entry.clients.size === 0) {
     ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
-    saveBufferToDisk(godName)
   }
 }
 
@@ -278,9 +208,7 @@ export function detachAllFromClient(ws) {
     entry.clients.delete(ws)
     ptyLog(`[detach] ${godName}: ${entry.clients.size} clients remaining`)
     if (entry.clients.size === 0) {
-      // Keep PTY alive - just save buffer, don't kill
       ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
-      saveBufferToDisk(godName)
     }
   })
 }
@@ -290,7 +218,6 @@ export function killPty(godName) {
   if (!entry) return
 
   ptyLog(`[pty:kill] ${godName}: killing PTY`)
-  saveBufferToDisk(godName)
   entry.proc.kill()
   ptyProcesses.delete(godName)
 }
