@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
+import os from 'os'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 
@@ -19,11 +20,23 @@ let serverProcess = null
 function startServer() {
   const serverPath = path.join(__dirname, '../server/index.js')
 
-  // Use Node instead of bun - macOS apps don't have terminal PATH
-  serverProcess = spawn(process.execPath, [serverPath], {
-    cwd: path.join(__dirname, '../..'),
+  // Find bun - check common locations
+  const homedir = os.homedir()
+  const bunPaths = [
+    'bun', // PATH
+    path.join(homedir, '.bun/bin/bun'), // Default bun install location
+    '/usr/local/bin/bun',
+    '/opt/homebrew/bin/bun'
+  ]
+
+  // Use bun to run the server (needed for Bun.spawn terminal support)
+  serverProcess = spawn(bunPaths[0], ['run', serverPath], {
+    cwd: path.join(__dirname, '..'),
     stdio: ['ignore', 'inherit', 'inherit'],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+    env: {
+      ...process.env,
+      PATH: `${path.join(homedir, '.bun/bin')}:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`
+    }
   })
 
   serverProcess.on('error', (err) => {

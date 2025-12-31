@@ -12,18 +12,23 @@ import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
 import * as calendar from './calendar.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const projectRoot = path.join(__dirname, '../..')
+import os from 'os'
 
-// Check for dtach dependency (required for terminal sessions)
-let dtachMissing = false
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// In dev: use iris project root. In production: use home directory
+const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
+const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
+
+// Check for tmux dependency (required for terminal sessions)
+let tmuxMissing = false
 try {
-  execSync('which dtach', { stdio: 'ignore' })
+  execSync('which tmux', { stdio: 'ignore' })
 } catch {
-  dtachMissing = true
+  tmuxMissing = true
   const isMac = process.platform === 'darwin'
-  console.warn('⚠️  dtach not found - terminal sessions will not work')
-  console.warn(isMac ? '   Install with: brew install dtach' : '   Install with: sudo apt install dtach')
+  console.warn('⚠️  tmux not found - terminal sessions will not work')
+  console.warn(isMac ? '   Install with: brew install tmux' : '   Install with: sudo apt install tmux')
 }
 
 // Ensure socket directory exists
@@ -37,11 +42,15 @@ const wsClients = new Set()
 // Broadcast function
 function broadcast(event, data = {}) {
   const msg = JSON.stringify({ event, ...data })
+  console.log(`[broadcast] ${event} to ${wsClients.size} clients`)
+  let sent = 0
   wsClients.forEach(ws => {
     if (ws.readyState === 1) {
       ws.send(msg)
+      sent++
     }
   })
+  console.log(`[broadcast] Sent to ${sent}/${wsClients.size} clients`)
 }
 
 // Wire up broadcast to state and services modules
@@ -66,13 +75,13 @@ wss.on('connection', (ws) => {
     services: serviceStatus
   }))
 
-  // Warn if dtach is missing
-  if (dtachMissing) {
+  // Warn if tmux is missing
+  if (tmuxMissing) {
     const isMac = process.platform === 'darwin'
     ws.send(JSON.stringify({
       event: 'warning',
-      message: 'dtach not found - terminal sessions will not work',
-      hint: isMac ? 'brew install dtach' : 'sudo apt install dtach'
+      message: 'tmux not found - terminal sessions will not work',
+      hint: isMac ? 'brew install tmux' : 'sudo apt install tmux'
     }))
   }
 

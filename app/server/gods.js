@@ -4,32 +4,88 @@ import os from 'os'
 import { spawn, execSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
 
-const isMac = process.platform === 'darwin'
-
+const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
-// Find the actual dtach master PID by querying who owns the socket
-// dtach forks internally, so the spawned child.pid is NOT the master process
-function getDtachMasterPid(socketPath) {
-  try {
-    if (isMac) {
-      // macOS: use lsof to find process using the socket
-      const output = execSync(`lsof -t "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
-      const pid = parseInt(output.trim().split('\n')[0])
-      return pid > 0 ? pid : null
-    } else {
-      // Linux: use fuser (returns PIDs using the socket)
-      const output = execSync(`fuser "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
-      const pid = parseInt(output.trim().split(/\s+/)[0])
-      return pid > 0 ? pid : null
+// Cross-runtime sleep (works with both Bun and Node)
+function sleepSync(ms) {
+  if (typeof Bun !== 'undefined' && Bun.sleepSync) {
+    Bun.sleepSync(ms)
+  } else {
+    const seconds = ms / 1000
+    try {
+      execSync(`sleep ${seconds}`, { stdio: 'ignore' })
+    } catch {
+      const end = Date.now() + ms
+      while (Date.now() < end) { /* spin */ }
     }
-  } catch {
-    return null
   }
 }
 
-// Re-export for pty.js
+let terminalCounter = 0
+
+export function sanitizeName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
+}
+
+// Get tmux session name for a god/terminal
+export function getSessionName(name) {
+  return `${SESSION_PREFIX}${sanitizeName(name)}`
+}
+
+// For backwards compatibility with pty.js buffer paths
+export function getSocketPath(godName) {
+  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.sock`)
+}
+
+// Check if tmux session exists
+export function sessionExists(name) {
+  try {
+    execSync(`tmux has-session -t "${getSessionName(name)}" 2>/dev/null`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Backwards compat alias
+export function socketExists(godName) {
+  return sessionExists(godName)
+}
+
+// Re-export SOCKET_DIR for buffer file paths
 export { SOCKET_DIR }
+
+// List all iris tmux sessions
+export function listGodSessions() {
+  try {
+    const output = execSync(
+      `tmux list-sessions -F "#{session_name}" 2>/dev/null | grep "^${SESSION_PREFIX}"`,
+      { encoding: 'utf-8' }
+    )
+    return output.trim().split('\n')
+      .filter(Boolean)
+      .map(sessionName => {
+        const name = sessionName.replace(SESSION_PREFIX, '')
+        const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
+        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
+        return {
+          name: capitalName,
+          sessionName,
+          color: god.color,
+          voice: god.voice,
+          status: 'working'
+        }
+      })
+  } catch {
+    return []
+  }
+}
+
+// Backwards compat alias
+export function listGodSockets() {
+  return listGodSessions()
+}
 
 // Get the most recent Claude session ID for a project
 export function getLatestSessionId(projectPath) {
@@ -53,146 +109,6 @@ export function getLatestSessionId(projectPath) {
   }
 }
 
-let terminalCounter = 0
-
-export function sanitizeName(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
-}
-
-export function getSocketPath(godName) {
-  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.sock`)
-}
-
-export function getPidPath(godName) {
-  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.pid`)
-}
-
-export function socketExists(godName) {
-  return fs.existsSync(getSocketPath(godName))
-}
-
-export function listGodSockets() {
-  try {
-    const files = fs.readdirSync(SOCKET_DIR)
-    return files
-      .filter(f => f.endsWith('.sock'))
-      .map(f => {
-        const name = f.replace('.sock', '')
-        const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
-        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
-        return {
-          name: capitalName,
-          socketPath: path.join(SOCKET_DIR, f),
-          color: god.color,
-          voice: god.voice,
-          status: 'working'
-        }
-      })
-  } catch {
-    return []
-  }
-}
-
-export function createGodSession(name, task = '', projectRoot, options = {}) {
-  const godKey = name.toLowerCase()
-  const socketPath = getSocketPath(godKey)
-  const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, userName } = options
-
-  if (socketExists(godKey)) {
-    if (resumeSessionId) {
-      // Resurrection: kill existing socket to make room for the resumed session
-      killGodSession(godKey)
-    } else {
-      return {
-        name,
-        socketPath,
-        color: god.color,
-        voice: god.voice,
-        status: 'working',
-        exists: true
-      }
-    }
-  }
-
-  // Record sessions before spawn so we can detect the new one
-  const sessionsBefore = new Set(getSessionIds(projectRoot))
-
-  // Build dtach command args
-  let dtachArgs = ['-n', socketPath, '-E', 'claude', '--dangerously-skip-permissions']
-
-  if (resumeSessionId) {
-    // Resume existing session
-    dtachArgs.push('--resume', resumeSessionId)
-  } else {
-    // Build init prompt with god identity
-    const identity = `You are ${name}. Voice: ${god.voice}.`
-
-    let initPrompt = ''
-    if (startPrompt) {
-      initPrompt += startPrompt + '\n\n'
-    }
-    if (task) {
-      initPrompt += task + '\n\n'
-    }
-    initPrompt += identity
-
-    // Pass prompt directly - no shell escaping needed with spawn
-    dtachArgs.push(initPrompt)
-  }
-
-  try {
-    // Use spawn with detached:true - this calls setsid() internally on Unix (both Linux and macOS)
-    const child = spawn('dtach', dtachArgs, {
-      detached: true,
-      stdio: 'ignore',
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        FORCE_COLOR: '3',
-        GOD_NAME: name
-      }
-    })
-    child.unref()
-
-    // Wait for dtach to fork and create the socket
-    Bun.sleepSync(300)
-
-    // Get the ACTUAL dtach master PID (dtach forks, so child.pid is the parent that exits)
-    const pid = getDtachMasterPid(socketPath)
-    const pidFile = getPidPath(godKey)
-    if (pid) {
-      fs.writeFileSync(pidFile, String(pid))
-    }
-
-    // Wait for Claude to create its session file
-    Bun.sleepSync(200)
-
-    // Find the new session ID (one that wasn't there before)
-    let sessionId = resumeSessionId || null
-    if (!resumeSessionId) {
-      const sessionsAfter = getSessionIds(projectRoot)
-      sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
-    }
-
-    return {
-      name,
-      socketPath,
-      color: god.color,
-      voice: god.voice,
-      status: 'working',
-      mission: task || null,
-      sessionId,
-      pid
-    }
-  } catch (e) {
-    console.error('Failed to create dtach session:', e)
-    return null
-  }
-}
-
 // Get all session IDs for a project
 function getSessionIds(projectPath) {
   try {
@@ -209,21 +125,118 @@ function getSessionIds(projectPath) {
   }
 }
 
+export function createGodSession(name, task = '', projectRoot, options = {}) {
+  const godKey = name.toLowerCase()
+  const sessionName = getSessionName(godKey)
+  const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
+  const { resumeSessionId, startPrompt, userName } = options
+
+  // Check if session already exists
+  if (sessionExists(godKey)) {
+    if (resumeSessionId) {
+      // Resurrection: kill existing session to make room
+      killGodSession(godKey)
+    } else {
+      return {
+        name,
+        sessionName,
+        color: god.color,
+        voice: god.voice,
+        status: 'working',
+        exists: true
+      }
+    }
+  }
+
+  // Record sessions before spawn so we can detect the new one
+  const sessionsBefore = new Set(getSessionIds(projectRoot))
+
+  // Build claude command
+  let claudeArgs = ['--dangerously-skip-permissions']
+
+  if (resumeSessionId) {
+    claudeArgs.push('--resume', resumeSessionId)
+  } else {
+    // Build init prompt with god identity
+    const identity = `You are ${name}. Voice: ${god.voice}.`
+
+    let initPrompt = ''
+    if (startPrompt) {
+      initPrompt += startPrompt + '\n\n'
+    }
+    if (task) {
+      initPrompt += task + '\n\n'
+    }
+    initPrompt += identity
+
+    claudeArgs.push(initPrompt)
+  }
+
+  try {
+    // Build environment string for tmux
+    const envVars = [
+      `TERM=xterm-256color`,
+      `COLORTERM=truecolor`,
+      `FORCE_COLOR=3`,
+      `GOD_NAME=${name}`
+    ].join(' ')
+
+    // Create tmux session with claude command
+    // Use -x and -y for initial size (will be resized on attach)
+    const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+    const tmuxCmd = `tmux new-session -d -s "${sessionName}" -x 120 -y 40 -c "${projectRoot}" "${envVars} ${claudeCmd}"`
+
+    execSync(tmuxCmd, {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        FORCE_COLOR: '3',
+        GOD_NAME: name
+      }
+    })
+
+    // Wait for Claude to create its session file
+    sleepSync(500)
+
+    // Find the new session ID
+    let sessionId = resumeSessionId || null
+    if (!resumeSessionId) {
+      const sessionsAfter = getSessionIds(projectRoot)
+      sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
+    }
+
+    return {
+      name,
+      sessionName,
+      color: god.color,
+      voice: god.voice,
+      status: 'working',
+      mission: task || null,
+      sessionId
+    }
+  } catch (e) {
+    console.error('Failed to create tmux session:', e)
+    return null
+  }
+}
+
 export function createTerminalSession(options = {}, projectRoot) {
   const { command, name: customName, color, cwd } = options
 
   terminalCounter++
   const displayName = customName || `Terminal ${terminalCounter}`
   const sanitized = sanitizeName(displayName)
-  // Use the same name derivation as listGodSockets so they match
   const name = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
-  const socketPath = path.join(SOCKET_DIR, `${sanitized}.sock`)
+  const sessionName = getSessionName(sanitized)
 
-  if (fs.existsSync(socketPath)) {
+  // Check if session already exists
+  if (sessionExists(sanitized)) {
     return {
       name,
       displayName,
-      socketPath,
+      sessionName,
       color: color || '#888888',
       status: 'working',
       exists: true
@@ -232,17 +245,19 @@ export function createTerminalSession(options = {}, projectRoot) {
 
   try {
     const workDir = cwd || projectRoot
-    const pidFile = path.join(SOCKET_DIR, `${sanitized}.pid`)
 
-    // Build dtach args - use bash -c for custom commands, plain bash otherwise
-    const dtachArgs = command
-      ? ['-n', socketPath, '-E', 'bash', '-c', command]
-      : ['-n', socketPath, '-E', 'bash']
+    // Build environment string for tmux
+    const envVars = [
+      `TERM=xterm-256color`,
+      `COLORTERM=truecolor`,
+      `FORCE_COLOR=3`
+    ].join(' ')
 
-    // Use spawn with detached:true - cross-platform setsid equivalent
-    const child = spawn('dtach', dtachArgs, {
-      detached: true,
-      stdio: 'ignore',
+    // Create tmux session with bash
+    const shellCmd = command ? `bash -c '${command.replace(/'/g, "'\\''")}'` : 'bash'
+    const tmuxCmd = `tmux new-session -d -s "${sessionName}" -x 120 -y 40 -c "${workDir}" "${envVars} ${shellCmd}"`
+
+    execSync(tmuxCmd, {
       cwd: workDir,
       env: {
         ...process.env,
@@ -251,24 +266,16 @@ export function createTerminalSession(options = {}, projectRoot) {
         FORCE_COLOR: '3'
       }
     })
-    child.unref()
 
-    // Wait for dtach to fork and create the socket
-    Bun.sleepSync(300)
-
-    // Get the ACTUAL dtach master PID (dtach forks, so child.pid is the parent that exits)
-    const pid = getDtachMasterPid(socketPath)
-    if (pid) {
-      fs.writeFileSync(pidFile, String(pid))
-    }
+    // Wait for session to initialize
+    sleepSync(200)
 
     return {
       name,
       displayName,
-      socketPath,
+      sessionName,
       color: color || '#888888',
-      status: 'working',
-      pid
+      status: 'working'
     }
   } catch (e) {
     console.error('Failed to create terminal session:', e)
@@ -277,57 +284,17 @@ export function createTerminalSession(options = {}, projectRoot) {
 }
 
 export function killGodSession(godName) {
-  const sanitized = godName.toLowerCase()
-  const socketPath = getSocketPath(sanitized)
-  const pidFile = getPidPath(sanitized)
+  const sessionName = getSessionName(godName)
 
-  let killed = false
-
-  // Try stored PID first
-  if (fs.existsSync(pidFile)) {
-    try {
-      const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim())
-      if (pid > 0) {
-        // Kill entire process group (negative PID) - POSIX standard
-        process.kill(-pid, 'SIGTERM')
-        killed = true
-      }
-    } catch (e) {
-      // PID might be stale, continue to socket-based lookup
-    }
+  try {
+    execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`)
+  } catch {
+    // Session might not exist, that's fine
   }
 
-  // If stored PID didn't work, try to find the actual process via socket
-  if (!killed && fs.existsSync(socketPath)) {
-    const livePid = getDtachMasterPid(socketPath)
-    if (livePid) {
-      try {
-        process.kill(-livePid, 'SIGTERM')
-        killed = true
-      } catch {
-        // Try killing just the process if group kill fails
-        try {
-          process.kill(livePid, 'SIGTERM')
-          killed = true
-        } catch {}
-      }
-    }
-  }
-
-  // Last resort: use fuser/lsof to kill anything using the socket
-  if (!killed && fs.existsSync(socketPath)) {
-    try {
-      if (isMac) {
-        execSync(`lsof -t "${socketPath}" 2>/dev/null | xargs kill 2>/dev/null`, { encoding: 'utf-8' })
-      } else {
-        execSync(`fuser -k "${socketPath}" 2>/dev/null`, { encoding: 'utf-8' })
-      }
-    } catch {}
-  }
-
-  // Clean up files
-  try { fs.unlinkSync(pidFile) } catch {}
-  try { fs.unlinkSync(socketPath) } catch {}
+  // Clean up any leftover buffer files
+  const bufferPath = path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)
+  try { fs.unlinkSync(bufferPath) } catch {}
 
   return true
 }

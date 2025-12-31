@@ -76,6 +76,7 @@ export function handleMessage(ws, msg, projectRoot) {
   switch (event) {
     // God lifecycle
     case 'god:spawn': {
+      console.log('[god:spawn] Received:', data)
       // If no name provided, pick a random available god from pantheon
       let godName = data.name
       if (!godName) {
@@ -92,6 +93,7 @@ export function handleMessage(ws, msg, projectRoot) {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName
       })
+      console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
       if (god && !god.exists) {
         appState.entities[god.name] = {
           id: god.name,
@@ -117,9 +119,13 @@ export function handleMessage(ws, msg, projectRoot) {
 
         appState.focusedEntity = god.name
         saveState()
+        console.log('[god:spawn] SUCCESS - broadcasting state')
         broadcastState()
       } else if (god?.exists) {
+        console.log('[god:spawn] God already exists, sending spawned event')
         ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
+      } else {
+        console.log('[god:spawn] FAILED - god is null or undefined')
       }
       break
     }

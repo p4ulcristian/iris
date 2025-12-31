@@ -1,7 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { getSocketPath, sanitizeName, SOCKET_DIR } from './gods.js'
+import { execSync } from 'child_process'
+import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -10,7 +11,7 @@ function ptyLog(msg) {
   try { fs.appendFileSync(PTY_LOG, line) } catch {}
 }
 
-// godName -> { proc, terminal, clients: Set<ws>, socketPath }
+// godName -> { proc, terminal, clients: Set<ws>, sessionName }
 export const ptyProcesses = new Map()
 
 // godName -> string (raw output buffer - preserves ANSI codes)
@@ -104,24 +105,21 @@ export function clearOutputBuffer(godName) {
 }
 
 export function attachPty(godName, ws, cols, rows) {
-  ptyLog(`[pty:attach] START ${godName}`)
-  const socketPath = getSocketPath(godName)
+  const sessionName = getSessionName(godName)
+  ptyLog(`[pty:attach] START ${godName} (session: ${sessionName})`)
 
-  if (!fs.existsSync(socketPath)) {
-    ptyLog(`[pty:attach] ${godName}: socket not found at ${socketPath}`)
-    ws.send(JSON.stringify({ event: 'error', message: `Socket not found: ${socketPath}` }))
+  // Check if tmux session exists
+  if (!sessionExists(godName)) {
+    ptyLog(`[pty:attach] ${godName}: tmux session not found`)
+    ws.send(JSON.stringify({ event: 'error', message: `Session not found: ${sessionName}` }))
     return
   }
 
-  // If PTY already exists for this god, just add client and send buffer
+  // If PTY already exists for this god, just add client
   if (ptyProcesses.has(godName)) {
     const entry = ptyProcesses.get(godName)
     entry.clients.add(ws)
     ptyLog(`[pty:attach] ${godName}: PTY exists, now ${entry.clients.size} clients`)
-
-    // Buffer replay disabled - was causing duplicate/glitched output
-    // New clients will just see ongoing output from here
-    ptyLog(`[pty:attach] ${godName}: new client added, skipping buffer replay`)
     return
   }
 
@@ -136,14 +134,11 @@ export function attachPty(godName, ws, cols, rows) {
     }
   }
 
-  // Store buffer to send after resize jiggle (so bash redraw doesn't overwrite it)
-  const pendingBuffer = buffer
-
   const clients = new Set([ws])
 
-  // Spawn using Bun.Terminal
-  // Use -r winch to force SIGWINCH redraw method (needed for nvim and other TUI apps)
-  const proc = Bun.spawn(['dtach', '-a', socketPath, '-r', 'winch'], {
+  // Attach to tmux session using Bun.Terminal
+  // tmux handles terminal size propagation correctly on both Linux and macOS
+  const proc = Bun.spawn(['tmux', 'attach-session', '-t', sessionName], {
     terminal: {
       cols: cols || 120,
       rows: rows || 40,
@@ -166,12 +161,9 @@ export function attachPty(godName, ws, cols, rows) {
     }
   })
 
-  ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, socketPath })
+  ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, sessionName })
 
-  // Resize jiggle disabled - was causing visual glitches
-  // dtach -r winch already triggers a redraw via SIGWINCH
-
-  // Handle process exit
+  // Handle process exit (tmux attach exited)
   proc.exited.then((exitCode) => {
     console.log(`PTY for ${godName} exited with code ${exitCode}`)
     const entry = ptyProcesses.get(godName)
@@ -192,9 +184,9 @@ export function detachPty(godName, ws) {
 
   entry.clients.delete(ws)
 
-  // If no more clients, kill process (but NOT the dtach session)
+  // If no more clients, kill the attach process (but NOT the tmux session)
   if (entry.clients.size === 0) {
-    // Flush buffer to disk before detaching (in case of pending debounced save)
+    // Flush buffer to disk before detaching
     saveBufferToDisk(godName)
     entry.proc.kill()
     ptyProcesses.delete(godName)
@@ -220,7 +212,7 @@ export function detachAllFromClient(ws) {
     entry.clients.delete(ws)
     ptyLog(`[detach] ${godName}: ${entry.clients.size} clients remaining`)
     if (entry.clients.size === 0) {
-      // Flush buffer to disk before detaching (in case of pending debounced save)
+      // Flush buffer to disk before detaching
       const buf = outputBuffers.get(godName)
       ptyLog(`[detach] ${godName}: saving buffer (${buf ? buf.length + ' chars' : 'none'}) to disk`)
       saveBufferToDisk(godName)
