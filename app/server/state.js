@@ -1,8 +1,13 @@
 import fs from 'fs'
 import path from 'path'
+import { fileURLToPath } from 'url'
 import { STATE_FILE, SOCKET_DIR, GOD_COLORS } from './config.js'
 import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'))
+const APP_VERSION = pkg.version
 
 // Broadcast function - set by index.js
 let broadcastFn = null
@@ -455,7 +460,8 @@ export function getStateForBroadcast() {
         email: appState.settings?.googleCalendar?.email || null
       }
     },
-    codeHighlights: appState.codeHighlights || {}
+    codeHighlights: appState.codeHighlights || {},
+    version: APP_VERSION
   }
 }
 

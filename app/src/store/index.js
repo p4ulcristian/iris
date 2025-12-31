@@ -62,6 +62,9 @@ const initialState = {
 
   // Tiles per tab - extracted from layout tree by server
   tiles: {},  // { [tabId]: [{ id, entityId }, ...] } - one entity per tile
+
+  // App version (from server)
+  version: null
 }
 
 // Store
@@ -434,6 +437,11 @@ export const useStore = create(
         // Sync tiles
         if (serverState.tiles !== undefined) {
           state.tiles = serverState.tiles
+        }
+
+        // Sync version
+        if (serverState.version !== undefined) {
+          state.version = serverState.version
         }
       }),
 

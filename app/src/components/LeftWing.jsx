@@ -219,6 +219,7 @@ export default function LeftWing({
   const powers = useStore(s => s.settings?.powers ?? true)
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
+  const version = useStore(s => s.version)
 
   const handleServiceToggle = (service, isActive) => {
     console.log('handleServiceToggle called:', { service, isActive, hasSend: !!send })
@@ -332,6 +333,9 @@ export default function LeftWing({
         {'IRIS'.split('').map((letter, i) => (
           <span key={i} className="text-white/50 text-lg font-mono font-bold leading-tight">{letter}</span>
         ))}
+        {version && (
+          <span className="text-white/30 text-[10px] font-mono mt-2">{version}</span>
+        )}
       </div>
 
       {/* Chronicle preview button - above Powers */}
