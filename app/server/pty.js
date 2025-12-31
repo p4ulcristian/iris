@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync } from 'child_process'
-import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
+import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists, TMUX_PATH } from './gods.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -138,28 +138,44 @@ export function attachPty(godName, ws, cols, rows) {
 
   // Attach to tmux session using Bun.Terminal
   // tmux handles terminal size propagation correctly on both Linux and macOS
-  const proc = Bun.spawn(['tmux', 'attach-session', '-t', sessionName], {
-    terminal: {
-      cols: cols || 120,
-      rows: rows || 40,
-      data(terminal, data) {
-        const entry = ptyProcesses.get(godName)
-        if (!entry) return
+  let proc
+  try {
+    proc = Bun.spawn([TMUX_PATH, 'attach-session', '-t', sessionName], {
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor'
+      },
+      terminal: {
+        cols: cols || 120,
+        rows: rows || 40,
+        data(terminal, data) {
+          const entry = ptyProcesses.get(godName)
+          if (!entry) return
 
-        const dataStr = data.toString()
+          const dataStr = data.toString()
 
-        // Store in buffer for peek
-        appendToBuffer(godName, dataStr)
+          // Store in buffer for peek
+          appendToBuffer(godName, dataStr)
 
-        const msg = JSON.stringify({ event: 'pty:output', godName, data: dataStr })
-        entry.clients.forEach(client => {
-          if (client.readyState === 1) {
-            client.send(msg)
-          }
-        })
+          const msg = JSON.stringify({ event: 'pty:output', godName, data: dataStr })
+          entry.clients.forEach(client => {
+            if (client.readyState === 1) {
+              client.send(msg)
+            }
+          })
+        }
       }
-    }
-  })
+    })
+  } catch (e) {
+    ptyLog(`[pty:attach] ${godName}: Bun.spawn failed: ${e.message}`)
+    ws.send(JSON.stringify({ event: 'error', message: `PTY spawn failed: ${e.message}` }))
+    return
+  }
+
+  if (!proc.terminal) {
+    ptyLog(`[pty:attach] ${godName}: proc.terminal is undefined after spawn`)
+  }
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, sessionName })
 
@@ -184,12 +200,11 @@ export function detachPty(godName, ws) {
 
   entry.clients.delete(ws)
 
-  // If no more clients, kill the attach process (but NOT the tmux session)
+  // Keep PTY alive even with no clients - this prevents Claude Code input from getting stuck
+  // The PTY will be killed explicitly when the god is banished via killPty()
   if (entry.clients.size === 0) {
-    // Flush buffer to disk before detaching
+    ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
     saveBufferToDisk(godName)
-    entry.proc.kill()
-    ptyProcesses.delete(godName)
   }
 }
 
@@ -212,14 +227,21 @@ export function detachAllFromClient(ws) {
     entry.clients.delete(ws)
     ptyLog(`[detach] ${godName}: ${entry.clients.size} clients remaining`)
     if (entry.clients.size === 0) {
-      // Flush buffer to disk before detaching
-      const buf = outputBuffers.get(godName)
-      ptyLog(`[detach] ${godName}: saving buffer (${buf ? buf.length + ' chars' : 'none'}) to disk`)
+      // Keep PTY alive - just save buffer, don't kill
+      ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
       saveBufferToDisk(godName)
-      entry.proc.kill()
-      ptyProcesses.delete(godName)
     }
   })
+}
+
+export function killPty(godName) {
+  const entry = ptyProcesses.get(godName)
+  if (!entry) return
+
+  ptyLog(`[pty:kill] ${godName}: killing PTY`)
+  saveBufferToDisk(godName)
+  entry.proc.kill()
+  ptyProcesses.delete(godName)
 }
 
 export function killAllPty() {

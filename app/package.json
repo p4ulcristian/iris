@@ -39,6 +39,13 @@
     "asarUnpack": [
       "server/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/tmux/${os}-${arch}",
+        "to": "tmux",
+        "filter": ["**/*"]
+      }
+    ],
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Utility",

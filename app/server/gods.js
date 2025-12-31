@@ -1,9 +1,24 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { spawn, execSync } from 'child_process'
+import { fileURLToPath } from 'url'
+import { spawn, spawnSync, execSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// Detect bundled tmux binary (in packaged app) or fall back to system tmux
+function getTmuxPath() {
+  // In packaged app: resources/app.asar.unpacked/server/ → resources/tmux/tmux
+  const bundledPath = path.join(__dirname, '..', '..', 'tmux', 'tmux')
+  if (fs.existsSync(bundledPath)) {
+    return bundledPath
+  }
+  // Fall back to system tmux
+  return 'tmux'
+}
+
+export const TMUX_PATH = getTmuxPath()
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
@@ -41,7 +56,7 @@ export function getSocketPath(godName) {
 // Check if tmux session exists
 export function sessionExists(name) {
   try {
-    execSync(`tmux has-session -t "${getSessionName(name)}" 2>/dev/null`)
+    execSync(`"${TMUX_PATH}" has-session -t "${getSessionName(name)}" 2>/dev/null`)
     return true
   } catch {
     return false
@@ -60,7 +75,7 @@ export { SOCKET_DIR }
 export function listGodSessions() {
   try {
     const output = execSync(
-      `tmux list-sessions -F "#{session_name}" 2>/dev/null | grep "^${SESSION_PREFIX}"`,
+      `"${TMUX_PATH}" list-sessions -F "#{session_name}" 2>/dev/null | grep "^${SESSION_PREFIX}"`,
       { encoding: 'utf-8' }
     )
     return output.trim().split('\n')
@@ -173,20 +188,25 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   }
 
   try {
-    // Build environment string for tmux
-    const envVars = [
-      `TERM=xterm-256color`,
-      `COLORTERM=truecolor`,
-      `FORCE_COLOR=3`,
-      `GOD_NAME=${name}`
-    ].join(' ')
-
     // Create tmux session with claude command
     // Use -x and -y for initial size (will be resized on attach)
+    // Pass environment variables via -e flags for proper propagation
     const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
-    const tmuxCmd = `tmux new-session -d -s "${sessionName}" -x 120 -y 40 -c "${projectRoot}" "${envVars} ${claudeCmd}"`
+    const tmuxArgs = [
+      'new-session',
+      '-d',
+      '-s', sessionName,
+      '-x', '120',
+      '-y', '40',
+      '-c', projectRoot,
+      '-e', 'TERM=xterm-256color',
+      '-e', 'COLORTERM=truecolor',
+      '-e', 'FORCE_COLOR=3',
+      '-e', `GOD_NAME=${name}`,
+      claudeCmd
+    ]
 
-    execSync(tmuxCmd, {
+    spawnSync(TMUX_PATH, tmuxArgs, {
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -197,9 +217,10 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       }
     })
 
-    // Disable tmux status bar
+    // Configure tmux session options
     try {
-      execSync(`tmux set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
     } catch {}
 
     // Wait for Claude to create its session file
@@ -251,18 +272,23 @@ export function createTerminalSession(options = {}, projectRoot) {
   try {
     const workDir = cwd || projectRoot
 
-    // Build environment string for tmux
-    const envVars = [
-      `TERM=xterm-256color`,
-      `COLORTERM=truecolor`,
-      `FORCE_COLOR=3`
-    ].join(' ')
-
     // Create tmux session with bash
+    // Pass environment variables via -e flags for proper propagation
     const shellCmd = command ? `bash -c '${command.replace(/'/g, "'\\''")}'` : 'bash'
-    const tmuxCmd = `tmux new-session -d -s "${sessionName}" -x 120 -y 40 -c "${workDir}" "${envVars} ${shellCmd}"`
+    const tmuxArgs = [
+      'new-session',
+      '-d',
+      '-s', sessionName,
+      '-x', '120',
+      '-y', '40',
+      '-c', workDir,
+      '-e', 'TERM=xterm-256color',
+      '-e', 'COLORTERM=truecolor',
+      '-e', 'FORCE_COLOR=3',
+      shellCmd
+    ]
 
-    execSync(tmuxCmd, {
+    spawnSync(TMUX_PATH, tmuxArgs, {
       cwd: workDir,
       env: {
         ...process.env,
@@ -272,9 +298,10 @@ export function createTerminalSession(options = {}, projectRoot) {
       }
     })
 
-    // Disable tmux status bar
+    // Configure tmux session options
     try {
-      execSync(`tmux set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
     } catch {}
 
     // Wait for session to initialize
@@ -297,7 +324,7 @@ export function killGodSession(godName) {
   const sessionName = getSessionName(godName)
 
   try {
-    execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`)
+    execSync(`"${TMUX_PATH}" kill-session -t "${sessionName}" 2>/dev/null`)
   } catch {
     // Session might not exist, that's fine
   }

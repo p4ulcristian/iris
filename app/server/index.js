@@ -11,6 +11,7 @@ import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks,
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
 import * as calendar from './calendar.js'
+import { TMUX_PATH } from './gods.js'
 
 import os from 'os'
 
@@ -20,10 +21,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
 const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
 
-// Check for tmux dependency (required for terminal sessions)
+// Check for tmux (bundled or system)
 let tmuxMissing = false
 try {
-  execSync('which tmux', { stdio: 'ignore' })
+  execSync(`"${TMUX_PATH}" -V`, { stdio: 'ignore' })
+  console.log(`Using tmux: ${TMUX_PATH}`)
 } catch {
   tmuxMissing = true
   const isMac = process.platform === 'darwin'
