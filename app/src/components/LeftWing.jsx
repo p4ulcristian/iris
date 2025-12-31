@@ -22,6 +22,65 @@ function Spinner() {
   )
 }
 
+function ChronicleButton() {
+  const [open, setOpen] = useState(false)
+  const [lines, setLines] = useState([])
+  const menuRef = useRef(null)
+
+  // Fetch recent lines when opened, auto-refresh every 3s
+  useEffect(() => {
+    if (!open) return
+
+    const fetchLines = () => {
+      fetch('http://127.0.0.1:8766/chronicle/recent?count=5')
+        .then(r => r.json())
+        .then(data => setLines(data.lines || []))
+        .catch(() => setLines([]))
+    }
+
+    fetchLines()
+    const interval = setInterval(fetchLines, 3000)
+    return () => clearInterval(interval)
+  }, [open])
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <IconButton
+        icon={faScroll}
+        size="md"
+        variant="glass"
+        onClick={() => setOpen(!open)}
+        title="Chronicle preview"
+      />
+      {open && (
+        <div className="absolute left-full bottom-0 ml-2 min-w-[280px] max-w-[400px] liquid-glass-popup p-3 z-50">
+          {lines.length === 0 ? (
+            <p className="text-white/40 text-xs">No recent transcripts</p>
+          ) : (
+            <ul className="space-y-2">
+              {lines.map((line, i) => (
+                <li key={i} className="text-xs text-white/70">{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
@@ -63,7 +122,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
       </button>
 
       {open && (
-        <div className="absolute left-full bottom-0 ml-2 min-w-[160px] liquid-glass py-1.5 z-50">
+        <div className="absolute left-full bottom-0 ml-2 min-w-[160px] liquid-glass-popup py-1.5 z-50">
           {serviceList.map((service) => {
             const isActive = services[service.key]
             const isLoading = servicesLoading[service.key]
@@ -240,6 +299,25 @@ export default function LeftWing({
           <span key={i} className="text-white/50 text-lg font-mono font-bold leading-tight">{letter}</span>
         ))}
       </div>
+
+      {/* Chronicle preview button - above Powers */}
+      {powers && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{
+            opacity: loadStage >= 2 ? 1 : 0,
+            scale: loadStage >= 2 ? 1 : 0.8
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 400,
+            damping: 25,
+            delay: (!initialLoadDone || loadStage < 5) ? 0.12 : 0
+          }}
+        >
+          <ChronicleButton />
+        </motion.div>
+      )}
 
       {/* Services dropdown - only show when powers are enabled */}
       {powers && (

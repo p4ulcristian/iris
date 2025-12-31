@@ -3,6 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #     "flask",
+#     "flask-cors",
 #     "numpy",
 #     "sounddevice",
 #     "soundfile",
@@ -31,6 +32,7 @@ Chronicle (continuous transcription):
 """
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import logging
 import threading
 import os
@@ -56,6 +58,7 @@ except ImportError:
             return "[STT not installed - install nemo_toolkit[asr]]"
 
 app = Flask(__name__)
+CORS(app)
 
 # Configure logging
 logging.basicConfig(
@@ -275,6 +278,29 @@ def chronicle_log():
 
     chronicle.log(text, source=source)
     return jsonify({"status": "ok", "message": "Logged"})
+
+
+@app.route('/chronicle/recent', methods=['GET'])
+def chronicle_recent():
+    """Get recent transcript lines"""
+    global chronicle
+
+    count = request.args.get('count', 5, type=int)
+
+    # Get today's transcript file
+    if chronicle is None:
+        return jsonify({"lines": []})
+
+    log_file = chronicle._get_log_file()
+    if not log_file.exists():
+        return jsonify({"lines": []})
+
+    # Read last N lines
+    with open(log_file, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    recent = lines[-count:] if len(lines) >= count else lines
+    return jsonify({"lines": [l.strip() for l in recent]})
 
 
 def main():
