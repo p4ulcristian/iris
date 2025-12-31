@@ -115,11 +115,18 @@ export function attachPty(godName, ws, cols, rows) {
     return
   }
 
-  // If PTY already exists for this god, just add client
+  // If PTY already exists for this god, just add client and send buffered content
   if (ptyProcesses.has(godName)) {
     const entry = ptyProcesses.get(godName)
     entry.clients.add(ws)
     ptyLog(`[pty:attach] ${godName}: PTY exists, now ${entry.clients.size} clients`)
+
+    // Send buffered content to new client
+    const buffer = outputBuffers.get(godName)
+    if (buffer && ws.readyState === 1) {
+      ws.send(JSON.stringify({ event: 'pty:output', godName, data: buffer }))
+      ptyLog(`[pty:attach] ${godName}: sent ${buffer.length} chars of buffer to new client`)
+    }
     return
   }
 
