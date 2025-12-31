@@ -8,6 +8,11 @@ const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 const HOME = os.homedir()
 
+// Strip ANSI escape codes from string
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[0-9;]*m/g, '')
+}
+
 // Build PATH with common locations for claude and other tools
 function getExtendedPath() {
   const paths = [
@@ -72,6 +77,19 @@ export function sessionExists(name) {
   }
 }
 
+// Check if session is active (not EXITED)
+export function isSessionActive(name) {
+  const sessionName = getSessionName(name)
+  try {
+    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
+    const line = result.split('\n').find(l => l.includes(sessionName))
+    // EXITED sessions show "(EXITED" in output
+    return line && !line.includes('EXITED')
+  } catch {
+    return false
+  }
+}
+
 // Backwards compat alias
 export function socketExists(godName) {
   return sessionExists(godName)
@@ -90,7 +108,8 @@ export function listGodSessions() {
       .filter(line => line.includes(SESSION_PREFIX))
       .map(line => {
         // Parse session name from zellij output (format: "session-name [Created ...]" or just "session-name")
-        const sessionName = line.split(/\s+/)[0].trim()
+        // Strip ANSI codes first - zellij outputs colored text
+        const sessionName = stripAnsi(line.split(/\s+/)[0].trim())
         if (!sessionName.startsWith(SESSION_PREFIX)) return null
 
         const name = sessionName.replace(SESSION_PREFIX, '')
@@ -163,10 +182,11 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   // Check if session already exists
   if (sessionExists(godKey)) {
-    if (resumeSessionId) {
-      // Resurrection: kill existing session to make room
+    if (resumeSessionId || !isSessionActive(godKey)) {
+      // Resurrection OR dead session - clean up and recreate
       killGodSession(godKey)
     } else {
+      // Active session - reattach
       return {
         name,
         sessionName,
@@ -338,7 +358,7 @@ export function killGodSession(godName) {
   const sessionName = getSessionName(godName)
 
   try {
-    execSync(`"${ZELLIJ_BIN}" kill-session "${sessionName}" 2>/dev/null || true`, { stdio: 'ignore' })
+    execSync(`"${ZELLIJ_BIN}" delete-session "${sessionName}" --force 2>/dev/null || true`, { stdio: 'ignore' })
   } catch {}
 
   // Clean up any leftover buffer files
