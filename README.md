@@ -75,7 +75,7 @@ bun run dev
 | Tool | Package (Arch) | macOS | Purpose |
 |------|----------------|-------|---------|
 | `claude` CLI | `npm i -g @anthropic-ai/claude-code` | same | Spawning gods |
-| `tmux` | `tmux` | `brew install tmux` | Session persistence |
+| `abduco` | bundled | bundled | Session persistence |
 
 ### Voice Features (Linux only)
 
@@ -97,6 +97,6 @@ Python dependencies are handled automatically via `uv` inline script metadata. E
 
 ## Architecture
 
-Iris runs as an Electron app with an embedded WebSocket server. Gods are spawned as tmux sessions (persistent terminal sessions) and rendered via xterm.js. The app discovers existing sessions on startup, so gods survive restarts.
+Iris runs as an Electron app with an embedded WebSocket server. Gods are spawned as abduco sessions (persistent terminal sessions) and rendered via xterm.js. The app discovers existing sessions on startup, so gods survive restarts.
 
 For details, see `architecture.md`.

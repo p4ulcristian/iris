@@ -7,18 +7,18 @@ import { SOCKET_DIR, PANTHEON } from './config.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// Detect bundled tmux binary (in packaged app) or fall back to system tmux
-function getTmuxPath() {
-  // In packaged app: resources/app.asar.unpacked/server/ → resources/tmux/tmux
-  const bundledPath = path.join(__dirname, '..', '..', 'tmux', 'tmux')
+// Detect bundled abduco binary (in packaged app) or fall back to system abduco
+function getAbducoPath() {
+  // In packaged app: resources/app.asar.unpacked/server/ → resources/abduco/abduco
+  const bundledPath = path.join(__dirname, '..', '..', 'abduco', 'abduco')
   if (fs.existsSync(bundledPath)) {
     return bundledPath
   }
-  // Fall back to system tmux
-  return 'tmux'
+  // Fall back to system abduco
+  return 'abduco'
 }
 
-export const TMUX_PATH = getTmuxPath()
+export const ABDUCO_PATH = getAbducoPath()
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
@@ -43,22 +43,33 @@ export function sanitizeName(name) {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
 }
 
-// Get tmux session name for a god/terminal
-export function getSessionName(name) {
-  return `${SESSION_PREFIX}${sanitizeName(name)}`
-}
-
-// For backwards compatibility with pty.js buffer paths
+// Get abduco socket path for a god/terminal
 export function getSocketPath(godName) {
-  return path.join(SOCKET_DIR, `${sanitizeName(godName)}.sock`)
+  return path.join(SOCKET_DIR, `${SESSION_PREFIX}${sanitizeName(godName)}.sock`)
 }
 
-// Check if tmux session exists
+// Legacy alias for session name (now returns socket path)
+export function getSessionName(name) {
+  return getSocketPath(name)
+}
+
+// Check if abduco session exists (socket file exists and is active)
 export function sessionExists(name) {
+  const socketPath = getSocketPath(name)
+  if (!fs.existsSync(socketPath)) {
+    return false
+  }
+  // Check if the socket is still active by trying to connect
   try {
-    execSync(`"${TMUX_PATH}" has-session -t "${getSessionName(name)}" 2>/dev/null`)
+    // abduco -a will fail quickly if socket is stale
+    execSync(`"${ABDUCO_PATH}" -a "${socketPath}" -e '^_' </dev/null 2>/dev/null &`, {
+      timeout: 100,
+      stdio: 'ignore'
+    })
     return true
   } catch {
+    // Socket exists but may be stale - try to clean up
+    try { fs.unlinkSync(socketPath) } catch {}
     return false
   }
 }
@@ -71,27 +82,37 @@ export function socketExists(godName) {
 // Re-export SOCKET_DIR for buffer file paths
 export { SOCKET_DIR }
 
-// List all iris tmux sessions
+// List all iris abduco sessions
 export function listGodSessions() {
   try {
-    const output = execSync(
-      `"${TMUX_PATH}" list-sessions -F "#{session_name}" 2>/dev/null | grep "^${SESSION_PREFIX}"`,
-      { encoding: 'utf-8' }
-    )
-    return output.trim().split('\n')
-      .filter(Boolean)
-      .map(sessionName => {
-        const name = sessionName.replace(SESSION_PREFIX, '')
-        const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
-        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
-        return {
-          name: capitalName,
-          sessionName,
-          color: god.color,
-          voice: god.voice,
-          status: 'working'
-        }
-      })
+    // Ensure socket directory exists
+    if (!fs.existsSync(SOCKET_DIR)) {
+      return []
+    }
+
+    const files = fs.readdirSync(SOCKET_DIR)
+      .filter(f => f.startsWith(SESSION_PREFIX) && f.endsWith('.sock'))
+
+    return files.map(fileName => {
+      const name = fileName.replace(SESSION_PREFIX, '').replace('.sock', '')
+      const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
+      const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
+      const socketPath = path.join(SOCKET_DIR, fileName)
+
+      // Check if session is still active
+      if (!fs.existsSync(socketPath)) {
+        return null
+      }
+
+      return {
+        name: capitalName,
+        sessionName: socketPath,
+        socketPath,
+        color: god.color,
+        voice: god.voice,
+        status: 'working'
+      }
+    }).filter(Boolean)
   } catch {
     return []
   }
@@ -142,19 +163,25 @@ function getSessionIds(projectPath) {
 
 export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
-  const sessionName = getSessionName(godKey)
+  const socketPath = getSocketPath(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
   const { resumeSessionId, startPrompt, userName } = options
 
+  // Ensure socket directory exists
+  if (!fs.existsSync(SOCKET_DIR)) {
+    fs.mkdirSync(SOCKET_DIR, { recursive: true })
+  }
+
   // Check if session already exists
-  if (sessionExists(godKey)) {
+  if (fs.existsSync(socketPath)) {
     if (resumeSessionId) {
       // Resurrection: kill existing session to make room
       killGodSession(godKey)
     } else {
       return {
         name,
-        sessionName,
+        sessionName: socketPath,
+        socketPath,
         color: god.color,
         voice: god.voice,
         status: 'working',
@@ -188,25 +215,12 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   }
 
   try {
-    // Create tmux session with claude command
-    // Use -x and -y for initial size (will be resized on attach)
-    // Pass environment variables via -e flags for proper propagation
+    // Create abduco session with claude command
+    // -n: create new session but don't attach
+    // The command is passed as a single string after the socket path
     const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
-    const tmuxArgs = [
-      'new-session',
-      '-d',
-      '-s', sessionName,
-      '-x', '120',
-      '-y', '40',
-      '-c', projectRoot,
-      '-e', 'TERM=xterm-256color',
-      '-e', 'COLORTERM=truecolor',
-      '-e', 'FORCE_COLOR=3',
-      '-e', `GOD_NAME=${name}`,
-      claudeCmd
-    ]
 
-    spawnSync(TMUX_PATH, tmuxArgs, {
+    spawnSync(ABDUCO_PATH, ['-n', socketPath, 'bash', '-c', claudeCmd], {
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -214,17 +228,9 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
         COLORTERM: 'truecolor',
         FORCE_COLOR: '3',
         GOD_NAME: name
-      }
+      },
+      stdio: 'ignore'
     })
-
-    // Configure tmux session - minimal streaming mode (no interactive features)
-    try {
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
-      // Disable prefix key and all tmux keybindings - pure streaming only
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix None`, { stdio: 'ignore' })
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix2 None`, { stdio: 'ignore' })
-    } catch {}
 
     // Wait for Claude to create its session file
     sleepSync(500)
@@ -238,7 +244,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
     return {
       name,
-      sessionName,
+      sessionName: socketPath,
+      socketPath,
       color: god.color,
       voice: god.voice,
       status: 'working',
@@ -246,7 +253,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       sessionId
     }
   } catch (e) {
-    console.error('Failed to create tmux session:', e)
+    console.error('Failed to create abduco session:', e)
     return null
   }
 }
@@ -258,14 +265,20 @@ export function createTerminalSession(options = {}, projectRoot) {
   const displayName = customName || `Terminal ${terminalCounter}`
   const sanitized = sanitizeName(displayName)
   const name = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
-  const sessionName = getSessionName(sanitized)
+  const socketPath = getSocketPath(sanitized)
+
+  // Ensure socket directory exists
+  if (!fs.existsSync(SOCKET_DIR)) {
+    fs.mkdirSync(SOCKET_DIR, { recursive: true })
+  }
 
   // Check if session already exists
-  if (sessionExists(sanitized)) {
+  if (fs.existsSync(socketPath)) {
     return {
       name,
       displayName,
-      sessionName,
+      sessionName: socketPath,
+      socketPath,
       color: color || '#888888',
       status: 'working',
       exists: true
@@ -275,40 +288,19 @@ export function createTerminalSession(options = {}, projectRoot) {
   try {
     const workDir = cwd || projectRoot
 
-    // Create tmux session with bash
-    // Pass environment variables via -e flags for proper propagation
+    // Create abduco session with bash
     const shellCmd = command ? `bash -c '${command.replace(/'/g, "'\\''")}'` : 'bash'
-    const tmuxArgs = [
-      'new-session',
-      '-d',
-      '-s', sessionName,
-      '-x', '120',
-      '-y', '40',
-      '-c', workDir,
-      '-e', 'TERM=xterm-256color',
-      '-e', 'COLORTERM=truecolor',
-      '-e', 'FORCE_COLOR=3',
-      shellCmd
-    ]
 
-    spawnSync(TMUX_PATH, tmuxArgs, {
+    spawnSync(ABDUCO_PATH, ['-n', socketPath, 'bash', '-c', shellCmd], {
       cwd: workDir,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         FORCE_COLOR: '3'
-      }
+      },
+      stdio: 'ignore'
     })
-
-    // Configure tmux session - minimal streaming mode (no interactive features)
-    try {
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
-      // Disable prefix key and all tmux keybindings - pure streaming only
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix None`, { stdio: 'ignore' })
-      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix2 None`, { stdio: 'ignore' })
-    } catch {}
 
     // Wait for session to initialize
     sleepSync(200)
@@ -316,7 +308,8 @@ export function createTerminalSession(options = {}, projectRoot) {
     return {
       name,
       displayName,
-      sessionName,
+      sessionName: socketPath,
+      socketPath,
       color: color || '#888888',
       status: 'working'
     }
@@ -327,13 +320,23 @@ export function createTerminalSession(options = {}, projectRoot) {
 }
 
 export function killGodSession(godName) {
-  const sessionName = getSessionName(godName)
+  const socketPath = getSocketPath(godName)
 
+  // Find and kill the abduco process by socket
   try {
-    execSync(`"${TMUX_PATH}" kill-session -t "${sessionName}" 2>/dev/null`)
-  } catch {
-    // Session might not exist, that's fine
-  }
+    // Get the PID of the abduco server process
+    const result = execSync(`lsof -t "${socketPath}" 2>/dev/null || true`, { encoding: 'utf-8' })
+    const pids = result.trim().split('\n').filter(Boolean)
+
+    for (const pid of pids) {
+      try {
+        process.kill(parseInt(pid), 'SIGTERM')
+      } catch {}
+    }
+  } catch {}
+
+  // Remove the socket file
+  try { fs.unlinkSync(socketPath) } catch {}
 
   // Clean up any leftover buffer files
   const bufferPath = path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)

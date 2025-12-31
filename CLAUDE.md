@@ -36,7 +36,7 @@ Voice assistant for Paul.
 | **Iris** | The Electron frontend — React app in `app/src/` |
 | **brain** | Python voice/utility system — `brain/` |
 | **Olympus** | The full Electron app where gods work |
-| **god** | A Claude instance in a dtach terminal session |
+| **god** | A Claude instance in an abduco terminal session |
 
 ### Actions
 

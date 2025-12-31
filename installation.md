@@ -7,7 +7,7 @@ Run the Electron app to spawn and manage gods.
 ### Requirements
 
 ```bash
-sudo pacman -S bun dtach
+sudo pacman -S bun
 ```
 
 ### Claude CLI
@@ -41,13 +41,12 @@ Complete setup with speech-to-text, text-to-speech, and push-to-talk.
 ### Requirements
 
 ```bash
-sudo pacman -S bun dtach uv wtype gtk4-layer-shell
+sudo pacman -S bun uv wtype gtk4-layer-shell
 ```
 
 | Package | Purpose |
 |---------|---------|
 | `bun` | JS package manager / runtime |
-| `dtach` | Persistent terminal sessions |
 | `uv` | Python package manager |
 | `wtype` | Wayland keyboard input (PTT) |
 | `gtk4-layer-shell` | Speech bubble overlay |
@@ -157,7 +156,7 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Gods don't persist after restart
 
-Make sure `dtach` is installed. Gods are stored as socket files in `~/.local/share/iris/sockets/`.
+Gods are stored as socket files in `/tmp/iris/`. The abduco binary is bundled with the app.
 
 ---
 

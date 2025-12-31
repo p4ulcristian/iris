@@ -14,6 +14,16 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
+      - name: Compile abduco for Linux x64
+        run: |
+          git clone https://github.com/martanne/abduco.git /tmp/abduco
+          cd /tmp/abduco
+          ./configure
+          make LDFLAGS="-static"
+          strip abduco
+          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/linux-x64
+          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/linux-x64/
+
       - name: Set version from tag
         working-directory: ./app
         run: |
@@ -36,13 +46,24 @@ jobs:
             app/dist/*.AppImage
             app/dist/*.deb
 
-  build-mac:
+  build-mac-arm64:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+
+      - name: Compile abduco for macOS ARM64
+        run: |
+          brew install automake
+          git clone https://github.com/martanne/abduco.git /tmp/abduco
+          cd /tmp/abduco
+          ./configure
+          make
+          strip abduco
+          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/mac-arm64
+          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/mac-arm64/
 
       - name: Set version from tag
         working-directory: ./app
@@ -54,18 +75,57 @@ jobs:
         working-directory: ./app
         run: bun install
 
-      - name: Build macOS
+      - name: Build macOS ARM64
         working-directory: ./app
         run: bun run build:mac
 
-      - name: Upload macOS artifacts
+      - name: Upload macOS ARM64 artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mac-artifacts
+          name: mac-arm64-artifacts
+          path: app/dist/*.dmg
+
+  build-mac-x64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Compile abduco for macOS x64
+        run: |
+          brew install automake
+          git clone https://github.com/martanne/abduco.git /tmp/abduco
+          cd /tmp/abduco
+          ./configure
+          make
+          strip abduco
+          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/mac-x64
+          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/mac-x64/
+
+      - name: Set version from tag
+        working-directory: ./app
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          jq --arg v "$VERSION" '.version = $v' package.json > tmp.json && mv tmp.json package.json
+
+      - name: Install dependencies
+        working-directory: ./app
+        run: bun install
+
+      - name: Build macOS x64
+        working-directory: ./app
+        run: bun run build:mac
+
+      - name: Upload macOS x64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-x64-artifacts
           path: app/dist/*.dmg
 
   release:
-    needs: [build-linux, build-mac]
+    needs: [build-linux, build-mac-arm64, build-mac-x64]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,10 +136,16 @@ jobs:
           name: linux-artifacts
           path: artifacts
 
-      - name: Download macOS artifacts
+      - name: Download macOS ARM64 artifacts
         uses: actions/download-artifact@v4
         with:
-          name: mac-artifacts
+          name: mac-arm64-artifacts
+          path: artifacts
+
+      - name: Download macOS x64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-x64-artifacts
           path: artifacts
 
       - name: Create Release
@@ -96,11 +162,11 @@ jobs:
             - [Claude CLI](https://github.com/anthropics/claude-code) - `npm install -g @anthropic-ai/claude-code && claude login`
 
             **Linux:**
-            - `tmux` - for session persistence
+            - `abduco` is bundled in the app
             - Voice features (optional): `uv`, `wtype`, `gtk4-layer-shell`
 
             **macOS:**
-            - `tmux` - `brew install tmux`
+            - `abduco` is bundled in the app
             - Voice features not yet supported on macOS
 
             ## macOS Installation

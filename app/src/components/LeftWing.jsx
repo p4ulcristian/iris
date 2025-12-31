@@ -25,23 +25,38 @@ function Spinner() {
 function ChronicleButton() {
   const [open, setOpen] = useState(false)
   const [lines, setLines] = useState([])
+  const [status, setStatus] = useState({ running: false, volume: 0, start_time: null })
   const menuRef = useRef(null)
 
   // Fetch recent lines when opened, auto-refresh every 3s
   useEffect(() => {
     if (!open) return
 
-    const fetchLines = () => {
+    const fetchData = () => {
       fetch('http://127.0.0.1:8766/chronicle/recent?count=5')
         .then(r => r.json())
         .then(data => setLines(data.lines || []))
         .catch(() => setLines([]))
+
+      fetch('http://127.0.0.1:8766/chronicle/status')
+        .then(r => r.json())
+        .then(data => setStatus(data))
+        .catch(() => {})
     }
 
-    fetchLines()
-    const interval = setInterval(fetchLines, 3000)
+    fetchData()
+    const interval = setInterval(fetchData, 500)  // Faster refresh for volume
     return () => clearInterval(interval)
   }, [open])
+
+  // Format elapsed time
+  const formatTime = (startTime) => {
+    if (!startTime) return '00:00'
+    const elapsed = Math.floor(Date.now() / 1000 - startTime)
+    const mins = Math.floor(elapsed / 60)
+    const secs = elapsed % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -69,12 +84,31 @@ function ChronicleButton() {
           {lines.length === 0 ? (
             <p className="text-white/40 text-xs">No recent transcripts</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2 mb-3">
               {lines.map((line, i) => (
                 <li key={i} className="text-xs text-white/70">{line}</li>
               ))}
             </ul>
           )}
+
+          {/* Volume bar and timer */}
+          <div className="flex items-center gap-3 pt-2 border-t border-white/10">
+            <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden relative">
+              {/* Volume level */}
+              <div
+                className="h-full bg-green-500 transition-all duration-100"
+                style={{ width: `${(status.volume || 0) * 100}%` }}
+              />
+              {/* VAD indicator line */}
+              <div
+                className="absolute top-0 h-full w-0.5 bg-yellow-400 transition-all duration-100"
+                style={{ left: `${(status.vad || 0) * 100}%` }}
+              />
+            </div>
+            <span className="text-xs text-white/50 font-mono min-w-[40px]">
+              {formatTime(status.batch_start)}
+            </span>
+          </div>
         </div>
       )}
     </div>

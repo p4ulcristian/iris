@@ -32,7 +32,7 @@ You exist in Olympus - an Electron app where gods work in parallel terminals.
 
 - Colored border matching your identity
 - Full xterm.js terminal with scrollback
-- Persists via dtach (survives app restart)
+- Persists via abduco (survives app restart)
 
 ## Communication
 

@@ -41,11 +41,9 @@
     ],
     "extraResources": [
       {
-        "from": "resources/tmux/${os}-${arch}",
-        "to": "tmux",
-        "filter": [
-          "**/*"
-        ]
+        "from": "resources/abduco/${os}-${arch}",
+        "to": "abduco",
+        "filter": ["**/*"]
       },
       {
         "from": "resources/bun/${os}-${arch}",

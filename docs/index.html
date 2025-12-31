@@ -666,7 +666,15 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          macOS
+          macOS (Apple Silicon)
+        </a>
+        <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-mac-x64.dmg" class="cta cta-secondary">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          macOS (Intel)
         </a>
       </div>
       <p class="download-note"><span id="version"></span> <a href="https://github.com/p4ulcristian/iris-releases/releases/latest/download/Iris-linux-amd64.deb">.deb</a> · <a href="https://github.com/p4ulcristian/iris-releases/releases/latest">All releases</a></p>
@@ -776,7 +784,7 @@
       <div class="feature animate-on-scroll delay-2">
         <div class="feature-icon">&#8635;</div>
         <h3>Session Persistence</h3>
-        <p>Sessions survive app restarts via tmux. Pick up where you left off.</p>
+        <p>Sessions survive app restarts via abduco. Pick up where you left off.</p>
       </div>
       <div class="feature animate-on-scroll delay-3">
         <div class="feature-icon">&#9707;</div>
@@ -796,7 +804,7 @@
       <ul class="req-list">
         <li>
           <span class="check">&#10003;</span>
-          <span><strong>macOS or Linux</strong> &mdash; Windows not supported (no tmux)</span>
+          <span><strong>macOS or Linux</strong> &mdash; Windows not yet supported</span>
         </li>
         <li>
           <span class="check">&#10003;</span>
@@ -804,9 +812,7 @@
         </li>
         <li>
           <span class="check">&#10003;</span>
-          <span><strong>tmux</strong> &mdash; Session persistence<br>
-            <code style="display: inline; margin-top: 4px;">brew install tmux</code> (Mac) or <code style="display: inline;">apt install tmux</code> (Linux)
-          </span>
+          <span><strong>abduco</strong> &mdash; Bundled with the app (no install needed)</span>
         </li>
       </ul>
     </section>
@@ -825,19 +831,12 @@
         <div class="install-step">
           <span class="step-num">2</span>
           <div class="step-content">
-            <p>Install tmux if you haven't already</p>
-            <code>brew install tmux  # macOS</code>
-          </div>
-        </div>
-        <div class="install-step">
-          <span class="step-num">3</span>
-          <div class="step-content">
             <p><strong>macOS only:</strong> Remove quarantine flag (app isn't code-signed)</p>
             <code>xattr -cr /Applications/Iris.app</code>
           </div>
         </div>
         <div class="install-step">
-          <span class="step-num">4</span>
+          <span class="step-num">3</span>
           <div class="step-content">
             <p>Run Iris and press <strong>Ctrl+N</strong> to spawn your first instance</p>
           </div>

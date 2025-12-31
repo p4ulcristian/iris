@@ -4,7 +4,7 @@ import { SERVICES, REALMS, PANTHEON, LOGS_DIR, GOD_COLORS } from './config.js'
 import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty } from './state.js'
 import { startService, stopService, startChronicle, stopChronicle } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer } from './pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer, killPty } from './pty.js'
 import { listSessions } from './history.js'
 import * as git from './git.js'
 import * as linear from './linear.js'
@@ -184,11 +184,7 @@ export function handleMessage(ws, msg, projectRoot) {
 
       // For god/terminal types, clean up PTY
       if (entity?.type === 'god' || entity?.type === 'terminal') {
-        if (ptyProcesses.has(entityId)) {
-          const entry = ptyProcesses.get(entityId)
-          entry.proc.kill()
-          ptyProcesses.delete(entityId)
-        }
+        killPty(entityId)
         killGodSession(entityId)
         clearOutputBuffer(entityId)
       }
@@ -389,11 +385,7 @@ export function handleMessage(ws, msg, projectRoot) {
           }
 
           if (entity.type === 'god' || entity.type === 'terminal') {
-            if (ptyProcesses.has(id)) {
-              const entry = ptyProcesses.get(id)
-              entry.proc.kill()
-              ptyProcesses.delete(id)
-            }
+            killPty(id)
             killGodSession(id)
             clearOutputBuffer(id)
           }
@@ -1283,11 +1275,7 @@ export function handleMessage(ws, msg, projectRoot) {
           addToCemetery(existingEntity)
         }
         // Clean up PTY
-        if (ptyProcesses.has(godName)) {
-          const entry = ptyProcesses.get(godName)
-          entry.proc.kill()
-          ptyProcesses.delete(godName)
-        }
+        killPty(godName)
         clearOutputBuffer(godName)
         delete appState.entities[godName]
 

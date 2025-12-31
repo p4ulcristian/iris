@@ -11,7 +11,7 @@ import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks,
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
 import * as calendar from './calendar.js'
-import { TMUX_PATH } from './gods.js'
+import { ABDUCO_PATH } from './gods.js'
 
 import os from 'os'
 
@@ -21,16 +21,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
 const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
 
-// Check for tmux (bundled or system)
-let tmuxMissing = false
+// Check for abduco (bundled or system)
+let abducoMissing = false
 try {
-  execSync(`"${TMUX_PATH}" -V`, { stdio: 'ignore' })
-  console.log(`Using tmux: ${TMUX_PATH}`)
+  execSync(`"${ABDUCO_PATH}" -v`, { stdio: 'ignore' })
+  console.log(`Using abduco: ${ABDUCO_PATH}`)
 } catch {
-  tmuxMissing = true
+  abducoMissing = true
   const isMac = process.platform === 'darwin'
-  console.warn('⚠️  tmux not found - terminal sessions will not work')
-  console.warn(isMac ? '   Install with: brew install tmux' : '   Install with: sudo apt install tmux')
+  console.warn('⚠️  abduco not found - terminal sessions will not work')
+  console.warn(isMac ? '   Install with: brew install abduco' : '   Install with: sudo pacman -S abduco')
 }
 
 // Ensure socket directory exists
@@ -77,13 +77,13 @@ wss.on('connection', (ws) => {
     services: serviceStatus
   }))
 
-  // Warn if tmux is missing
-  if (tmuxMissing) {
+  // Warn if abduco is missing
+  if (abducoMissing) {
     const isMac = process.platform === 'darwin'
     ws.send(JSON.stringify({
       event: 'warning',
-      message: 'tmux not found - terminal sessions will not work',
-      hint: isMac ? 'brew install tmux' : 'sudo apt install tmux'
+      message: 'abduco not found - terminal sessions will not work',
+      hint: isMac ? 'brew install abduco' : 'sudo pacman -S abduco'
     }))
   }
 

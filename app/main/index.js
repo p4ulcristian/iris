@@ -54,7 +54,9 @@ function startServer() {
     stdio: ['ignore', 'inherit', 'inherit'],
     env: {
       ...process.env,
-      PATH: `${path.join(homedir, '.bun/bin')}:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`
+      PATH: `${path.join(homedir, '.bun/bin')}:/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor'
     }
   })
 

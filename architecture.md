@@ -5,7 +5,7 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 ## Core Concepts
 
 ```
-[User] → [brain/ (STT/TTS)] → [Electron App] → [Gods via tmux]
+[User] → [brain/ (STT/TTS)] → [Electron App] → [Gods via abduco]
               ↑                                      ↓
               └────────────── responses ─────────────┘
 ```
@@ -14,7 +14,7 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 
 **Electron App** is the orchestrator - spawns gods, manages sessions, renders terminals. WebSocket server on port 9999.
 
-**Gods** are Claude instances in tmux sessions, rendered via xterm.js. All gods are equal. Each is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter).
+**Gods** are Claude instances in abduco sessions (persistent terminal sessions), rendered via xterm.js. All gods are equal. Each is named from the Greek pantheon (Zeus, Apollo, Artemis, Athena, Hermes, Hades, Poseidon, Hera, Ares, Hephaestus, Aphrodite, Dionysus, Demeter).
 
 ## App Structure
 
@@ -108,11 +108,11 @@ iris/
 ## God Lifecycle
 
 1. **Summon**: User presses Ctrl+N or clicks [+]
-   - Server spawns tmux session: `tmux new-session -d -s iris-<name> claude "<prompt>"`
+   - Server spawns abduco session: `abduco -n /tmp/iris/iris-<name>.sock claude "<prompt>"`
    - React adds god entity to tile
 
 2. **Attach**: When entity renders
-   - Bun.Terminal spawns: `tmux attach-session -t iris-<name>`
+   - Bun.Terminal spawns: `abduco -a /tmp/iris/iris-<name>.sock`
    - PTY output streams to xterm.js via WebSocket
 
 3. **Working**: God executes task
@@ -121,18 +121,18 @@ iris/
 
 4. **Banish**: User presses Ctrl+K or clicks X
    - PTY detached (session persists)
-   - `god:kill` event runs `tmux kill-session -t iris-<name>`
+   - `god:kill` event terminates process and removes socket file
 
 ## Session Persistence
 
-Gods use **tmux** for persistence:
+Gods use **abduco** for persistence:
 - Sessions survive app restarts
 - Multiple windows can attach to same god
 - Closing app detaches but doesn't kill gods
 
 Session discovery on startup:
 ```bash
-tmux list-sessions -F "#{session_name}" | grep "^iris-"
+ls /tmp/iris/iris-*.sock
 ```
 
 ## State Management: Server as Single Source of Truth
