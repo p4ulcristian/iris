@@ -6,6 +6,29 @@ import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js
 
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
+const HOME = os.homedir()
+
+// Build PATH with common locations for claude and other tools
+function getExtendedPath() {
+  const paths = [
+    process.env.PATH,
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    `${HOME}/.local/bin`,
+    `${HOME}/.bun/bin`,
+  ]
+
+  // Add NVM node paths (check for existing versions)
+  const nvmDir = `${HOME}/.nvm/versions/node`
+  try {
+    if (fs.existsSync(nvmDir)) {
+      const versions = fs.readdirSync(nvmDir)
+      versions.forEach(v => paths.push(`${nvmDir}/${v}/bin`))
+    }
+  } catch {}
+
+  return paths.filter(Boolean).join(':')
+}
 
 // Cross-runtime sleep (works with both Bun and Node)
 function sleepSync(ms) {
@@ -187,6 +210,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Step 1: Create detached zellij session in background
     const zellijEnv = {
       ...process.env,
+      PATH: getExtendedPath(),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor'
     }
@@ -266,6 +290,7 @@ export function createTerminalSession(options = {}, projectRoot) {
     // Step 1: Create detached zellij session in background
     const zellijEnv = {
       ...process.env,
+      PATH: getExtendedPath(),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor'
     }
