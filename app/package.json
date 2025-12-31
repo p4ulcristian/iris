@@ -41,11 +41,6 @@
     ],
     "extraResources": [
       {
-        "from": "resources/abduco/${os}-${arch}",
-        "to": "abduco",
-        "filter": ["**/*"]
-      },
-      {
         "from": "resources/bun/${os}-${arch}",
         "to": "bun",
         "filter": [

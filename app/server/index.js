@@ -11,7 +11,6 @@ import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks,
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
 import * as calendar from './calendar.js'
-import { ABDUCO_PATH } from './gods.js'
 
 import os from 'os'
 
@@ -21,16 +20,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
 const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
 
-// Check for abduco (bundled or system)
-let abducoMissing = false
+// Check for zellij
+let zellijMissing = false
 try {
-  execSync(`"${ABDUCO_PATH}" -v`, { stdio: 'ignore' })
-  console.log(`Using abduco: ${ABDUCO_PATH}`)
+  execSync('zellij --version', { stdio: 'ignore' })
+  console.log('Zellij found')
 } catch {
-  abducoMissing = true
+  zellijMissing = true
   const isMac = process.platform === 'darwin'
-  console.warn('⚠️  abduco not found - terminal sessions will not work')
-  console.warn(isMac ? '   Install with: brew install abduco' : '   Install with: sudo pacman -S abduco')
+  console.warn('⚠️  zellij not found - terminal sessions will not work')
+  console.warn(isMac ? '   Install with: brew install zellij' : '   Install with: sudo pacman -S zellij')
 }
 
 // Ensure socket directory exists
@@ -77,13 +76,13 @@ wss.on('connection', (ws) => {
     services: serviceStatus
   }))
 
-  // Warn if abduco is missing
-  if (abducoMissing) {
+  // Warn if zellij is missing
+  if (zellijMissing) {
     const isMac = process.platform === 'darwin'
     ws.send(JSON.stringify({
       event: 'warning',
-      message: 'abduco not found - terminal sessions will not work',
-      hint: isMac ? 'brew install abduco' : 'sudo pacman -S abduco'
+      message: 'zellij not found - terminal sessions will not work',
+      hint: isMac ? 'brew install zellij' : 'sudo pacman -S zellij'
     }))
   }
 

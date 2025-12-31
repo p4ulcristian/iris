@@ -655,7 +655,8 @@ export default function App() {
                 // Use activeStages (sorted by entity order) for consistent Ctrl+Up/Down navigation
                 const activeTab = tabs.find(t => t.id === activeTabId)
                 const activeStageId = activeTab?.activeStageId
-                const activeIdx = activeStages.findIndex(s => s.id === activeStageId)
+                const foundIdx = activeStages.findIndex(s => s.id === activeStageId)
+                const activeIdx = foundIdx === -1 ? 0 : foundIdx
 
                 if (activeStages.length > 0) {
                   return (

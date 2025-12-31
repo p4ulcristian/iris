@@ -89,7 +89,7 @@ export function loadState() {
     appState.entityCounter = 0
   }
 
-  // Merge with discovered sockets (gods/terminals with active abduco sessions)
+  // Merge with discovered sessions (gods/terminals with active zellij sessions)
   const sockets = listGodSockets()
   const socketNames = new Set(sockets.map(s => s.name))
 

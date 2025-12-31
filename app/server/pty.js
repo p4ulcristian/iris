@@ -1,8 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { execSync } from 'child_process'
-import { getSocketPath, sanitizeName, SOCKET_DIR, sessionExists, ABDUCO_PATH } from './gods.js'
+import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -105,13 +104,13 @@ export function clearOutputBuffer(godName) {
 }
 
 export function attachPty(godName, ws, cols, rows) {
-  const socketPath = getSocketPath(godName)
-  ptyLog(`[pty:attach] START ${godName} (socket: ${socketPath})`)
+  const sessionName = getSessionName(godName)
+  ptyLog(`[pty:attach] START ${godName} (session: ${sessionName})`)
 
-  // Check if abduco session exists
+  // Check if zellij session exists
   if (!sessionExists(godName)) {
-    ptyLog(`[pty:attach] ${godName}: abduco session not found`)
-    ws.send(JSON.stringify({ event: 'error', message: `Session not found: ${socketPath}` }))
+    ptyLog(`[pty:attach] ${godName}: zellij session not found`)
+    ws.send(JSON.stringify({ event: 'error', message: `Session not found: ${sessionName}` }))
     return
   }
 
@@ -136,10 +135,10 @@ export function attachPty(godName, ws, cols, rows) {
 
   const clients = new Set([ws])
 
-  // Attach to abduco session using Bun.Terminal
+  // Attach to zellij session using Bun.Terminal
   let proc
   try {
-    proc = Bun.spawn([ABDUCO_PATH, '-a', socketPath], {
+    proc = Bun.spawn(['zellij', 'attach', sessionName], {
       env: {
         ...process.env,
         TERM: 'xterm-256color',
@@ -176,9 +175,9 @@ export function attachPty(godName, ws, cols, rows) {
     ptyLog(`[pty:attach] ${godName}: proc.terminal is undefined after spawn`)
   }
 
-  ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, socketPath })
+  ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, sessionName })
 
-  // Handle process exit (abduco attach exited)
+  // Handle process exit (zellij attach exited)
   proc.exited.then((exitCode) => {
     console.log(`PTY for ${godName} exited with code ${exitCode}`)
     const entry = ptyProcesses.get(godName)

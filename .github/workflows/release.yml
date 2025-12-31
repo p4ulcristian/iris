@@ -14,16 +14,6 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Compile abduco for Linux x64
-        run: |
-          git clone https://github.com/martanne/abduco.git /tmp/abduco
-          cd /tmp/abduco
-          ./configure
-          make LDFLAGS="-static"
-          strip abduco
-          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/linux-x64
-          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/linux-x64/
-
       - name: Set version from tag
         working-directory: ./app
         run: |
@@ -54,17 +44,6 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Compile abduco for macOS ARM64
-        run: |
-          brew install automake
-          git clone https://github.com/martanne/abduco.git /tmp/abduco
-          cd /tmp/abduco
-          ./configure
-          make
-          strip abduco
-          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/mac-arm64
-          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/mac-arm64/
-
       - name: Set version from tag
         working-directory: ./app
         run: |
@@ -92,17 +71,6 @@ jobs:
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
-
-      - name: Compile abduco for macOS x64
-        run: |
-          brew install automake
-          git clone https://github.com/martanne/abduco.git /tmp/abduco
-          cd /tmp/abduco
-          ./configure
-          make
-          strip abduco
-          mkdir -p $GITHUB_WORKSPACE/app/resources/abduco/mac-x64
-          cp abduco $GITHUB_WORKSPACE/app/resources/abduco/mac-x64/
 
       - name: Set version from tag
         working-directory: ./app
@@ -160,13 +128,14 @@ jobs:
 
             **All platforms:**
             - [Claude CLI](https://github.com/anthropics/claude-code) - `npm install -g @anthropic-ai/claude-code && claude login`
+            - [Zellij](https://zellij.dev) - Terminal multiplexer for session persistence
 
             **Linux:**
-            - `abduco` is bundled in the app
+            - Install Zellij: `sudo pacman -S zellij` (Arch) or see [zellij.dev](https://zellij.dev/documentation/installation)
             - Voice features (optional): `uv`, `wtype`, `gtk4-layer-shell`
 
             **macOS:**
-            - `abduco` is bundled in the app
+            - Install Zellij: `brew install zellij`
             - Voice features not yet supported on macOS
 
             ## macOS Installation

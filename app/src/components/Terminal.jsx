@@ -24,6 +24,7 @@ export default function Terminal({ sessionName, color, onData, onResize }) {
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
       allowTransparency: true,
+      scrollback: 10000,
       theme: {
         background: 'transparent',
         foreground: '#e0e0e0',

@@ -1,24 +1,9 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
-import { fileURLToPath } from 'url'
-import { spawn, spawnSync, execSync } from 'child_process'
+import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON } from './config.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// Detect bundled abduco binary (in packaged app) or fall back to system abduco
-function getAbducoPath() {
-  // In packaged app: resources/app.asar.unpacked/server/ → resources/abduco/abduco
-  const bundledPath = path.join(__dirname, '..', '..', 'abduco', 'abduco')
-  if (fs.existsSync(bundledPath)) {
-    return bundledPath
-  }
-  // Fall back to system abduco
-  return 'abduco'
-}
-
-export const ABDUCO_PATH = getAbducoPath()
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 
@@ -43,33 +28,23 @@ export function sanitizeName(name) {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
 }
 
-// Get abduco socket path for a god/terminal
+// Get zellij session name for a god/terminal
+export function getSessionName(godName) {
+  return `${SESSION_PREFIX}${sanitizeName(godName)}`
+}
+
+// Legacy alias for socket path (now returns session name for compat)
 export function getSocketPath(godName) {
-  return path.join(SOCKET_DIR, `${SESSION_PREFIX}${sanitizeName(godName)}.sock`)
+  return getSessionName(godName)
 }
 
-// Legacy alias for session name (now returns socket path)
-export function getSessionName(name) {
-  return getSocketPath(name)
-}
-
-// Check if abduco session exists (socket file exists and is active)
+// Check if zellij session exists
 export function sessionExists(name) {
-  const socketPath = getSocketPath(name)
-  if (!fs.existsSync(socketPath)) {
-    return false
-  }
-  // Check if the socket is still active by trying to connect
+  const sessionName = getSessionName(name)
   try {
-    // abduco -a will fail quickly if socket is stale
-    execSync(`"${ABDUCO_PATH}" -a "${socketPath}" -e '^_' </dev/null 2>/dev/null &`, {
-      timeout: 100,
-      stdio: 'ignore'
-    })
-    return true
+    const result = execSync('zellij list-sessions 2>/dev/null || true', { encoding: 'utf-8' })
+    return result.includes(sessionName)
   } catch {
-    // Socket exists but may be stale - try to clean up
-    try { fs.unlinkSync(socketPath) } catch {}
     return false
   }
 }
@@ -82,37 +57,33 @@ export function socketExists(godName) {
 // Re-export SOCKET_DIR for buffer file paths
 export { SOCKET_DIR }
 
-// List all iris abduco sessions
+// List all iris zellij sessions
 export function listGodSessions() {
   try {
-    // Ensure socket directory exists
-    if (!fs.existsSync(SOCKET_DIR)) {
-      return []
-    }
+    const result = execSync('zellij list-sessions 2>/dev/null || true', { encoding: 'utf-8' })
+    const lines = result.trim().split('\n').filter(Boolean)
 
-    const files = fs.readdirSync(SOCKET_DIR)
-      .filter(f => f.startsWith(SESSION_PREFIX) && f.endsWith('.sock'))
+    return lines
+      .filter(line => line.includes(SESSION_PREFIX))
+      .map(line => {
+        // Parse session name from zellij output (format: "session-name [Created ...]" or just "session-name")
+        const sessionName = line.split(/\s+/)[0].trim()
+        if (!sessionName.startsWith(SESSION_PREFIX)) return null
 
-    return files.map(fileName => {
-      const name = fileName.replace(SESSION_PREFIX, '').replace('.sock', '')
-      const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
-      const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
-      const socketPath = path.join(SOCKET_DIR, fileName)
+        const name = sessionName.replace(SESSION_PREFIX, '')
+        const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
+        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
 
-      // Check if session is still active
-      if (!fs.existsSync(socketPath)) {
-        return null
-      }
-
-      return {
-        name: capitalName,
-        sessionName: socketPath,
-        socketPath,
-        color: god.color,
-        voice: god.voice,
-        status: 'working'
-      }
-    }).filter(Boolean)
+        return {
+          name: capitalName,
+          sessionName,
+          socketPath: sessionName, // For backwards compat
+          color: god.color,
+          voice: god.voice,
+          status: 'working'
+        }
+      })
+      .filter(Boolean)
   } catch {
     return []
   }
@@ -163,25 +134,20 @@ function getSessionIds(projectPath) {
 
 export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
-  const socketPath = getSocketPath(godKey)
+  const sessionName = getSessionName(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, userName } = options
-
-  // Ensure socket directory exists
-  if (!fs.existsSync(SOCKET_DIR)) {
-    fs.mkdirSync(SOCKET_DIR, { recursive: true })
-  }
+  const { resumeSessionId, startPrompt } = options
 
   // Check if session already exists
-  if (fs.existsSync(socketPath)) {
+  if (sessionExists(godKey)) {
     if (resumeSessionId) {
       // Resurrection: kill existing session to make room
       killGodSession(godKey)
     } else {
       return {
         name,
-        sessionName: socketPath,
-        socketPath,
+        sessionName,
+        socketPath: sessionName,
         color: god.color,
         voice: god.voice,
         status: 'working',
@@ -215,25 +181,34 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   }
 
   try {
-    // Create abduco session with claude command
-    // -n: create new session but don't attach
-    // The command is passed as a single string after the socket path
+    // Create zellij session with claude command
     const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
 
-    spawnSync(ABDUCO_PATH, ['-n', socketPath, 'bash', '-c', claudeCmd], {
+    // Step 1: Create detached zellij session in background
+    spawnSync('zellij', ['attach', sessionName, '-b'], {
       cwd: projectRoot,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        FORCE_COLOR: '3',
-        GOD_NAME: name
+        COLORTERM: 'truecolor'
       },
       stdio: 'ignore'
     })
 
-    // Wait for Claude to create its session file
+    // Wait for session to be ready
     sleepSync(500)
+
+    // Step 2: Run claude command in-place (replaces the default shell pane)
+    spawnSync('zellij', [
+      '-s', sessionName,
+      'run', '-i', '--',
+      'bash', '-c', `cd "${projectRoot}" && ${claudeCmd}`
+    ], {
+      stdio: 'ignore'
+    })
+
+    // Wait for session to be created
+    sleepSync(800)
 
     // Find the new session ID
     let sessionId = resumeSessionId || null
@@ -244,8 +219,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
     return {
       name,
-      sessionName: socketPath,
-      socketPath,
+      sessionName,
+      socketPath: sessionName,
       color: god.color,
       voice: god.voice,
       status: 'working',
@@ -253,7 +228,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       sessionId
     }
   } catch (e) {
-    console.error('Failed to create abduco session:', e)
+    console.error('Failed to create zellij session:', e)
     return null
   }
 }
@@ -265,20 +240,15 @@ export function createTerminalSession(options = {}, projectRoot) {
   const displayName = customName || `Terminal ${terminalCounter}`
   const sanitized = sanitizeName(displayName)
   const name = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
-  const socketPath = getSocketPath(sanitized)
-
-  // Ensure socket directory exists
-  if (!fs.existsSync(SOCKET_DIR)) {
-    fs.mkdirSync(SOCKET_DIR, { recursive: true })
-  }
+  const sessionName = getSessionName(sanitized)
 
   // Check if session already exists
-  if (fs.existsSync(socketPath)) {
+  if (sessionExists(sanitized)) {
     return {
       name,
       displayName,
-      sessionName: socketPath,
-      socketPath,
+      sessionName,
+      socketPath: sessionName,
       color: color || '#888888',
       status: 'working',
       exists: true
@@ -287,29 +257,41 @@ export function createTerminalSession(options = {}, projectRoot) {
 
   try {
     const workDir = cwd || projectRoot
+    const shellCmd = command || 'bash'
 
-    // Create abduco session with bash
-    const shellCmd = command ? `bash -c '${command.replace(/'/g, "'\\''")}'` : 'bash'
-
-    spawnSync(ABDUCO_PATH, ['-n', socketPath, 'bash', '-c', shellCmd], {
+    // Step 1: Create detached zellij session in background
+    spawnSync('zellij', ['attach', sessionName, '-b'], {
       cwd: workDir,
       env: {
         ...process.env,
         TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        FORCE_COLOR: '3'
+        COLORTERM: 'truecolor'
       },
       stdio: 'ignore'
     })
 
+    // Wait for session to be ready
+    sleepSync(500)
+
+    // Step 2: Run shell command in-place (replaces the default shell pane)
+    if (shellCmd !== 'bash') {
+      spawnSync('zellij', [
+        '-s', sessionName,
+        'run', '-i', '--',
+        'bash', '-c', `cd "${workDir}" && ${shellCmd}`
+      ], {
+        stdio: 'ignore'
+      })
+    }
+
     // Wait for session to initialize
-    sleepSync(200)
+    sleepSync(300)
 
     return {
       name,
       displayName,
-      sessionName: socketPath,
-      socketPath,
+      sessionName,
+      socketPath: sessionName,
       color: color || '#888888',
       status: 'working'
     }
@@ -320,23 +302,11 @@ export function createTerminalSession(options = {}, projectRoot) {
 }
 
 export function killGodSession(godName) {
-  const socketPath = getSocketPath(godName)
+  const sessionName = getSessionName(godName)
 
-  // Find and kill the abduco process by socket
   try {
-    // Get the PID of the abduco server process
-    const result = execSync(`lsof -t "${socketPath}" 2>/dev/null || true`, { encoding: 'utf-8' })
-    const pids = result.trim().split('\n').filter(Boolean)
-
-    for (const pid of pids) {
-      try {
-        process.kill(parseInt(pid), 'SIGTERM')
-      } catch {}
-    }
+    execSync(`zellij kill-session "${sessionName}" 2>/dev/null || true`, { stdio: 'ignore' })
   } catch {}
-
-  // Remove the socket file
-  try { fs.unlinkSync(socketPath) } catch {}
 
   // Clean up any leftover buffer files
   const bufferPath = path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)
