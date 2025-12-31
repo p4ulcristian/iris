@@ -6,22 +6,8 @@ import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// Get version - handle both dev and packaged app paths
-function getAppVersion() {
-  const paths = [
-    path.join(__dirname, '../package.json'),  // Dev mode
-    path.join(__dirname, '../../app.asar/package.json'),  // Packaged (server is unpacked)
-  ]
-  for (const p of paths) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(p, 'utf-8'))
-      return pkg.version
-    } catch {}
-  }
-  return 'unknown'
-}
-const APP_VERSION = getAppVersion()
+const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'))
+const APP_VERSION = pkg.version
 
 // Broadcast function - set by index.js
 let broadcastFn = null

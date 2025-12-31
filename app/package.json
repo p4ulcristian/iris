@@ -37,7 +37,8 @@
       "package.json"
     ],
     "asarUnpack": [
-      "server/**/*"
+      "server/**/*",
+      "package.json"
     ],
     "extraResources": [
       {

@@ -31,10 +31,13 @@ export const LOGS_DIR = path.join(DATA_DIR, 'logs')
 
 // Zellij config directory (bundled with app)
 function getZellijConfigDir() {
-  // Check if running from packaged app
-  const resourcesPath = process.resourcesPath
-  if (resourcesPath && fs.existsSync(path.join(resourcesPath, 'zellij'))) {
-    return path.join(resourcesPath, 'zellij')
+  // Check if running from packaged app (server is in app.asar.unpacked)
+  if (__dirname.includes('app.asar.unpacked')) {
+    const resourcesDir = path.join(__dirname, '..', '..')
+    const bundled = path.join(resourcesDir, 'zellij')
+    if (fs.existsSync(bundled)) {
+      return bundled
+    }
   }
   // Development mode - use resources folder
   return path.join(__dirname, '../resources/zellij')
@@ -43,10 +46,12 @@ export const ZELLIJ_CONFIG_DIR = getZellijConfigDir()
 
 // Zellij binary path (bundled with app or system)
 function getZellijBin() {
-  const resourcesPath = process.resourcesPath
-  // Check bundled binary in packaged app
-  if (resourcesPath) {
-    const bundled = path.join(resourcesPath, 'zellij', 'bin', 'zellij')
+  // Check if running from packaged app (server is in app.asar.unpacked)
+  // __dirname = .../Resources/app.asar.unpacked/server
+  // zellij is at .../Resources/zellij/bin/zellij
+  if (__dirname.includes('app.asar.unpacked')) {
+    const resourcesDir = path.join(__dirname, '..', '..')  // Up to Resources
+    const bundled = path.join(resourcesDir, 'zellij', 'bin', 'zellij')
     if (fs.existsSync(bundled)) {
       return bundled
     }
