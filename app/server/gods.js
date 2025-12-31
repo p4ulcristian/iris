@@ -197,6 +197,11 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       }
     })
 
+    // Disable tmux status bar
+    try {
+      execSync(`tmux set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+    } catch {}
+
     // Wait for Claude to create its session file
     sleepSync(500)
 
@@ -266,6 +271,11 @@ export function createTerminalSession(options = {}, projectRoot) {
         FORCE_COLOR: '3'
       }
     })
+
+    // Disable tmux status bar
+    try {
+      execSync(`tmux set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
+    } catch {}
 
     // Wait for session to initialize
     sleepSync(200)
