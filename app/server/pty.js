@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import { execSync } from 'child_process'
 import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
 import { ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 
@@ -32,12 +33,40 @@ function loadBufferFromDisk(godName) {
   return ''
 }
 
+function getZellijScrollback(godName) {
+  const sessionName = getSessionName(godName)
+  const tmpFile = path.join(os.tmpdir(), `iris-scrollback-${sanitizeName(godName)}-${Date.now()}.txt`)
+
+  try {
+    execSync(`${ZELLIJ_BIN} --config-dir "${ZELLIJ_CONFIG_DIR}" -s ${sessionName} action dump-screen --full "${tmpFile}"`, {
+      timeout: 5000,
+      stdio: 'pipe'
+    })
+
+    if (fs.existsSync(tmpFile)) {
+      const content = fs.readFileSync(tmpFile, 'utf-8')
+      fs.unlinkSync(tmpFile)
+      ptyLog(`[zellij-scrollback] ${godName}: got ${content.length} chars from zellij`)
+      return content
+    }
+  } catch (e) {
+    ptyLog(`[zellij-scrollback] ${godName}: failed - ${e.message}`)
+    // Clean up temp file if it exists
+    try { fs.unlinkSync(tmpFile) } catch {}
+  }
+  return ''
+}
+
 function saveBufferToDisk(godName) {
   const buffer = outputBuffers.get(godName) || ''
   const bufferPath = getBufferPath(godName)
+  ptyLog(`[buffer] ${godName}: saving to ${bufferPath}`)
   try {
     fs.writeFileSync(bufferPath, buffer)
-  } catch {}
+    ptyLog(`[buffer] ${godName}: saved ${buffer.length} chars to disk`)
+  } catch (e) {
+    ptyLog(`[buffer] ${godName}: FAILED to save - ${e.message}`)
+  }
 }
 
 // Debounced save - don't write on every output
@@ -130,10 +159,20 @@ export function attachPty(godName, ws, cols, rows) {
     return
   }
 
-  // Check memory buffer first (more recent), then fall back to disk
+  // Try to get scrollback: memory buffer > zellij scrollback > disk buffer
   let buffer = outputBuffers.get(godName)
   ptyLog(`[pty:attach] ${godName}: memory buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
+
   if (!buffer) {
+    // Try to get scrollback directly from Zellij (most reliable on reconnect)
+    buffer = getZellijScrollback(godName)
+    if (buffer) {
+      outputBuffers.set(godName, buffer)
+    }
+  }
+
+  if (!buffer) {
+    // Fall back to disk buffer
     buffer = loadBufferFromDisk(godName)
     ptyLog(`[pty:attach] ${godName}: disk buffer = ${buffer ? buffer.length + ' chars' : 'none'}`)
     if (buffer) {
@@ -184,6 +223,12 @@ export function attachPty(godName, ws, cols, rows) {
   }
 
   ptyProcesses.set(godName, { proc, terminal: proc.terminal, clients, sessionName })
+
+  // Send buffered content to client (from Zellij scrollback or disk)
+  if (buffer && ws.readyState === 1) {
+    ws.send(JSON.stringify({ event: 'pty:output', godName, data: buffer }))
+    ptyLog(`[pty:attach] ${godName}: sent ${buffer.length} chars of scrollback to client`)
+  }
 
   // Handle process exit (zellij attach exited)
   proc.exited.then((exitCode) => {
