@@ -1,6 +1,6 @@
 {
   "name": "iris",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
@@ -43,6 +43,11 @@
       {
         "from": "resources/tmux/${os}-${arch}",
         "to": "tmux",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "resources/bun/${os}-${arch}",
+        "to": "bun",
         "filter": ["**/*"]
       }
     ],

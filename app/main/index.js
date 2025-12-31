@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import os from 'os'
+import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 
@@ -32,11 +33,23 @@ function startServer() {
 
   const serverPath = path.join(serverDir, 'server/index.js')
 
-  // Find bun - check common locations
+  // Find bun - use bundled version in packaged app, or system bun in dev
   const homedir = os.homedir()
+  let bunPath = 'bun'
+
+  if (isPackaged) {
+    // In packaged app: resources/bun/bun
+    const bundledBun = path.join(process.resourcesPath, 'bun', 'bun')
+    if (fs.existsSync(bundledBun)) {
+      bunPath = bundledBun
+      console.log(`Using bundled bun: ${bunPath}`)
+    } else {
+      console.warn('Bundled bun not found, falling back to system bun')
+    }
+  }
 
   // Use bun to run the server (needed for Bun.spawn terminal support)
-  serverProcess = spawn('bun', ['run', serverPath], {
+  serverProcess = spawn(bunPath, ['run', serverPath], {
     cwd: serverDir,
     stdio: ['ignore', 'inherit', 'inherit'],
     env: {

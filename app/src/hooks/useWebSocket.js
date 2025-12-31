@@ -5,6 +5,7 @@ import { reportError } from '../utils/error-reporter'
 let sharedWs = null
 let sharedConnected = false
 const connectionListeners = new Set()
+const messageListeners = new Set()
 
 function notifyConnectionChange(isConnected) {
   sharedConnected = isConnected
@@ -27,13 +28,18 @@ function ensureConnection(url) {
     console.log('WebSocket disconnected')
     notifyConnectionChange(false)
     sharedWs = null
-    // Reconnect after 2 seconds
-    setTimeout(() => ensureConnection(url), 2000)
+    // Reconnect after 1 second (faster for initial startup race)
+    setTimeout(() => ensureConnection(url), 1000)
   }
 
   ws.onerror = (error) => {
     console.error('WebSocket error:', error)
     reportError({ message: 'WebSocket connection error' }, 'websocket', { type: 'connection' })
+  }
+
+  // Attach all registered message listeners to new WebSocket
+  ws.onmessage = (event) => {
+    messageListeners.forEach(fn => fn(event))
   }
 
   sharedWs = ws
@@ -49,13 +55,7 @@ export function useWebSocket(url) {
     const onConnectionChange = (isConnected) => setConnected(isConnected)
     connectionListeners.add(onConnectionChange)
 
-    // Ensure we have a connection
-    ensureConnection(url)
-
-    // Sync current state
-    setConnected(sharedConnected)
-
-    // Listen for messages
+    // Message handler - registered globally so it works across reconnects
     const onMessage = (event) => {
       try {
         const data = JSON.parse(event.data)
@@ -65,17 +65,17 @@ export function useWebSocket(url) {
         reportError(e, 'websocket', { type: 'parse', data: event.data?.slice(0, 200) })
       }
     }
+    messageListeners.add(onMessage)
 
-    // Add message listener to current ws
-    if (sharedWs) {
-      sharedWs.addEventListener('message', onMessage)
-    }
+    // Ensure we have a connection
+    ensureConnection(url)
+
+    // Sync current state
+    setConnected(sharedConnected)
 
     return () => {
       connectionListeners.delete(onConnectionChange)
-      if (sharedWs) {
-        sharedWs.removeEventListener('message', onMessage)
-      }
+      messageListeners.delete(onMessage)
     }
   }, [url])
 
