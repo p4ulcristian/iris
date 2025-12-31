@@ -660,25 +660,14 @@ export default function App() {
 
                 if (activeStages.length > 0) {
                   return (
-                    <motion.div
-                      className="relative h-full overflow-hidden"
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{
-                        opacity: loadStage >= 3 ? 1 : 0,
-                        scale: loadStage >= 3 ? 1 : 0.98
-                      }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 300,
-                        damping: 30
-                      }}
-                    >
+                    <div className="relative h-full overflow-hidden">
                       {activeStages.map((stage, idx) => {
                         const offset = idx - activeIdx
                         return (
                           <motion.div
                             key={stage.id}
                             className="absolute inset-0"
+                            initial={false}
                             animate={{ y: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                           >
@@ -692,7 +681,7 @@ export default function App() {
                           </motion.div>
                         )
                       })}
-                    </motion.div>
+                    </div>
                   )
                 }
 
