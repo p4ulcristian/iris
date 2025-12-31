@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { SERVICES, REALMS, PANTHEON, LOGS_DIR } from './config.js'
-import { GOD_COLORS } from '../src/themes/index.js'
+import { SERVICES, REALMS, PANTHEON, LOGS_DIR, GOD_COLORS } from './config.js'
 import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty } from './state.js'
 import { startService, stopService, startChronicle, stopChronicle } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'

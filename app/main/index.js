@@ -18,20 +18,26 @@ let mainWindow = null
 let serverProcess = null
 
 function startServer() {
-  const serverPath = path.join(__dirname, '../server/index.js')
+  // In packaged app, server files are in app.asar.unpacked
+  // In dev, they're in the regular location
+  const isPackaged = app.isPackaged
+  let serverDir
+
+  if (isPackaged) {
+    // Unpacked files go to app.asar.unpacked instead of app.asar
+    serverDir = path.join(__dirname, '..').replace('app.asar', 'app.asar.unpacked')
+  } else {
+    serverDir = path.join(__dirname, '..')
+  }
+
+  const serverPath = path.join(serverDir, 'server/index.js')
 
   // Find bun - check common locations
   const homedir = os.homedir()
-  const bunPaths = [
-    'bun', // PATH
-    path.join(homedir, '.bun/bin/bun'), // Default bun install location
-    '/usr/local/bin/bun',
-    '/opt/homebrew/bin/bun'
-  ]
 
   // Use bun to run the server (needed for Bun.spawn terminal support)
-  serverProcess = spawn(bunPaths[0], ['run', serverPath], {
-    cwd: path.join(__dirname, '..'),
+  serverProcess = spawn('bun', ['run', serverPath], {
+    cwd: serverDir,
     stdio: ['ignore', 'inherit', 'inherit'],
     env: {
       ...process.env,

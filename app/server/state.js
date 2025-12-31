@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { STATE_FILE, SOCKET_DIR } from './config.js'
-import { GOD_COLORS } from '../src/themes/index.js'
+import { STATE_FILE, SOCKET_DIR, GOD_COLORS } from './config.js'
 import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
 

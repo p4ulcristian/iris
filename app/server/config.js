@@ -77,3 +77,8 @@ export const PANTHEON = Object.fromEntries(
 const realmsData = pantheonYaml.realms || {}
 export const REALMS = Object.keys(realmsData)
 export const REALM_COLORS = realmsData
+
+// Build GOD_COLORS from PANTHEON (for client broadcast)
+export const GOD_COLORS = Object.fromEntries(
+  Object.entries(PANTHEON).map(([name, data]) => [name, data.color])
+)
