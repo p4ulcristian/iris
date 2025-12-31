@@ -96,11 +96,11 @@ jobs:
             - [Claude CLI](https://github.com/anthropics/claude-code) - `npm install -g @anthropic-ai/claude-code && claude login`
 
             **Linux:**
-            - `dtach` - for session persistence
+            - `tmux` - for session persistence
             - Voice features (optional): `uv`, `wtype`, `gtk4-layer-shell`
 
             **macOS:**
-            - `dtach` - `brew install dtach`
+            - `tmux` - `brew install tmux`
             - Voice features not yet supported on macOS
 
             ## macOS Installation
