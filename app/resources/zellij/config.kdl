@@ -1,5 +1,6 @@
 // Iris bundled zellij config - minimal UI for embedding
-keybinds clear-defaults=true
+keybinds clear-defaults=true {
+}
 show_startup_tips false
 pane_frames false
 default_layout "compact"
