@@ -14,10 +14,10 @@
     "url": "https://github.com/p4ulcristian/iris"
   },
   "scripts": {
-    "dev": "concurrently -k -n vite,server,electron -c cyan,green,magenta \"bun:dev:vite\" \"bun:dev:server\" \"sleep 2 && bun run dev:electron\"",
+    "dev": "bunx --bun vite build && concurrently -k -n server,electron -c green,magenta \"bun:dev:server\" \"electron .\"",
+    "dev:hot": "concurrently -k -n vite,server,electron -c cyan,green,magenta \"bun:dev:vite\" \"bun:dev:server\" \"sleep 2 && electron . --dev\"",
     "dev:vite": "bunx --bun vite",
     "dev:server": "bun --watch server/index.js",
-    "dev:electron": "electron . --dev",
     "build": "bunx --bun vite build && electron-builder",
     "build:linux": "bunx --bun vite build && electron-builder --linux --publish never",
     "build:mac": "bunx --bun vite build && electron-builder --mac --publish never",

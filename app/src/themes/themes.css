@@ -1,6 +1,7 @@
 /* Theme colors - from config/themes.yaml */
+/* Base theme (obsidian) is defined in @theme block in index.css */
+/* These classes override the base when applied to html element */
 
-:root,
 .theme-obsidian {
   --color-bg-primary: #0a0a0a;
   --color-bg-secondary: #111111;

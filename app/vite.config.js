@@ -9,7 +9,8 @@ export default defineConfig({
   base: './',
   build: {
     outDir: '../dist-vite',
-    emptyOutDir: true
+    emptyOutDir: true,
+    cssMinify: false  // Disable CSS minification - has bugs with filter functions
   },
   resolve: {
     alias: {
