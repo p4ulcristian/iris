@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { execSync, spawnSync } from 'child_process'
-import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR } from './config.js'
+import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 
 const SESSION_PREFIX = 'iris-'
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
@@ -42,7 +42,7 @@ export function getSocketPath(godName) {
 export function sessionExists(name) {
   const sessionName = getSessionName(name)
   try {
-    const result = execSync('zellij list-sessions 2>/dev/null || true', { encoding: 'utf-8' })
+    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
     return result.includes(sessionName)
   } catch {
     return false
@@ -60,7 +60,7 @@ export { SOCKET_DIR }
 // List all iris zellij sessions
 export function listGodSessions() {
   try {
-    const result = execSync('zellij list-sessions 2>/dev/null || true', { encoding: 'utf-8' })
+    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
     const lines = result.trim().split('\n').filter(Boolean)
 
     return lines
@@ -191,7 +191,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       COLORTERM: 'truecolor'
     }
 
-    spawnSync('zellij', ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
+    spawnSync(ZELLIJ_BIN, ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
       cwd: projectRoot,
       env: zellijEnv,
       stdio: 'ignore'
@@ -201,7 +201,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     sleepSync(500)
 
     // Step 2: Run claude command in-place (replaces the default shell pane)
-    spawnSync('zellij', [
+    spawnSync(ZELLIJ_BIN, [
       '--config-dir', ZELLIJ_CONFIG_DIR,
       '-s', sessionName,
       'run', '-i', '--',
@@ -270,7 +270,7 @@ export function createTerminalSession(options = {}, projectRoot) {
       COLORTERM: 'truecolor'
     }
 
-    spawnSync('zellij', ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
+    spawnSync(ZELLIJ_BIN, ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
       cwd: workDir,
       env: zellijEnv,
       stdio: 'ignore'
@@ -313,7 +313,7 @@ export function killGodSession(godName) {
   const sessionName = getSessionName(godName)
 
   try {
-    execSync(`zellij kill-session "${sessionName}" 2>/dev/null || true`, { stdio: 'ignore' })
+    execSync(`"${ZELLIJ_BIN}" kill-session "${sessionName}" 2>/dev/null || true`, { stdio: 'ignore' })
   } catch {}
 
   // Clean up any leftover buffer files

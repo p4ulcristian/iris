@@ -41,6 +41,28 @@ function getZellijConfigDir() {
 }
 export const ZELLIJ_CONFIG_DIR = getZellijConfigDir()
 
+// Zellij binary path (bundled with app or system)
+function getZellijBin() {
+  const resourcesPath = process.resourcesPath
+  // Check bundled binary in packaged app
+  if (resourcesPath) {
+    const bundled = path.join(resourcesPath, 'zellij', 'bin', 'zellij')
+    if (fs.existsSync(bundled)) {
+      return bundled
+    }
+  }
+  // Development mode - check platform-specific binary
+  const platform = os.platform() === 'darwin' ? 'mac' : 'linux'
+  const arch = os.arch() === 'arm64' ? 'arm64' : 'x64'
+  const devBin = path.join(__dirname, '../resources/zellij/bin', `${platform}-${arch}`, 'zellij')
+  if (fs.existsSync(devBin)) {
+    return devBin
+  }
+  // Fall back to system zellij
+  return 'zellij'
+}
+export const ZELLIJ_BIN = getZellijBin()
+
 export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },

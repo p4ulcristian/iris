@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import { getSessionName, sanitizeName, SOCKET_DIR, sessionExists } from './gods.js'
-import { ZELLIJ_CONFIG_DIR } from './config.js'
+import { ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -139,7 +139,7 @@ export function attachPty(godName, ws, cols, rows) {
   // Attach to zellij session using Bun.Terminal
   let proc
   try {
-    proc = Bun.spawn(['zellij', '--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName], {
+    proc = Bun.spawn([ZELLIJ_BIN, '--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName], {
       env: {
         ...process.env,
         TERM: 'xterm-256color',

@@ -57,6 +57,7 @@ benchmark_*.py
 
 # Bin symlinks
 bin/
+!app/resources/*/bin/
 
 # Vendored binaries (downloaded, not committed)
 vendor/bin/*

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 import { WebSocketServer } from 'ws'
 
-import { WS_PORT, SOCKET_DIR, OAUTH_PORT } from './config.js'
+import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
 import { setBroadcast as setStateBroadcast, loadState, getStateForBroadcast, broadcastState } from './state.js'
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
 import { detachAllFromClient, killAllPty } from './pty.js'
@@ -23,13 +23,13 @@ const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
 // Check for zellij
 let zellijMissing = false
 try {
-  execSync('zellij --version', { stdio: 'ignore' })
-  console.log('Zellij found')
+  execSync(`"${ZELLIJ_BIN}" --version`, { stdio: 'ignore' })
+  console.log(`Zellij found: ${ZELLIJ_BIN}`)
 } catch {
   zellijMissing = true
   const isMac = process.platform === 'darwin'
   console.warn('⚠️  zellij not found - terminal sessions will not work')
-  console.warn(isMac ? '   Install with: brew install zellij' : '   Install with: sudo pacman -S zellij')
+  console.warn(isMac ? '   brew install zellij' : '   sudo pacman -S zellij')
 }
 
 // Ensure socket directory exists

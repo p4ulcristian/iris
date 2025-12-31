@@ -1,6 +1,6 @@
 {
   "name": "iris",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
@@ -48,11 +48,16 @@
         ]
       },
       {
-        "from": "resources/zellij",
-        "to": "zellij",
-        "filter": [
-          "**/*"
-        ]
+        "from": "resources/zellij/config.kdl",
+        "to": "zellij/config.kdl"
+      },
+      {
+        "from": "resources/zellij/layouts",
+        "to": "zellij/layouts"
+      },
+      {
+        "from": "resources/zellij/bin/${os}-${arch}",
+        "to": "zellij/bin"
       }
     ],
     "linux": {
