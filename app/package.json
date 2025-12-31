@@ -1,6 +1,6 @@
 {
   "name": "iris",
-  "version": "0.9.13",
+  "version": "0.9.14",
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
