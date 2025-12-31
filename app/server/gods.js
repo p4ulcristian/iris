@@ -188,11 +188,10 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     const zellijEnv = {
       ...process.env,
       TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      ZELLIJ_CONFIG_DIR
+      COLORTERM: 'truecolor'
     }
 
-    spawnSync('zellij', ['attach', sessionName, '-b'], {
+    spawnSync('zellij', ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
       cwd: projectRoot,
       env: zellijEnv,
       stdio: 'ignore'
@@ -203,6 +202,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
     // Step 2: Run claude command in-place (replaces the default shell pane)
     spawnSync('zellij', [
+      '--config-dir', ZELLIJ_CONFIG_DIR,
       '-s', sessionName,
       'run', '-i', '--',
       'bash', '-c', `cd "${projectRoot}" && ${claudeCmd}`
@@ -267,11 +267,10 @@ export function createTerminalSession(options = {}, projectRoot) {
     const zellijEnv = {
       ...process.env,
       TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      ZELLIJ_CONFIG_DIR
+      COLORTERM: 'truecolor'
     }
 
-    spawnSync('zellij', ['attach', sessionName, '-b'], {
+    spawnSync('zellij', ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
       cwd: workDir,
       env: zellijEnv,
       stdio: 'ignore'
@@ -283,6 +282,7 @@ export function createTerminalSession(options = {}, projectRoot) {
     // Step 2: Run shell command in-place (replaces the default shell pane)
     if (shellCmd !== 'bash') {
       spawnSync('zellij', [
+        '--config-dir', ZELLIJ_CONFIG_DIR,
         '-s', sessionName,
         'run', '-i', '--',
         'bash', '-c', `cd "${workDir}" && ${shellCmd}`

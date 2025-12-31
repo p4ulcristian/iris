@@ -139,12 +139,11 @@ export function attachPty(godName, ws, cols, rows) {
   // Attach to zellij session using Bun.Terminal
   let proc
   try {
-    proc = Bun.spawn(['zellij', 'attach', sessionName], {
+    proc = Bun.spawn(['zellij', '--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName], {
       env: {
         ...process.env,
         TERM: 'xterm-256color',
-        COLORTERM: 'truecolor',
-        ZELLIJ_CONFIG_DIR
+        COLORTERM: 'truecolor'
       },
       terminal: {
         cols: cols || 120,
