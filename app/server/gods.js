@@ -217,10 +217,13 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       }
     })
 
-    // Configure tmux session options
+    // Configure tmux session - minimal streaming mode (no interactive features)
     try {
       execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
       execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
+      // Disable prefix key and all tmux keybindings - pure streaming only
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix None`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix2 None`, { stdio: 'ignore' })
     } catch {}
 
     // Wait for Claude to create its session file
@@ -298,10 +301,13 @@ export function createTerminalSession(options = {}, projectRoot) {
       }
     })
 
-    // Configure tmux session options
+    // Configure tmux session - minimal streaming mode (no interactive features)
     try {
       execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" status off`, { stdio: 'ignore' })
       execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" mouse on`, { stdio: 'ignore' })
+      // Disable prefix key and all tmux keybindings - pure streaming only
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix None`, { stdio: 'ignore' })
+      execSync(`"${TMUX_PATH}" set-option -t "${sessionName}" prefix2 None`, { stdio: 'ignore' })
     } catch {}
 
     // Wait for session to initialize
