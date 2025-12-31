@@ -1,6 +1,6 @@
 {
   "name": "iris",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Voice assistant that summons the Greek pantheon",
   "main": "main/index.js",
   "type": "module",
@@ -43,21 +43,30 @@
       {
         "from": "resources/tmux/${os}-${arch}",
         "to": "tmux",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "resources/bun/${os}-${arch}",
         "to": "bun",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility",
       "icon": "assets/icon.png"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.utilities",
       "icon": "assets/icon.png"
     }
