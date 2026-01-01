@@ -711,15 +711,15 @@ export default function App() {
 
                       <div className="flex flex-col gap-3 text-sm">
                         <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Ctrl+N</kbd>
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
                           <span>Summon a god</span>
                         </p>
                         <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Ctrl+R</kbd>
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
                           <span>Open terminal</span>
                         </p>
                         <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
                           <span>New realm</span>
                         </p>
                       </div>
@@ -1047,7 +1047,7 @@ export default function App() {
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="terminal"
-                                title="New terminal (Ctrl+R) - drag to split"
+                                title="New terminal (Alt+R) - drag to split"
                                 onClick={handleSpawnTerminal}
                               />
                               <DraggableTypeButton
@@ -1087,7 +1087,7 @@ export default function App() {
                       <div className="flex gap-1.5 p-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
                         <DraggableTypeButton
                           entityType="god"
-                          title="New god (Ctrl+N) - drag to split"
+                          title="New god (Alt+N) - drag to split"
                           onClick={() => setSummonModalOpen(true)}
                         />
                         <DraggableTypeButton
