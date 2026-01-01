@@ -10,6 +10,7 @@ import * as git from './git.js'
 import * as linear from './linear.js'
 import * as calendar from './calendar.js'
 import * as layout from './layout.js'
+import * as profiles from './profiles.js'
 
 // Entity type definitions with display info
 const ENTITY_TYPES = {
@@ -24,6 +25,8 @@ const ENTITY_TYPES = {
   settings: { icon: '⚙️', label: 'Settings' },
   cemetery: { icon: '🪦', label: 'Cemetery' },
   oracle: { icon: '🔮', label: 'Oracle' },
+  profiles: { icon: '📜', label: 'Profiles' },
+  'profile-editor': { icon: '📜', label: 'Profile' },
   'youtube-music': { icon: '🎵', label: 'YouTube Music' },
   messenger: { icon: '💬', label: 'Messenger' },
   discord: { icon: '🎮', label: 'Discord' }
@@ -31,7 +34,8 @@ const ENTITY_TYPES = {
 
 // Add a god to the cemetery before banishing
 function addToCemetery(entity) {
-  if (entity.type !== 'god') return  // Only gods go to cemetery, not terminals
+  if (entity.type !== 'god') return
+  if (!entity.sessionId) return  // Can't resurrect without session ID
 
   const godKey = entity.id.toLowerCase()
   const pantheonGod = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
@@ -46,10 +50,10 @@ function addToCemetery(entity) {
     title: entity.title || null,
     banishedAt: Date.now(),
     tabName: tab?.name || 'Unknown',
-    sessionId: entity.sessionId || null  // Use the entity's tracked session ID
+    sessionId: entity.sessionId
   }
 
-  appState.cemetery.unshift(fallen)  // Add to front (newest first)
+  appState.cemetery.unshift(fallen)
 }
 
 function getRandomRealmName() {
@@ -90,7 +94,8 @@ export function handleMessage(ws, msg, projectRoot) {
       clearOutputBuffer(godName)
       const god = createGodSession(godName, data.task, projectRoot, {
         startPrompt: appState.settings?.startPrompt,
-        userName: appState.settings?.userName
+        userName: appState.settings?.userName,
+        profile: data.profile
       })
       console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
       if (god && !god.exists) {
@@ -575,7 +580,8 @@ export function handleMessage(ws, msg, projectRoot) {
         spawnedAt: Date.now(),
         // Type-specific data
         url: data.url || null,
-        project: data.project || null
+        project: data.project || null,
+        data: data.data || null  // Custom data for entity (e.g., profile for profile-editor)
       }
 
       // Create a new stage for this entity
@@ -1262,7 +1268,6 @@ export function handleMessage(ws, msg, projectRoot) {
       const { godId, sessionId, name, mission, title } = data
       if (!sessionId) break
 
-      // Use the original god name or fall back to provided name
       const godName = godId || name
       if (!godName) break
 
@@ -1270,16 +1275,13 @@ export function handleMessage(ws, msg, projectRoot) {
       const existingEntity = appState.entities[godName]
       const existingTabId = existingEntity?.tabId
       if (existingEntity) {
-        // Add current god to cemetery before replacing
         if (existingEntity.type === 'god') {
           addToCemetery(existingEntity)
         }
-        // Clean up PTY
         killPty(godName)
         clearOutputBuffer(godName)
         delete appState.entities[godName]
 
-        // Normalize the tab where the existing entity was removed
         if (existingTabId) {
           normalizeTabOrder(existingTabId)
         }
@@ -1297,7 +1299,7 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           mission: mission || null,
           title: title || null,
-          sessionId: sessionId  // Preserve sessionId for re-banish
+          sessionId: sessionId
         }
 
         // Create a new stage for this entity
@@ -1799,6 +1801,90 @@ export function handleMessage(ws, msg, projectRoot) {
 
       saveState()
       broadcastState()
+      break
+    }
+
+    // ==================== PROFILES ====================
+
+    case 'profiles:list': {
+      const allProfiles = profiles.listProfiles()
+      // Add preview for each profile
+      const profilesWithPreview = allProfiles.map(p => {
+        const content = profiles.loadProfile(p.name)
+        const lines = content ? content.split('\n').filter(l => l.trim()).slice(0, 3) : []
+        return {
+          ...p,
+          preview: lines.join('\n').substring(0, 150)
+        }
+      })
+      ws.send(JSON.stringify({
+        event: 'profiles:list:response',
+        profiles: profilesWithPreview
+      }))
+      break
+    }
+
+    case 'profiles:get': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name required' }))
+        break
+      }
+
+      const content = profiles.loadProfile(name)
+      if (!content) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: `Profile "${name}" not found` }))
+        break
+      }
+
+      const info = profiles.getProfileInfo(name)
+      ws.send(JSON.stringify({
+        event: 'profiles:get:response',
+        name,
+        content,
+        source: info?.source || 'unknown'
+      }))
+      break
+    }
+
+    case 'profiles:save': {
+      const { name, content } = data
+      if (!name || content === undefined) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name and content required' }))
+        break
+      }
+
+      try {
+        const savedPath = profiles.saveProfile(name, content)
+        ws.send(JSON.stringify({
+          event: 'profiles:save:response',
+          name,
+          path: savedPath,
+          source: 'user'
+        }))
+      } catch (err) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: err.message }))
+      }
+      break
+    }
+
+    case 'profiles:delete': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name required' }))
+        break
+      }
+
+      const deleted = profiles.deleteProfile(name)
+      if (!deleted) {
+        ws.send(JSON.stringify({ event: 'profiles:error', error: `Could not delete profile "${name}"` }))
+        break
+      }
+
+      ws.send(JSON.stringify({
+        event: 'profiles:delete:response',
+        name
+      }))
       break
     }
 

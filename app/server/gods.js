@@ -1,11 +1,12 @@
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
+import { loadProfile } from './profiles.js'
 
 const SESSION_PREFIX = 'iris-'
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude/projects')
 const HOME = os.homedir()
 
 // Strip ANSI escape codes from string
@@ -136,49 +137,11 @@ export function listGodSockets() {
   return listGodSessions()
 }
 
-// Get the most recent Claude session ID for a project
-export function getLatestSessionId(projectPath) {
-  try {
-    const projectFolder = projectPath.replace(/\//g, '-')
-    const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectFolder)
-
-    if (!fs.existsSync(projectDir)) return null
-
-    const files = fs.readdirSync(projectDir)
-      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
-      .map(f => ({
-        id: f.replace('.jsonl', ''),
-        mtime: fs.statSync(path.join(projectDir, f)).mtime
-      }))
-      .sort((a, b) => b.mtime - a.mtime)
-
-    return files.length > 0 ? files[0].id : null
-  } catch {
-    return null
-  }
-}
-
-// Get all session IDs for a project
-function getSessionIds(projectPath) {
-  try {
-    const projectFolder = projectPath.replace(/\//g, '-')
-    const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectFolder)
-
-    if (!fs.existsSync(projectDir)) return []
-
-    return fs.readdirSync(projectDir)
-      .filter(f => f.endsWith('.jsonl') && !f.startsWith('agent-'))
-      .map(f => f.replace('.jsonl', ''))
-  } catch {
-    return []
-  }
-}
-
 export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
   const sessionName = getSessionName(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt } = options
+  const { resumeSessionId, startPrompt, profile = 'gods' } = options
 
   // Check if session already exists
   if (sessionExists(godKey)) {
@@ -199,15 +162,31 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
   }
 
-  // Record sessions before spawn so we can detect the new one
-  const sessionsBefore = new Set(getSessionIds(projectRoot))
+  // Generate session ID upfront (we control it, no detection needed)
+  const sessionId = resumeSessionId || crypto.randomUUID()
 
   // Build claude command
   let claudeArgs = ['--dangerously-skip-permissions']
+  let profileTempFile = null
+
+  // Load and apply profile (if not resuming)
+  if (!resumeSessionId && profile && profile !== 'none') {
+    const profileContent = loadProfile(profile)
+    if (profileContent) {
+      // Write profile to temp file to preserve newlines (shell args mangle them)
+      profileTempFile = path.join(os.tmpdir(), `iris-profile-${godKey}-${Date.now()}.md`)
+      fs.writeFileSync(profileTempFile, profileContent)
+      // Don't add to claudeArgs - we'll handle it separately in the command
+    }
+  }
 
   if (resumeSessionId) {
+    // Resume existing session
     claudeArgs.push('--resume', resumeSessionId)
   } else {
+    // New session - use our pre-generated session ID
+    claudeArgs.push('--session-id', sessionId)
+
     // Build init prompt with god identity
     const identity = `You are ${name}. Voice: ${god.voice}.`
 
@@ -225,7 +204,13 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   try {
     // Create zellij session with claude command
-    const claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+    // Build command parts separately to handle profile file with proper shell expansion
+    let claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+
+    // Add profile from temp file using shell expansion (preserves newlines)
+    if (profileTempFile) {
+      claudeCmd = `claude --dangerously-skip-permissions --append-system-prompt "$(cat '${profileTempFile}')" ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+    }
 
     // Step 1: Create detached zellij session in background
     const zellijEnv = {
@@ -258,11 +243,9 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Wait for session to be created
     sleepSync(800)
 
-    // Find the new session ID
-    let sessionId = resumeSessionId || null
-    if (!resumeSessionId) {
-      const sessionsAfter = getSessionIds(projectRoot)
-      sessionId = sessionsAfter.find(id => !sessionsBefore.has(id)) || getLatestSessionId(projectRoot)
+    // Clean up temp profile file
+    if (profileTempFile) {
+      try { fs.unlinkSync(profileTempFile) } catch {}
     }
 
     return {
@@ -277,6 +260,10 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
   } catch (e) {
     console.error('Failed to create zellij session:', e)
+    // Clean up temp profile file on error
+    if (profileTempFile) {
+      try { fs.unlinkSync(profileTempFile) } catch {}
+    }
     return null
   }
 }

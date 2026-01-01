@@ -159,10 +159,9 @@ export function loadState() {
     appState.settings.powers = true
   }
 
-  // Ensure cemetery array exists
-  if (!appState.cemetery) {
-    appState.cemetery = []
-  }
+  // Reset cemetery (old data had corrupted sessionIds from faulty detection)
+  // New gods will use pre-generated UUIDs that are reliable
+  appState.cemetery = []
 
   // Ensure tile/split counters exist
   if (!appState.tileCounter) {
@@ -406,7 +405,8 @@ export function getStateForBroadcast() {
       url: entity.url || null,        // for browser
       project: entity.project || null,  // for git
       pendingFile: entity.pendingFile || null,  // for code
-      pendingLine: entity.pendingLine || null   // for code
+      pendingLine: entity.pendingLine || null,  // for code
+      data: entity.data || null       // for profile-editor, etc.
     }
   })
 
