@@ -17,6 +17,9 @@ import CemeteryView from './components/CemeteryView'
 import CalendarView from './components/CalendarView'
 import CodeView from './components/CodeView'
 import OracleView from './components/OracleView'
+import PersonalitiesView from './components/PersonalitiesView'
+import PersonalityEditor from './components/PersonalityEditor'
+import TraitEditor from './components/TraitEditor'
 import Surface from './components/Surface'
 import DraggableTypeButton from './components/DraggableTypeButton'
 import RootDropZone from './components/RootDropZone'
@@ -403,15 +406,15 @@ export default function App() {
 
       // Check if this is one of our app shortcuts
       const isAppShortcut = (
-        (e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r', 'b', 'arrowup', 'arrowdown'].includes(key)) ||
-        (e.altKey && (['n', 'k', ',', '.'].includes(key) || (e.key >= '1' && e.key <= '9')))
+        (e.ctrlKey && ['k', 'f', 'l', 'd', 'b'].includes(key)) ||
+        (e.altKey && (['n', 't', 'k', 'r', ',', '.', 'arrowup', 'arrowdown'].includes(key) || (e.key >= '1' && e.key <= '9')))
       )
 
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Ctrl+N: Open summon modal
-      if (e.ctrlKey && e.key === 'n') {
+      // Alt+N: Open summon modal (new god)
+      if (e.altKey && e.key === 'n') {
         e.preventDefault()
         e.stopPropagation()
         setSummonModalOpen(true)
@@ -426,8 +429,8 @@ export default function App() {
         return
       }
 
-      // Alt+N: New tab
-      if (e.altKey && e.key === 'n') {
+      // Alt+T: New tab
+      if (e.altKey && e.key === 't') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'tab:add' })
@@ -454,8 +457,8 @@ export default function App() {
         return
       }
 
-      // Ctrl+R: Spawn raw terminal
-      if (e.ctrlKey && e.key === 'r') {
+      // Alt+R: Spawn raw terminal
+      if (e.altKey && e.key === 'r') {
         e.preventDefault()
         e.stopPropagation()
         handleSpawnTerminal()
@@ -520,16 +523,16 @@ export default function App() {
         handleSetFocus(null)
       }
 
-      // Ctrl+Up: Focus previous entity
-      if (e.ctrlKey && e.key === 'ArrowUp') {
+      // Alt+Up: Focus previous entity
+      if (e.altKey && e.key === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:prev' })
         return
       }
 
-      // Ctrl+Down: Focus next entity
-      if (e.ctrlKey && e.key === 'ArrowDown') {
+      // Alt+Down: Focus next entity
+      if (e.altKey && e.key === 'ArrowDown') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:next' })
@@ -796,6 +799,24 @@ export default function App() {
                               {entity.type === 'oracle' && (
                                 <OracleView entityId={entity.id} />
                               )}
+                              {entity.type === 'personalities' && (
+                                <PersonalitiesView
+                                  onOpenEditor={(personality) => handleSpawnEntity('personality-editor', {
+                                    name: personality.name || 'New Personality',
+                                    data: { personality }
+                                  })}
+                                  onOpenTraitEditor={(trait) => handleSpawnEntity('trait-editor', {
+                                    name: trait.name || 'New Trait',
+                                    data: { trait }
+                                  })}
+                                />
+                              )}
+                              {entity.type === 'personality-editor' && (
+                                <PersonalityEditor entity={entity} />
+                              )}
+                              {entity.type === 'trait-editor' && (
+                                <TraitEditor entity={entity} />
+                              )}
                           </TileCard>
                         </motion.div>
                       )
@@ -981,7 +1002,7 @@ export default function App() {
                             exit={{ y: 20, opacity: 0 }}
                             transition={{ duration: 0.2, ease: 'easeOut' }}
                           >
-                            {/* Row 3: Settings, Cemetery, Oracle */}
+                            {/* Row 4: Settings, Cemetery, Oracle, Personalities */}
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="settings"
@@ -997,6 +1018,11 @@ export default function App() {
                                 entityType="oracle"
                                 title="Oracle (Local LLM) - drag to split"
                                 onClick={() => handleSpawnEntity('oracle')}
+                              />
+                              <DraggableTypeButton
+                                entityType="personalities"
+                                title="Personalities - drag to split"
+                                onClick={() => handleSpawnEntity('personalities')}
                               />
                             </div>
                             {/* Row 2: Calendar, Git, History */}

@@ -13,6 +13,7 @@ import OracleView from './OracleView'
 import YouTubeMusicView from './YouTubeMusicView'
 import MessengerView from './MessengerView'
 import DiscordView from './DiscordView'
+import PersonalitiesView from './PersonalitiesView'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -139,6 +140,8 @@ export default function Tile({
         return <MessengerView />
       case 'discord':
         return <DiscordView />
+      case 'personalities':
+        return <PersonalitiesView />
       default:
         return (
           <div className="h-full flex items-center justify-center text-text-secondary">

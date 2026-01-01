@@ -1,0 +1,10 @@
+{
+  "name": "god",
+  "description": "Divine worker with persona, voice, and skills",
+  "traits": [
+    "god-persona",
+    "speak",
+    "skills",
+    "terminology"
+  ]
+}

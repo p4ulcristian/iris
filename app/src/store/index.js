@@ -392,7 +392,8 @@ export const useStore = create(
               url: entity.url || null,
               project: entity.project || null,
               pendingFile: entity.pendingFile || null,
-              pendingLine: entity.pendingLine || null
+              pendingLine: entity.pendingLine || null,
+              data: entity.data || null
             }
           })
         }

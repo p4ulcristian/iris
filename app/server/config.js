@@ -68,6 +68,36 @@ function getZellijBin() {
 }
 export const ZELLIJ_BIN = getZellijBin()
 
+// Personalities directory (bundled with app)
+function getPersonalitiesDir() {
+  // Check if running from packaged app (server is in app.asar.unpacked)
+  if (__dirname.includes('app.asar.unpacked')) {
+    const resourcesDir = path.join(__dirname, '..', '..')
+    const bundled = path.join(resourcesDir, 'personalities')
+    if (fs.existsSync(bundled)) {
+      return bundled
+    }
+  }
+  // Development mode - use resources folder
+  return path.join(__dirname, '../resources/personalities')
+}
+export const PERSONALITIES_DIR = getPersonalitiesDir()
+
+// Traits directory (bundled with app)
+function getTraitsDir() {
+  // Check if running from packaged app (server is in app.asar.unpacked)
+  if (__dirname.includes('app.asar.unpacked')) {
+    const resourcesDir = path.join(__dirname, '..', '..')
+    const bundled = path.join(resourcesDir, 'traits')
+    if (fs.existsSync(bundled)) {
+      return bundled
+    }
+  }
+  // Development mode - use resources folder
+  return path.join(__dirname, '../resources/traits')
+}
+export const TRAITS_DIR = getTraitsDir()
+
 export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },

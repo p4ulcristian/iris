@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { reportError } from '../utils/error-reporter'
 
-// Singleton WebSocket and state
-let sharedWs = null
-let sharedConnected = false
-const connectionListeners = new Set()
-const messageListeners = new Set()
+// Singleton WebSocket and state - restore from window on HMR
+let sharedWs = window.__irisWs || null
+let sharedConnected = sharedWs?.readyState === WebSocket.OPEN
+const connectionListeners = window.__irisWsConnectionListeners || new Set()
+const messageListeners = window.__irisWsMessageListeners || new Set()
+
+// Persist to window for HMR survival
+window.__irisWsConnectionListeners = connectionListeners
+window.__irisWsMessageListeners = messageListeners
 
 function notifyConnectionChange(isConnected) {
   sharedConnected = isConnected
@@ -14,7 +18,11 @@ function notifyConnectionChange(isConnected) {
 
 function ensureConnection(url) {
   if (sharedWs && sharedWs.readyState !== WebSocket.CLOSED) {
-    return // Already connected or connecting
+    // Already connected - re-bind message handler in case of HMR
+    sharedWs.onmessage = (event) => {
+      messageListeners.forEach(fn => fn(event))
+    }
+    return
   }
 
   const ws = new WebSocket(url)

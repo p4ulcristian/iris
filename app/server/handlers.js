@@ -10,7 +10,9 @@ import * as git from './git.js'
 import * as linear from './linear.js'
 import * as calendar from './calendar.js'
 import * as layout from './layout.js'
-import * as profiles from './profiles.js'
+import * as personalities from './personalities.js'
+import * as traits from './traits.js'
+import * as projects from './projects.js'
 
 // Entity type definitions with display info
 const ENTITY_TYPES = {
@@ -25,8 +27,7 @@ const ENTITY_TYPES = {
   settings: { icon: '⚙️', label: 'Settings' },
   cemetery: { icon: '🪦', label: 'Cemetery' },
   oracle: { icon: '🔮', label: 'Oracle' },
-  profiles: { icon: '📜', label: 'Profiles' },
-  'profile-editor': { icon: '📜', label: 'Profile' },
+  personalities: { icon: '🧬', label: 'Personalities' },
   'youtube-music': { icon: '🎵', label: 'YouTube Music' },
   messenger: { icon: '💬', label: 'Messenger' },
   discord: { icon: '🎮', label: 'Discord' }
@@ -95,7 +96,7 @@ export function handleMessage(ws, msg, projectRoot) {
       const god = createGodSession(godName, data.task, projectRoot, {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName,
-        profile: data.profile
+        personality: data.personality
       })
       console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
       if (god && !god.exists) {
@@ -581,7 +582,7 @@ export function handleMessage(ws, msg, projectRoot) {
         // Type-specific data
         url: data.url || null,
         project: data.project || null,
-        data: data.data || null  // Custom data for entity (e.g., profile for profile-editor)
+        data: data.data || null  // Custom data for entity
       }
 
       // Create a new stage for this entity
@@ -1804,42 +1805,129 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    // ==================== PROFILES ====================
+    // ==================== PERSONALITIES ====================
 
-    case 'profiles:list': {
-      const allProfiles = profiles.listProfiles()
-      // Add preview for each profile
-      const profilesWithPreview = allProfiles.map(p => {
-        const content = profiles.loadProfile(p.name)
-        const lines = content ? content.split('\n').filter(l => l.trim()).slice(0, 3) : []
-        return {
-          ...p,
-          preview: lines.join('\n').substring(0, 150)
-        }
-      })
+    case 'personalities:list': {
+      const allPersonalities = personalities.listPersonalities()
+      // Add preview for each personality (all are trait-based)
+      const personalitiesWithPreview = allPersonalities.map(p => ({
+        ...p,
+        preview: p.traits.length > 0 ? `Traits: ${p.traits.join(', ')}` : 'No traits enabled'
+      }))
       ws.send(JSON.stringify({
-        event: 'profiles:list:response',
-        profiles: profilesWithPreview
+        event: 'personalities:list:response',
+        personalities: personalitiesWithPreview
       }))
       break
     }
 
-    case 'profiles:get': {
+    case 'personalities:get': {
       const { name } = data
       if (!name) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name required' }))
+        ws.send(JSON.stringify({ event: 'personalities:error', error: 'Personality name required' }))
         break
       }
 
-      const content = profiles.loadProfile(name)
-      if (!content) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: `Profile "${name}" not found` }))
+      const loaded = personalities.loadPersonality(name)
+      if (!loaded) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: `Personality "${name}" not found` }))
         break
       }
 
-      const info = profiles.getProfileInfo(name)
+      const info = personalities.getPersonalityInfo(name)
+
       ws.send(JSON.stringify({
-        event: 'profiles:get:response',
+        event: 'personalities:get:response',
+        name,
+        type: 'traits',
+        config: loaded.config,
+        source: info?.source || 'unknown'
+      }))
+      break
+    }
+
+    case 'personalities:save': {
+      const { name, config } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: 'Personality name required' }))
+        break
+      }
+
+      if (!config) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: 'Personality config required' }))
+        break
+      }
+
+      try {
+        const savedPath = personalities.savePersonality(name, config)
+        ws.send(JSON.stringify({
+          event: 'personalities:save:response',
+          name,
+          path: savedPath,
+          source: 'user'
+        }))
+      } catch (err) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: err.message }))
+      }
+      break
+    }
+
+    case 'personalities:delete': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: 'Personality name required' }))
+        break
+      }
+
+      const deleted = personalities.deletePersonality(name)
+      if (!deleted) {
+        ws.send(JSON.stringify({ event: 'personalities:error', error: `Could not delete personality "${name}"` }))
+        break
+      }
+
+      ws.send(JSON.stringify({
+        event: 'personalities:delete:response',
+        name
+      }))
+      break
+    }
+
+    // ==================== TRAITS ====================
+
+    case 'traits:list': {
+      const allTraits = traits.listTraits()
+      // Add preview for each trait
+      const traitsWithPreview = allTraits.map(t => {
+        const content = traits.loadTrait(t.name)
+        const lines = content ? content.split('\n').filter(l => l.trim()).slice(0, 2) : []
+        return {
+          ...t,
+          preview: lines.join('\n').substring(0, 100)
+        }
+      })
+      ws.send(JSON.stringify({
+        event: 'traits:list:response',
+        traits: traitsWithPreview
+      }))
+      break
+    }
+
+    case 'traits:get': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'traits:error', error: 'Trait name required' }))
+        break
+      }
+
+      const content = traits.loadTrait(name)
+      if (!content) {
+        ws.send(JSON.stringify({ event: 'traits:error', error: `Trait "${name}" not found` }))
+        break
+      }
+
+      const info = traits.getTraitInfo(name)
+      ws.send(JSON.stringify({
+        event: 'traits:get:response',
         name,
         content,
         source: info?.source || 'unknown'
@@ -1847,42 +1935,139 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'profiles:save': {
+    case 'traits:save': {
       const { name, content } = data
       if (!name || content === undefined) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name and content required' }))
+        ws.send(JSON.stringify({ event: 'traits:error', error: 'Trait name and content required' }))
         break
       }
 
       try {
-        const savedPath = profiles.saveProfile(name, content)
+        const savedPath = traits.saveTrait(name, content)
         ws.send(JSON.stringify({
-          event: 'profiles:save:response',
+          event: 'traits:save:response',
           name,
           path: savedPath,
           source: 'user'
         }))
       } catch (err) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: err.message }))
+        ws.send(JSON.stringify({ event: 'traits:error', error: err.message }))
       }
       break
     }
 
-    case 'profiles:delete': {
+    case 'traits:delete': {
       const { name } = data
       if (!name) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: 'Profile name required' }))
+        ws.send(JSON.stringify({ event: 'traits:error', error: 'Trait name required' }))
         break
       }
 
-      const deleted = profiles.deleteProfile(name)
+      const deleted = traits.deleteTrait(name)
       if (!deleted) {
-        ws.send(JSON.stringify({ event: 'profiles:error', error: `Could not delete profile "${name}"` }))
+        ws.send(JSON.stringify({ event: 'traits:error', error: `Could not delete trait "${name}"` }))
         break
       }
 
       ws.send(JSON.stringify({
-        event: 'profiles:delete:response',
+        event: 'traits:delete:response',
+        name
+      }))
+      break
+    }
+
+    // ==================== PROJECTS ====================
+
+    case 'projects:list': {
+      const allProjects = projects.listProjects()
+      ws.send(JSON.stringify({
+        event: 'projects:list:response',
+        projects: allProjects
+      }))
+      break
+    }
+
+    case 'projects:get': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: 'Project name required' }))
+        break
+      }
+
+      const project = projects.loadProject(name)
+      if (!project) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: `Project "${name}" not found` }))
+        break
+      }
+
+      ws.send(JSON.stringify({
+        event: 'projects:get:response',
+        name,
+        ...project
+      }))
+      break
+    }
+
+    case 'projects:save': {
+      const { name, path: projectPath, description, isDefault } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: 'Project name required' }))
+        break
+      }
+
+      if (!projectPath) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: 'Project path required' }))
+        break
+      }
+
+      try {
+        const config = {
+          path: projectPath,
+          description: description || '',
+          isDefault: isDefault || false
+        }
+        const savedPath = projects.saveProject(name, config)
+        ws.send(JSON.stringify({
+          event: 'projects:save:response',
+          name,
+          path: savedPath
+        }))
+      } catch (err) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: err.message }))
+      }
+      break
+    }
+
+    case 'projects:delete': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: 'Project name required' }))
+        break
+      }
+
+      const deleted = projects.deleteProject(name)
+      if (!deleted) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: `Could not delete project "${name}"` }))
+        break
+      }
+
+      ws.send(JSON.stringify({
+        event: 'projects:delete:response',
+        name
+      }))
+      break
+    }
+
+    case 'projects:setDefault': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'projects:error', error: 'Project name required' }))
+        break
+      }
+
+      projects.setDefaultProject(name)
+      ws.send(JSON.stringify({
+        event: 'projects:setDefault:response',
         name
       }))
       break

@@ -4,7 +4,8 @@ import os from 'os'
 import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
-import { loadProfile } from './profiles.js'
+import { getComposedPrompt } from './personalities.js'
+import { getProjectsContext } from './projects.js'
 
 const SESSION_PREFIX = 'iris-'
 const HOME = os.homedir()
@@ -141,7 +142,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
   const sessionName = getSessionName(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, profile = 'gods' } = options
+  const { resumeSessionId, startPrompt, personality = 'gods' } = options
 
   // Check if session already exists
   if (sessionExists(godKey)) {
@@ -167,15 +168,27 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   // Build claude command
   let claudeArgs = ['--dangerously-skip-permissions']
-  let profileTempFile = null
+  let personalityTempFile = null
 
-  // Load and apply profile (if not resuming)
-  if (!resumeSessionId && profile && profile !== 'none') {
-    const profileContent = loadProfile(profile)
-    if (profileContent) {
-      // Write profile to temp file to preserve newlines (shell args mangle them)
-      profileTempFile = path.join(os.tmpdir(), `iris-profile-${godKey}-${Date.now()}.md`)
-      fs.writeFileSync(profileTempFile, profileContent)
+  // Load and apply personality (if not resuming)
+  // getComposedPrompt handles both legacy (MD) and trait-based (JSON) personalities
+  if (!resumeSessionId && personality && personality !== 'none') {
+    const personalityContent = getComposedPrompt(personality)
+    const projectsContent = getProjectsContext()
+
+    // Combine personality and projects context
+    let systemContent = ''
+    if (personalityContent) {
+      systemContent += personalityContent
+    }
+    if (projectsContent) {
+      systemContent += '\n\n' + projectsContent
+    }
+
+    if (systemContent) {
+      // Write to temp file to preserve newlines (shell args mangle them)
+      personalityTempFile = path.join(os.tmpdir(), `iris-personality-${godKey}-${Date.now()}.md`)
+      fs.writeFileSync(personalityTempFile, systemContent)
       // Don't add to claudeArgs - we'll handle it separately in the command
     }
   }
@@ -204,12 +217,12 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   try {
     // Create zellij session with claude command
-    // Build command parts separately to handle profile file with proper shell expansion
+    // Build command parts separately to handle personality file with proper shell expansion
     let claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
 
-    // Add profile from temp file using shell expansion (preserves newlines)
-    if (profileTempFile) {
-      claudeCmd = `claude --dangerously-skip-permissions --append-system-prompt "$(cat '${profileTempFile}')" ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+    // Add personality from temp file using shell expansion (preserves newlines)
+    if (personalityTempFile) {
+      claudeCmd = `claude --dangerously-skip-permissions --append-system-prompt "$(cat '${personalityTempFile}')" ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
     }
 
     // Step 1: Create detached zellij session in background
@@ -243,9 +256,9 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Wait for session to be created
     sleepSync(800)
 
-    // Clean up temp profile file
-    if (profileTempFile) {
-      try { fs.unlinkSync(profileTempFile) } catch {}
+    // Clean up temp personality file
+    if (personalityTempFile) {
+      try { fs.unlinkSync(personalityTempFile) } catch {}
     }
 
     return {
@@ -260,9 +273,9 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
   } catch (e) {
     console.error('Failed to create zellij session:', e)
-    // Clean up temp profile file on error
-    if (profileTempFile) {
-      try { fs.unlinkSync(profileTempFile) } catch {}
+    // Clean up temp personality file on error
+    if (personalityTempFile) {
+      try { fs.unlinkSync(personalityTempFile) } catch {}
     }
     return null
   }

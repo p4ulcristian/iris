@@ -24,6 +24,7 @@ export const ENTITY_TYPES = {
   settings: { label: 'Settings', description: 'App settings',         faIcon: 'faGear',  color: '#6B7280' },
   calendar: { label: 'Calendar', description: 'Calendar view',        icon: calendarIcon, color: '#4285F4' },
   oracle:   { label: 'Oracle',   description: 'Oracle assistant',     faIcon: 'faRobot', color: '#F59E0B' },
+  personalities: { label: 'Personalities', description: 'Manage Claude personalities', faIcon: 'faDna', color: '#AA44FF' },
   'youtube-music': { label: 'YouTube Music', description: 'YouTube Music', icon: youtubeMusicIcon, color: '#FF0033' },
   messenger: { label: 'Messenger', description: 'Facebook Messenger', icon: messengerIcon, color: '#0099FF' },
   discord: { label: 'Discord', description: 'Discord', icon: discordIcon, color: '#5865F2' },

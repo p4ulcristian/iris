@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
+import { useWebSocket } from '../hooks/useWebSocket'
+import { WS_URL } from '../config'
 import Button from './ui/Button'
 
 export default function SummonModal({
@@ -10,8 +12,11 @@ export default function SummonModal({
 }) {
   const [selectedGod, setSelectedGod] = useState('')
   const [task, setTask] = useState('')
+  const [selectedPersonality, setSelectedPersonality] = useState('gods')
+  const [personalities, setPersonalities] = useState([])
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
+  const { send, lastMessage } = useWebSocket(WS_URL)
 
   // Get available gods from server-provided godColors
   const allGods = Object.keys(godColors)
@@ -19,12 +24,27 @@ export default function SummonModal({
   const availableGods = allGods.filter(g => !usedLower.includes(g))
   const godPool = availableGods.length > 0 ? availableGods : allGods
 
+  // Fetch personalities on open
+  useEffect(() => {
+    if (isOpen) {
+      send({ event: 'personalities:list' })
+    }
+  }, [isOpen, send])
+
+  // Handle personality list response
+  useEffect(() => {
+    if (lastMessage?.event === 'personalities:list:response') {
+      setPersonalities(lastMessage.personalities || [])
+    }
+  }, [lastMessage])
+
   // Pick random god on open
   useEffect(() => {
     if (isOpen) {
       const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
       setSelectedGod(randomGod)
       setTask('')
+      setSelectedPersonality('gods')
       // Focus input after a brief delay for modal animation
       setTimeout(() => inputRef.current?.focus(), 50)
     }
@@ -48,7 +68,7 @@ export default function SummonModal({
   const handleSubmit = (e) => {
     e?.preventDefault()
     const name = selectedGod.charAt(0).toUpperCase() + selectedGod.slice(1)
-    onSummon(name, task.trim())
+    onSummon(name, task.trim(), selectedPersonality)
   }
 
   if (!isOpen) return null
@@ -93,6 +113,64 @@ export default function SummonModal({
               </svg>
             </div>
           </div>
+        </div>
+
+        {/* Personality selector */}
+        <div className="mb-4">
+          <label className="block liquid-glass-text-muted text-sm mb-1.5">Personality</label>
+          <div className="relative">
+            <select
+              value={selectedPersonality}
+              onChange={(e) => setSelectedPersonality(e.target.value)}
+              className="w-full liquid-glass-select px-3 py-2.5 appearance-none"
+            >
+              <option value="none">None (no system prompt)</option>
+              {personalities.map(p => (
+                <option key={p.name} value={p.name}>
+                  {p.name} {p.source === 'bundled' ? '(bundled)' : ''} {p.type === 'traits' ? `[${p.traits?.length || 0} traits]` : ''}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Show traits for selected personality */}
+          {(() => {
+            const selected = personalities.find(p => p.name === selectedPersonality)
+            if (selected?.type === 'traits' && selected.traits?.length > 0) {
+              return (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {selected.traits.map(trait => (
+                    <span
+                      key={trait}
+                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300"
+                    >
+                      {trait}
+                    </span>
+                  ))}
+                </div>
+              )
+            }
+            if (selectedPersonality === 'none') {
+              return (
+                <p className="liquid-glass-text-muted text-xs mt-1.5 opacity-60">
+                  Pure Claude with no customization
+                </p>
+              )
+            }
+            if (selected?.type === 'legacy') {
+              return (
+                <p className="liquid-glass-text-muted text-xs mt-1.5 opacity-60">
+                  Legacy personality (monolithic)
+                </p>
+              )
+            }
+            return null
+          })()}
         </div>
 
         {/* Task input */}
