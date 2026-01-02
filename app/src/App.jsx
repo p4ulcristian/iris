@@ -402,18 +402,24 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
-      const key = e.key.toLowerCase()
+      // Use e.code for physical key detection (works with Mac Option key)
+      // On Mac, Option+letter produces special chars (e.g., Option+N = ñ)
+      // but e.code still gives us "KeyN"
+      const code = e.code
 
       // Check if this is one of our app shortcuts (all Alt-based for cross-platform)
-      const isAppShortcut = (
-        e.altKey && (['n', 't', 'w', 'k', 'r', 'b', 'd', 'f', ',', '.', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) || (e.key >= '1' && e.key <= '9'))
-      )
+      const appShortcutCodes = [
+        'KeyN', 'KeyT', 'KeyW', 'KeyK', 'KeyR', 'KeyB', 'KeyD', 'KeyF',
+        'Comma', 'Period', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+        'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'
+      ]
+      const isAppShortcut = e.altKey && appShortcutCodes.includes(code)
 
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
       // Alt+N: Open summon modal (new god)
-      if (e.altKey && e.key === 'n') {
+      if (e.altKey && code === 'KeyN') {
         e.preventDefault()
         e.stopPropagation()
         setSummonModalOpen(true)
@@ -421,7 +427,7 @@ export default function App() {
       }
 
       // Alt+B: Toggle sidebar
-      if (e.altKey && e.key === 'b') {
+      if (e.altKey && code === 'KeyB') {
         e.preventDefault()
         e.stopPropagation()
         handleSidebarToggle()
@@ -429,7 +435,7 @@ export default function App() {
       }
 
       // Alt+T: New tab
-      if (e.altKey && e.key === 't') {
+      if (e.altKey && code === 'KeyT') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'tab:add' })
@@ -437,7 +443,7 @@ export default function App() {
       }
 
       // Alt+K: Kill focused entity
-      if (e.altKey && e.key === 'k') {
+      if (e.altKey && code === 'KeyK') {
         e.preventDefault()
         e.stopPropagation()
         if (focusedEntity) {
@@ -449,7 +455,7 @@ export default function App() {
       }
 
       // Alt+W: Kill current tab
-      if (e.altKey && e.key === 'w') {
+      if (e.altKey && code === 'KeyW') {
         e.preventDefault()
         e.stopPropagation()
         handleKillTab()
@@ -457,7 +463,7 @@ export default function App() {
       }
 
       // Alt+R: Spawn raw terminal
-      if (e.altKey && e.key === 'r') {
+      if (e.altKey && code === 'KeyR') {
         e.preventDefault()
         e.stopPropagation()
         handleSpawnTerminal()
@@ -465,7 +471,7 @@ export default function App() {
       }
 
       // Alt+D: Toggle dev panel
-      if (e.altKey && e.key === 'd') {
+      if (e.altKey && code === 'KeyD') {
         e.preventDefault()
         e.stopPropagation()
         toggleDevPanel()
@@ -473,7 +479,7 @@ export default function App() {
       }
 
       // Alt+F: Toggle window fullscreen
-      if (e.altKey && e.key === 'f') {
+      if (e.altKey && code === 'KeyF') {
         e.preventDefault()
         e.stopPropagation()
         window.iris.windowControl('toggle-fullscreen')
@@ -481,7 +487,7 @@ export default function App() {
       }
 
       // Alt+, and Alt+.: Previous/next tab
-      if (e.altKey && e.key === ',') {
+      if (e.altKey && code === 'Comma') {
         e.preventDefault()
         e.stopPropagation()
         const idx = tabs.findIndex(t => t.id === activeTabId)
@@ -489,7 +495,7 @@ export default function App() {
         send({ event: 'tab:select', tabId: tabs[prevIdx].id })
         return
       }
-      if (e.altKey && e.key === '.') {
+      if (e.altKey && code === 'Period') {
         e.preventDefault()
         e.stopPropagation()
         const idx = tabs.findIndex(t => t.id === activeTabId)
@@ -499,14 +505,16 @@ export default function App() {
       }
 
       // Alt+1-9: Go to tab
-      if (e.altKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault()
-        e.stopPropagation()
-        const num = parseInt(e.key)
-        if (num >= 1 && num <= tabs.length) {
-          send({ event: 'tab:select', tabId: tabs[num - 1].id })
+      if (e.altKey && code.startsWith('Digit')) {
+        const num = parseInt(code.charAt(5))
+        if (num >= 1 && num <= 9) {
+          e.preventDefault()
+          e.stopPropagation()
+          if (num <= tabs.length) {
+            send({ event: 'tab:select', tabId: tabs[num - 1].id })
+          }
+          return
         }
-        return
       }
 
       // Escape: Clear focus
@@ -515,7 +523,7 @@ export default function App() {
       }
 
       // Alt+Up: Focus previous entity
-      if (e.altKey && e.key === 'ArrowUp') {
+      if (e.altKey && code === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:prev' })
@@ -523,7 +531,7 @@ export default function App() {
       }
 
       // Alt+Down: Focus next entity
-      if (e.altKey && e.key === 'ArrowDown') {
+      if (e.altKey && code === 'ArrowDown') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:next' })
@@ -531,7 +539,7 @@ export default function App() {
       }
 
       // Alt+Left: Previous tab
-      if (e.altKey && e.key === 'ArrowLeft') {
+      if (e.altKey && code === 'ArrowLeft') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
@@ -545,7 +553,7 @@ export default function App() {
       }
 
       // Alt+Right: Next tab
-      if (e.altKey && e.key === 'ArrowRight') {
+      if (e.altKey && code === 'ArrowRight') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
