@@ -1,0 +1,10 @@
+{
+  "type": "messenger",
+  "label": "Messenger",
+  "description": "Facebook Messenger",
+  "iconPath": "../../src/assets/icons/messenger.svg",
+  "color": "#0099FF",
+  "category": "media",
+  "showInPicker": true,
+  "showInSidebar": true
+}

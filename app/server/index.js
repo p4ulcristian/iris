@@ -6,7 +6,7 @@ import { execSync } from 'child_process'
 import { WebSocketServer } from 'ws'
 
 import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
-import { setBroadcast as setStateBroadcast, loadState, getStateForBroadcast, broadcastState } from './state.js'
+import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getStateForBroadcast, broadcastState } from './state.js'
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
@@ -60,6 +60,13 @@ setServicesBroadcast(broadcast)
 
 // Load persisted state
 loadState()
+
+// Load entity registry from app/entities/
+loadEntityRegistry().then(() => {
+  console.log('Entity registry loaded')
+}).catch(err => {
+  console.error('Failed to load entity registry:', err)
+})
 
 // Create WebSocket server
 const wss = new WebSocketServer({ port: WS_PORT })

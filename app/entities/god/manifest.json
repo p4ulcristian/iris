@@ -1,0 +1,10 @@
+{
+  "type": "god",
+  "label": "God",
+  "description": "Divine worker",
+  "iconPath": "../../src/assets/icons/claude.svg",
+  "color": null,
+  "category": "process",
+  "showInPicker": true,
+  "showInSidebar": true
+}

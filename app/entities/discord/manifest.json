@@ -1,0 +1,10 @@
+{
+  "type": "discord",
+  "label": "Discord",
+  "description": "Discord",
+  "iconPath": "../../src/assets/icons/discord.svg",
+  "color": "#5865F2",
+  "category": "media",
+  "showInPicker": true,
+  "showInSidebar": true
+}

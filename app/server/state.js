@@ -4,10 +4,15 @@ import { fileURLToPath } from 'url'
 import { STATE_FILE, SOCKET_DIR, GOD_COLORS } from './config.js'
 import { listGodSockets } from './gods.js'
 import * as layout from './layout.js'
+import { loadEntities, getClientRegistry } from './entityLoader.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'))
 const APP_VERSION = pkg.version
+
+// Entity registry (loaded from app/entities/)
+let entityRegistry = {}
+let entityHandlers = {}
 
 // Broadcast function - set by index.js
 let broadcastFn = null
@@ -18,6 +23,29 @@ export function setBroadcast(fn) {
 
 export function broadcast(event, data = {}) {
   if (broadcastFn) broadcastFn(event, data)
+}
+
+// Load entity registry from app/entities/
+export async function loadEntityRegistry() {
+  const { registry, handlers } = await loadEntities()
+  entityRegistry = registry
+  entityHandlers = handlers
+  return { registry, handlers }
+}
+
+// Get the entity registry
+export function getEntityRegistry() {
+  return entityRegistry
+}
+
+// Get entity handlers
+export function getEntityHandlers() {
+  return entityHandlers
+}
+
+// Get client-safe registry (for sending to frontend)
+export function getRegistryForClient() {
+  return getClientRegistry(entityRegistry)
 }
 
 // App state (source of truth)
@@ -438,6 +466,7 @@ export function getStateForBroadcast() {
     activeTabId: appState.activeTabId,
     tabCounter: appState.tabCounter,
     entities,
+    entityRegistry: getClientRegistry(entityRegistry),  // Entity type definitions from app/entities/
     theme: appState.theme,
     godColors,
     focusedEntity: appState.focusedEntity,

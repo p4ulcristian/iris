@@ -1,0 +1,10 @@
+{
+  "type": "history",
+  "label": "History",
+  "description": "Session history",
+  "icon": "faClockRotateLeft",
+  "color": "#8B5CF6",
+  "category": "system",
+  "showInPicker": true,
+  "showInSidebar": true
+}

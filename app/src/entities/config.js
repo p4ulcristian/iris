@@ -28,6 +28,7 @@ export const ENTITY_TYPES = {
   'youtube-music': { label: 'YouTube Music', description: 'YouTube Music', icon: youtubeMusicIcon, color: '#FF0033' },
   messenger: { label: 'Messenger', description: 'Facebook Messenger', icon: messengerIcon, color: '#0099FF' },
   discord: { label: 'Discord', description: 'Discord', icon: discordIcon, color: '#5865F2' },
+  rsvp: { label: 'RSVP', description: 'Speed reader', faIcon: 'faBook', color: '#10B981' },
 }
 
 // List format for pickers/iteration

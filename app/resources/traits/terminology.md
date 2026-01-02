@@ -49,3 +49,30 @@
 | **hear** | STT service |
 | **wake** | Input listener for push-to-talk |
 | **express** | Visual overlay UI |
+
+## Skills
+
+Python modules that gods invoke to interact with Iris UI and system. Located in `brain/skills/`.
+
+| Term | Meaning |
+|------|---------|
+| **focus** | Update god's title/goal in UI |
+| **ready** | Update visual state (working/done/stuck/question) |
+| **spawn** | Summon another god with a task |
+| **peek** | View another god's scrollback |
+| **browse** | Open URL in Iris browser |
+| **code** | Open file in code viewer |
+| **nvim** | Open file in Neovim |
+| **glow** | View markdown formatted |
+| **run** | Execute command and capture output |
+| **push** | Git commit and push |
+
+## Tools
+
+External services connected via MCP (Model Context Protocol).
+
+| Term | Meaning |
+|------|---------|
+| **Playwright** | Browser automation - navigate, click, screenshot |
+| **Linear** | Project management - issues, projects, documents |
+| **Railway** | Deployment - deploy, logs, environments |

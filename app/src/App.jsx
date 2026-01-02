@@ -23,6 +23,7 @@ import TraitEditor from './components/TraitEditor'
 import Surface from './components/Surface'
 import DraggableTypeButton from './components/DraggableTypeButton'
 import RootDropZone from './components/RootDropZone'
+import TileUngroupDropZone from './components/TileUngroupDropZone'
 import { DragProvider } from './contexts/DragContext'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
@@ -49,7 +50,6 @@ export default function App() {
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
-  const rotateLayout = useStore(s => s.rotateLayout)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
   const setServices = useStore(s => s.setServices)
@@ -404,10 +404,9 @@ export default function App() {
     const handleKeyDown = (e) => {
       const key = e.key.toLowerCase()
 
-      // Check if this is one of our app shortcuts
+      // Check if this is one of our app shortcuts (all Alt-based for cross-platform)
       const isAppShortcut = (
-        (e.ctrlKey && ['k', 'f', 'l', 'd', 'b'].includes(key)) ||
-        (e.altKey && (['n', 't', 'k', 'r', ',', '.', 'arrowup', 'arrowdown'].includes(key) || (e.key >= '1' && e.key <= '9')))
+        e.altKey && (['n', 't', 'w', 'k', 'r', 'b', 'd', 'f', ',', '.', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key) || (e.key >= '1' && e.key <= '9'))
       )
 
       // Ignore inputs unless it's an app shortcut
@@ -421,8 +420,8 @@ export default function App() {
         return
       }
 
-      // Ctrl+B: Toggle sidebar
-      if (e.ctrlKey && e.key === 'b') {
+      // Alt+B: Toggle sidebar
+      if (e.altKey && e.key === 'b') {
         e.preventDefault()
         e.stopPropagation()
         handleSidebarToggle()
@@ -437,8 +436,8 @@ export default function App() {
         return
       }
 
-      // Ctrl+K: Kill focused entity
-      if (e.ctrlKey && e.key === 'k') {
+      // Alt+K: Kill focused entity
+      if (e.altKey && e.key === 'k') {
         e.preventDefault()
         e.stopPropagation()
         if (focusedEntity) {
@@ -449,8 +448,8 @@ export default function App() {
         return
       }
 
-      // Alt+K: Kill current tab
-      if (e.altKey && e.key === 'k') {
+      // Alt+W: Kill current tab
+      if (e.altKey && e.key === 'w') {
         e.preventDefault()
         e.stopPropagation()
         handleKillTab()
@@ -465,27 +464,19 @@ export default function App() {
         return
       }
 
-      // Ctrl+D: Toggle dev panel
-      if (e.ctrlKey && e.key === 'd') {
+      // Alt+D: Toggle dev panel
+      if (e.altKey && e.key === 'd') {
         e.preventDefault()
         e.stopPropagation()
         toggleDevPanel()
         return
       }
 
-      // Ctrl+F: Toggle window fullscreen
-      if (e.ctrlKey && e.key === 'f') {
+      // Alt+F: Toggle window fullscreen
+      if (e.altKey && e.key === 'f') {
         e.preventDefault()
         e.stopPropagation()
         window.iris.windowControl('toggle-fullscreen')
-        return
-      }
-
-      // Ctrl+L: Rotate layout
-      if (e.ctrlKey && e.key === 'l') {
-        e.preventDefault()
-        e.stopPropagation()
-        rotateLayout()
         return
       }
 
@@ -539,33 +530,29 @@ export default function App() {
         return
       }
 
-      // Ctrl+Left: Previous tab
-      if (e.ctrlKey && e.key === 'ArrowLeft') {
+      // Alt+Left: Previous tab
+      if (e.altKey && e.key === 'ArrowLeft') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
         const a = activeTabIdRef.current
-        console.log('Ctrl+Left', { t, a })
         if (t?.length > 0) {
           const idx = t.findIndex(x => x.id === a)
           const prev = (idx - 1 + t.length) % t.length
-          console.log('switching', { idx, prev, to: t[prev]?.id })
           send({ event: 'tab:select', tabId: t[prev].id })
         }
         return
       }
 
-      // Ctrl+Right: Next tab
-      if (e.ctrlKey && e.key === 'ArrowRight') {
+      // Alt+Right: Next tab
+      if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
         const a = activeTabIdRef.current
-        console.log('Ctrl+Right', { t, a })
         if (t?.length > 0) {
           const idx = t.findIndex(x => x.id === a)
           const next = (idx + 1) % t.length
-          console.log('switching', { idx, next, to: t[next]?.id })
           send({ event: 'tab:select', tabId: t[next].id })
         }
         return
@@ -576,7 +563,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [
     handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab,
-    rotateLayout, focusedEntity, activeEntities,
+    focusedEntity, activeEntities,
     toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
 
@@ -839,7 +826,7 @@ export default function App() {
               }}
             >
               {/* Two card sets with choreographed animations */}
-              <div className="flex-1 relative overflow-hidden pb-12">
+              <TileUngroupDropZone className="flex-1 relative overflow-hidden pb-12">
                 {/* Full task cards - slide up to exit, slide down to enter */}
                 <AnimatePresence>
                   {sidebarShowCards && (
@@ -1025,7 +1012,7 @@ export default function App() {
                                 onClick={() => handleSpawnEntity('personalities')}
                               />
                             </div>
-                            {/* Row 2: Calendar, Git, History */}
+                            {/* Row 2: Calendar, Git, History, RSVP */}
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="calendar"
@@ -1041,6 +1028,11 @@ export default function App() {
                                 entityType="history"
                                 title="History - drag to split"
                                 onClick={() => handleSpawnEntity('history')}
+                              />
+                              <DraggableTypeButton
+                                entityType="rsvp"
+                                title="RSVP Speed Reader - drag to split"
+                                onClick={() => handleSpawnEntity('rsvp')}
                               />
                             </div>
                             {/* Row 2: Terminal, Nvim, Browser */}
@@ -1104,7 +1096,7 @@ export default function App() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+              </TileUngroupDropZone>
             </motion.div>
           </div>
       </main>

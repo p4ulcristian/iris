@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { SERVICES, REALMS, PANTHEON, LOGS_DIR, GOD_COLORS } from './config.js'
-import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty } from './state.js'
+import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, generateEntityId, getNextEntityNumber, normalizeTabOrder, getNextOrder, generateStageId, findStageByEntity, getActiveStage, deleteTabIfEmpty, getEntityRegistry } from './state.js'
 import { startService, stopService, startChronicle, stopChronicle } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer, killPty } from './pty.js'
@@ -14,23 +14,10 @@ import * as personalities from './personalities.js'
 import * as traits from './traits.js'
 import * as projects from './projects.js'
 
-// Entity type definitions with display info
-const ENTITY_TYPES = {
-  god: { icon: '⚡', label: 'God' },
-  terminal: { icon: '🖥️', label: 'Terminal' },
-  browser: { icon: '🌐', label: 'Browser' },
-  code: { icon: '📝', label: 'Code' },
-  git: { icon: '⚙️', label: 'Git' },
-  history: { icon: '📜', label: 'History' },
-  linear: { icon: '✓', label: 'Linear' },
-  calendar: { icon: '📅', label: 'Calendar' },
-  settings: { icon: '⚙️', label: 'Settings' },
-  cemetery: { icon: '🪦', label: 'Cemetery' },
-  oracle: { icon: '🔮', label: 'Oracle' },
-  personalities: { icon: '🧬', label: 'Personalities' },
-  'youtube-music': { icon: '🎵', label: 'YouTube Music' },
-  messenger: { icon: '💬', label: 'Messenger' },
-  discord: { icon: '🎮', label: 'Discord' }
+// Helper to get entity type info from registry (with fallback)
+function getEntityType(type) {
+  const registry = getEntityRegistry()
+  return registry[type] || { label: type, icon: null, color: '#888888' }
 }
 
 // Add a god to the cemetery before banishing
@@ -564,7 +551,8 @@ export function handleMessage(ws, msg, projectRoot) {
     // Spawn a view entity (browser, git, history, linear, settings)
     case 'entity:spawn': {
       const type = data.type
-      if (!ENTITY_TYPES[type] || type === 'god' || type === 'terminal') {
+      const entityTypeInfo = getEntityType(type)
+      if (!entityTypeInfo.label || type === 'god' || type === 'terminal') {
         // Use god:spawn or terminal:spawn for those
         break
       }
@@ -575,7 +563,7 @@ export function handleMessage(ws, msg, projectRoot) {
       appState.entities[entityId] = {
         id: entityId,
         type,
-        name: data.name || `${ENTITY_TYPES[type].label}-${num}`,
+        name: data.name || `${entityTypeInfo.label}-${num}`,
         tabId: appState.activeTabId,
         order: getNextOrder(appState.activeTabId),
         spawnedAt: Date.now(),
@@ -1563,11 +1551,12 @@ export function handleMessage(ws, msg, projectRoot) {
         // Spawn new entity of this type
         const newId = generateEntityId(entityType)
         const num = getNextEntityNumber(entityType)
+        const typeInfo = getEntityType(entityType)
 
         appState.entities[newId] = {
           id: newId,
           type: entityType,
-          name: `${ENTITY_TYPES[entityType]?.label || entityType}-${num}`,
+          name: `${typeInfo.label || entityType}-${num}`,
           tabId: tab.id,
           order: getNextOrder(tab.id),
           spawnedAt: Date.now()
@@ -1614,6 +1603,41 @@ export function handleMessage(ws, msg, projectRoot) {
       if (newTile) {
         appState.focusedTile = newTile.id
         appState.focusedEntity = targetEntityId
+      }
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    case 'layout:rearrange': {
+      // Alt+drag tile rearrangement: move entity from source tile to target position
+      const { tabId, sourceTileId, targetTileId, direction, position, entityId } = data
+      const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
+      if (!tab || !entityId) break
+
+      let activeStage = getActiveStage(tab)
+      if (!activeStage?.layout) break
+
+      // Don't allow dropping on self
+      if (sourceTileId === targetTileId) break
+
+      // Remove entity from its current position in the layout
+      activeStage.layout = layout.removeEntityFromLayout(activeStage.layout, entityId)
+
+      // If removing the entity made the layout null (only entity), create fresh layout at target
+      if (!activeStage.layout) {
+        activeStage.layout = layout.createTile([entityId], entityId)
+      } else {
+        // Split the target tile and insert the entity
+        activeStage.layout = layout.splitTile(activeStage.layout, targetTileId, direction, position, entityId)
+      }
+
+      // Focus the new tile and entity
+      const newTile = layout.findTileByEntity(activeStage.layout, entityId)
+      if (newTile) {
+        appState.focusedTile = newTile.id
+        appState.focusedEntity = entityId
       }
 
       saveState()
@@ -1734,11 +1758,12 @@ export function handleMessage(ws, msg, projectRoot) {
       if (entityType && !entityId) {
         const newId = generateEntityId(entityType)
         const num = getNextEntityNumber(entityType)
+        const typeInfo = getEntityType(entityType)
 
         appState.entities[newId] = {
           id: newId,
           type: entityType,
-          name: `${ENTITY_TYPES[entityType]?.label || entityType}-${num}`,
+          name: `${typeInfo.label || entityType}-${num}`,
           tabId: tab.id,
           order: getNextOrder(tab.id),
           spawnedAt: Date.now()

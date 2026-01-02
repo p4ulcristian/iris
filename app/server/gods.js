@@ -200,19 +200,18 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // New session - use our pre-generated session ID
     claudeArgs.push('--session-id', sessionId)
 
-    // Build init prompt with god identity
-    const identity = `You are ${name}. Voice: ${god.voice}.`
-
+    // Build init prompt (task only - personality handled by --append-system-prompt)
     let initPrompt = ''
     if (startPrompt) {
       initPrompt += startPrompt + '\n\n'
     }
     if (task) {
-      initPrompt += task + '\n\n'
+      initPrompt += task
     }
-    initPrompt += identity
 
-    claudeArgs.push(initPrompt)
+    if (initPrompt.trim()) {
+      claudeArgs.push(initPrompt)
+    }
   }
 
   try {

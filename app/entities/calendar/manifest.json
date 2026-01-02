@@ -1,0 +1,10 @@
+{
+  "type": "calendar",
+  "label": "Calendar",
+  "description": "Calendar view",
+  "iconPath": "../../src/assets/icons/google-calendar.svg",
+  "color": "#4285F4",
+  "category": "system",
+  "showInPicker": true,
+  "showInSidebar": true
+}

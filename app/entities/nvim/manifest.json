@@ -1,0 +1,10 @@
+{
+  "type": "nvim",
+  "label": "Nvim",
+  "description": "Neovim editor",
+  "iconPath": "../../src/assets/icons/neovim.svg",
+  "color": "#57A143",
+  "category": "process",
+  "showInPicker": true,
+  "showInSidebar": true
+}

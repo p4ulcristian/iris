@@ -33,6 +33,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
+  const isAltHeld = useStore(s => s.isAltHeld)
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
@@ -148,7 +149,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       {/* Draggable card wrapper for tile splitting */}
       <div
         ref={cardRef}
-        onClick={onClick}
+        onMouseEnter={() => !isAltHeld && onClick()}
         className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isTileDragging ? 'opacity-50' : ''}`}
         style={{
           '--god-color': entityColor,

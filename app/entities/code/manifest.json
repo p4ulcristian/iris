@@ -1,0 +1,10 @@
+{
+  "type": "code",
+  "label": "Code",
+  "description": "Code viewer",
+  "iconPath": "../../src/assets/icons/vscode.svg",
+  "color": "#007ACC",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

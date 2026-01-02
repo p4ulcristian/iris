@@ -1,0 +1,10 @@
+{
+  "type": "cemetery",
+  "label": "Cemetery",
+  "description": "Fallen gods",
+  "icon": "faSkull",
+  "color": "#1F2937",
+  "category": "system",
+  "showInPicker": true,
+  "showInSidebar": true
+}

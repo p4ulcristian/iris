@@ -1,0 +1,10 @@
+{
+  "type": "rsvp",
+  "label": "RSVP",
+  "description": "Speed reader",
+  "icon": "faBook",
+  "color": "#10B981",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

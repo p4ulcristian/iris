@@ -49,6 +49,11 @@ body {
   height: 100vh;
 }
 
+/* Alt+drag mode: disable terminal pointer events so drag works on tiles */
+body.alt-held .terminal-content {
+  pointer-events: none;
+}
+
 #root {
   height: 100vh;
   display: flex;

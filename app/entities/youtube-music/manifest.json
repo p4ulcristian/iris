@@ -1,0 +1,10 @@
+{
+  "type": "youtube-music",
+  "label": "YouTube Music",
+  "description": "YouTube Music",
+  "iconPath": "../../src/assets/icons/youtube-music.svg",
+  "color": "#FF0033",
+  "category": "media",
+  "showInPicker": true,
+  "showInSidebar": true
+}

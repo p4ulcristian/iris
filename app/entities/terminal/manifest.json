@@ -1,0 +1,10 @@
+{
+  "type": "terminal",
+  "label": "Terminal",
+  "description": "Raw shell session",
+  "iconPath": "../../src/assets/icons/terminal.svg",
+  "color": "#68D391",
+  "category": "process",
+  "showInPicker": true,
+  "showInSidebar": true
+}

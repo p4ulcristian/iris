@@ -277,7 +277,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0"
+      className="absolute inset-0 terminal-content"
     />
   )
 }

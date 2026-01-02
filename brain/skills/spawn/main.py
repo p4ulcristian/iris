@@ -1,5 +1,6 @@
 """Spawn - summon gods in Iris v2 Electron app."""
 
+import json
 import os
 import random
 from datetime import datetime
@@ -15,16 +16,16 @@ def get_iris_root() -> Path:
     return Path(__file__).parent.parent.parent.parent
 
 
-def load_pantheon() -> dict[str, dict[str, str]]:
-    """Load prompts/pantheon.yaml - the god configurations."""
+def load_gods() -> dict[str, dict[str, str]]:
+    """Load config/gods.json - the god registry."""
     root = get_iris_root()
-    pantheon_path = root / "prompts" / "pantheon.yaml"
+    gods_path = root / "config" / "gods.json"
 
-    if not pantheon_path.exists():
+    if not gods_path.exists():
         return {}
 
-    with open(pantheon_path) as f:
-        return yaml.safe_load(f) or {}
+    with open(gods_path) as f:
+        return json.load(f)
 
 
 def load_settings() -> dict:
@@ -41,19 +42,19 @@ def load_settings() -> dict:
 
 def list_gods() -> list[str]:
     """List all available god names."""
-    return list(load_pantheon().keys())
+    return list(load_gods().keys())
 
 
 def load_god(name: str) -> dict[str, str]:
     """Load a god's configuration."""
-    pantheon = load_pantheon()
+    gods = load_gods()
     name_lower = name.lower()
 
-    if name_lower in pantheon:
-        return pantheon[name_lower]
+    if name_lower in gods:
+        return gods[name_lower]
 
     # Search by voice
-    for god_name, config in pantheon.items():
+    for god_name, config in gods.items():
         if config.get("voice", "").lower() == name_lower:
             return config
 

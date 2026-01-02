@@ -33,6 +33,7 @@ const initialState = {
   focusedTile: null,  // For multi-tile layouts
   layoutMode: 'auto',
   devPanelOpen: false,
+  isAltHeld: false,  // For Alt+drag mode
 
   // Synced from server
   theme: 'divine-void',  // Will be overwritten by state:sync
@@ -56,6 +57,9 @@ const initialState = {
 
   // Code highlights for code viewer
   codeHighlights: {},
+
+  // Entity registry from server (type definitions)
+  entityRegistry: {},
 
   // Browser URL (from skill)
   browserUrl: null,
@@ -198,6 +202,10 @@ export const useStore = create(
 
       toggleDevPanel: () => set((state) => {
         state.devPanelOpen = !state.devPanelOpen
+      }),
+
+      setAltHeld: (held) => set((state) => {
+        state.isAltHeld = held
       }),
 
       // ============ CONNECTION ============
@@ -433,6 +441,11 @@ export const useStore = create(
         // Sync code highlights
         if (serverState.codeHighlights !== undefined) {
           state.codeHighlights = serverState.codeHighlights
+        }
+
+        // Sync entity registry
+        if (serverState.entityRegistry !== undefined) {
+          state.entityRegistry = serverState.entityRegistry
         }
 
         // Sync tiles
