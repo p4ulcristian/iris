@@ -1,14 +1,19 @@
-#!/usr/bin/env -S uv run --script --python 3.11
+#!/usr/bin/env -S uv run --script --python 3.11 --index-strategy unsafe-best-match
 # /// script
 # requires-python = ">=3.10,<3.12"
 # dependencies = [
 #     "flask",
-#     "torch",
+#     "torch>=2.9.0",
+#     "torchaudio>=2.9.0",
 #     "sounddevice",
 #     "setuptools",
 #     "resemble-perth",
 #     "chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git",
 # ]
+#
+# [tool.uv]
+# extra-index-url = ["https://download.pytorch.org/whl/cu128"]
+# override-dependencies = ["torch>=2.9.0", "torchaudio>=2.9.0"]
 # ///
 """
 Iris Speak Server - TTS HTTP API

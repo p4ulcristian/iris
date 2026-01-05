@@ -7,7 +7,7 @@ import logging
 
 # Must set before any nemo/torch imports
 os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "1")  # RTX 5060 Ti
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # RTX 5060 Ti
 
 os.environ['NEMO_LOG_LEVEL'] = 'ERROR'
 os.environ['HYDRA_FULL_ERROR'] = '0'
