@@ -229,7 +229,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       ...process.env,
       PATH: getExtendedPath(),
       TERM: 'xterm-256color',
-      COLORTERM: 'truecolor'
+      COLORTERM: 'truecolor',
+      GOD_NAME: name
     }
 
     spawnSync(ZELLIJ_BIN, ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
