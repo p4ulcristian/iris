@@ -98,6 +98,21 @@ function getTraitsDir() {
 }
 export const TRAITS_DIR = getTraitsDir()
 
+// MCP Servers directory (bundled with app)
+function getMcpServersDir() {
+  // Check if running from packaged app (server is in app.asar.unpacked)
+  if (__dirname.includes('app.asar.unpacked')) {
+    const resourcesDir = path.join(__dirname, '..', '..')
+    const bundled = path.join(resourcesDir, 'mcp-servers')
+    if (fs.existsSync(bundled)) {
+      return bundled
+    }
+  }
+  // Development mode - use resources folder
+  return path.join(__dirname, '../resources/mcp-servers')
+}
+export const MCP_SERVERS_DIR = getMcpServersDir()
+
 export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },

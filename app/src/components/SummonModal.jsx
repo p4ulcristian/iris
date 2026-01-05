@@ -14,6 +14,8 @@ export default function SummonModal({
   const [task, setTask] = useState('')
   const [selectedPersonality, setSelectedPersonality] = useState('god')
   const [personalities, setPersonalities] = useState([])
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [projects, setProjects] = useState([])
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
   const { send, lastMessage } = useWebSocket(WS_URL)
@@ -24,10 +26,11 @@ export default function SummonModal({
   const availableGods = allGods.filter(g => !usedLower.includes(g))
   const godPool = availableGods.length > 0 ? availableGods : allGods
 
-  // Fetch personalities on open
+  // Fetch personalities and projects on open
   useEffect(() => {
     if (isOpen) {
       send({ event: 'personalities:list' })
+      send({ event: 'projects:list' })
     }
   }, [isOpen, send])
 
@@ -35,6 +38,17 @@ export default function SummonModal({
   useEffect(() => {
     if (lastMessage?.event === 'personalities:list:response') {
       setPersonalities(lastMessage.personalities || [])
+    }
+  }, [lastMessage])
+
+  // Handle projects list response
+  useEffect(() => {
+    if (lastMessage?.event === 'projects:list:response') {
+      const projectList = lastMessage.projects || []
+      setProjects(projectList)
+      // Select the default project, or first one if none is default
+      const defaultProject = projectList.find(p => p.isDefault)
+      setSelectedProject(defaultProject?.name || projectList[0]?.name || null)
     }
   }, [lastMessage])
 
@@ -68,7 +82,7 @@ export default function SummonModal({
   const handleSubmit = (e) => {
     e?.preventDefault()
     const name = selectedGod.charAt(0).toUpperCase() + selectedGod.slice(1)
-    onSummon(name, task.trim(), selectedPersonality)
+    onSummon(name, task.trim(), selectedPersonality, selectedProject)
   }
 
   if (!isOpen) return null
@@ -172,6 +186,42 @@ export default function SummonModal({
             return null
           })()}
         </div>
+
+        {/* Project selector */}
+        {projects.length > 0 && (
+          <div className="mb-4">
+            <label className="block liquid-glass-text-muted text-sm mb-1.5">Project</label>
+            <div className="relative">
+              <select
+                value={selectedProject || ''}
+                onChange={(e) => setSelectedProject(e.target.value || null)}
+                className="w-full liquid-glass-select px-3 py-2.5 appearance-none"
+              >
+                {projects.map(p => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} {p.isDefault ? '(default)' : ''}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-50">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                  <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                </svg>
+              </div>
+            </div>
+            {(() => {
+              const selected = projects.find(p => p.name === selectedProject)
+              if (selected?.path) {
+                return (
+                  <p className="liquid-glass-text-muted text-xs mt-1.5 opacity-60 truncate">
+                    {selected.path.replace(/^\/home\/[^/]+/, '~')}
+                  </p>
+                )
+              }
+              return null
+            })()}
+          </div>
+        )}
 
         {/* Task input */}
         <div className="mb-4">

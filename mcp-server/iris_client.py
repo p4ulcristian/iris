@@ -138,12 +138,13 @@ class IrisClient:
 
         return "Error: Timeout waiting for command output. Command may still be running in Iris."
 
-    async def spawn_god(self, god_name: str = None, task: str = "") -> str:
+    async def spawn_god(self, god_name: str = None, task: str = "", project: str = None) -> str:
         """Spawn a new god in Iris.
 
         Args:
             god_name: Optional god name
             task: Task description
+            project: Optional project name to work in
 
         Returns:
             Confirmation message
@@ -154,6 +155,8 @@ class IrisClient:
         }
         if god_name:
             message["name"] = god_name.capitalize()
+        if project:
+            message["project"] = project
 
         success = await self.send_fire_and_forget(message)
 

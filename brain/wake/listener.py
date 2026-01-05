@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from ptt import PTTListener
-from output import paste_text, send_to_iris, send_enter_to_iris
+from output import paste_text, send_to_iris
 
 # Configure logging
 logging.basicConfig(
@@ -140,12 +140,6 @@ def on_capslock_tap():
         logger.warning(f"Failed to stop speak server: {e}")
 
 
-def on_iris_enter():
-    """Handle CapsLock+Enter - send Enter to Iris"""
-    logger.info("CapsLock+Enter - sending Enter to Iris")
-    send_enter_to_iris()
-
-
 def main():
     """Start the wake listener"""
     logger.info("Starting Iris Wake listener")
@@ -173,8 +167,7 @@ def main():
     listener = PTTListener(
         on_press=on_capslock_press,
         on_release=on_capslock_release,
-        on_tap=on_capslock_tap,
-        on_enter=on_iris_enter
+        on_tap=on_capslock_tap
     )
     listener.start()
 

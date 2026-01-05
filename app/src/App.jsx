@@ -306,11 +306,13 @@ export default function App() {
 
 
   // Summon a new god (with specific name)
-  const handleSummonGod = useCallback((name, task = '') => {
+  const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null) => {
     send({
       event: 'god:spawn',
       name,
-      task
+      task,
+      personality,
+      project
     })
   }, [send])
 
@@ -719,10 +721,10 @@ export default function App() {
                         return (
                           <motion.div
                             key={stage.id}
-                            className="absolute inset-0"
+                            className={`absolute inset-0 stage ${offset !== 0 ? 'stage-offscreen' : ''}`}
                             initial={false}
-                            animate={{ y: `${offset * 100}%` }}
-                            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                            animate={{ y: `${offset * 100}%`, z: 0 }}
+                            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                           >
                             <Surface
                               node={stage.layout}
@@ -1202,8 +1204,8 @@ export default function App() {
       <SummonModal
         isOpen={summonModalOpen}
         usedGodNames={getAllGodNames()}
-        onSummon={(name, task) => {
-          handleSummonGod(name, task)
+        onSummon={(name, task, personality, project) => {
+          handleSummonGod(name, task, personality, project)
           setSummonModalOpen(false)
         }}
         onCancel={() => setSummonModalOpen(false)}

@@ -1,0 +1,6 @@
+{
+  "name": "linear",
+  "description": "Issue tracking and project management",
+  "command": "bunx",
+  "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
+}

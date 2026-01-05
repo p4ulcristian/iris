@@ -415,7 +415,8 @@ export function getStateForBroadcast() {
         status: entity.status || null,
         mission: entity.mission || null,
         readyState: entity.readyState || 'working',
-        spawnedAt: entity.spawnedAt || null
+        spawnedAt: entity.spawnedAt || null,
+        project: entity.project || null  // for git branch display
       }
     }
 

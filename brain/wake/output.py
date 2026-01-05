@@ -31,19 +31,3 @@ def send_to_iris(text: str):
         print(f"Sent to Iris: {text}", flush=True)
     except Exception as e:
         print(f"send_to_iris error: {e}", flush=True)
-
-
-def send_enter_to_iris():
-    """Send Enter key event to Iris app via WebSocket."""
-    try:
-        message = json.dumps({"event": "voice:enter"})
-        result = subprocess.run(
-            ["websocat", "-1", IRIS_WS_URL],
-            input=message,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        print("Sent Enter to Iris", flush=True)
-    except Exception as e:
-        print(f"send_enter_to_iris error: {e}", flush=True)

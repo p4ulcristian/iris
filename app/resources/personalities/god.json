@@ -5,6 +5,11 @@
     "god-persona",
     "speak",
     "skills",
-    "terminology"
+    "terminology",
+    "modern-css"
+  ],
+  "mcpServers": [
+    "iris",
+    "playwright"
   ]
 }

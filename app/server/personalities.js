@@ -3,6 +3,7 @@ import path from 'path'
 import os from 'os'
 import { PERSONALITIES_DIR } from './config.js'
 import { composeTraits, listTraits } from './traits.js'
+import { composeMcpConfig } from './mcp-servers.js'
 
 // User personalities directory
 const USER_PERSONALITIES_DIR = path.join(os.homedir(), '.config', 'iris', 'personalities')
@@ -28,6 +29,7 @@ export function listPersonalities() {
             source,
             type: 'traits',
             traits: config.traits || [],
+            mcpServers: config.mcpServers || [],
             description: config.description || ''
           })
         } catch (e) {
@@ -89,6 +91,22 @@ export function getComposedPrompt(name) {
   // Compose all traits
   if (personality.type === 'traits' && personality.config.traits) {
     return composeTraits(personality.config.traits)
+  }
+
+  return null
+}
+
+// Get the MCP config for a personality (used when spawning gods)
+// Returns a JSON object suitable for --mcp-config flag
+export function getPersonalityMcpConfig(name, irisRoot = null) {
+  if (!name || name === 'none') return null
+
+  const personality = loadPersonality(name)
+  if (!personality) return null
+
+  // Get MCP servers from personality config
+  if (personality.type === 'traits' && personality.config.mcpServers) {
+    return composeMcpConfig(personality.config.mcpServers, irisRoot)
   }
 
   return null

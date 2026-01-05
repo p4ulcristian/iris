@@ -55,10 +55,9 @@ class PTTListener:
     - Longer hold -> on_press at press time, on_release at release time
     """
 
-    def __init__(self, on_press=None, on_release=None, on_enter=None, on_tap=None, key=ecodes.KEY_CAPSLOCK):
+    def __init__(self, on_press=None, on_release=None, on_tap=None, key=ecodes.KEY_CAPSLOCK):
         self.on_press = on_press
         self.on_release = on_release
-        self.on_enter = on_enter  # Called when CapsLock+Enter is pressed
         self.on_tap = on_tap  # Called on quick tap (< TAP_THRESHOLD)
         self.key = key
         self._running = False
@@ -141,13 +140,6 @@ class PTTListener:
                         self._current_mode = None
                         self._press_time = None
                     # Ignore KEY_HOLD (repeat) events
-                    continue
-
-                # CapsLock+Enter combo
-                if event.type == ecodes.EV_KEY and event.code == ecodes.KEY_ENTER:
-                    if event.value == KEY_DOWN and self._capslock_held:
-                        if self.on_enter:
-                            self.on_enter()
                     continue
 
         except Exception as e:

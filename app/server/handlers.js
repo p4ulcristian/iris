@@ -15,6 +15,7 @@ import * as calendar from './calendar.js'
 import * as layout from './layout.js'
 import * as personalities from './personalities.js'
 import * as traits from './traits.js'
+import * as mcpServers from './mcp-servers.js'
 import * as projects from './projects.js'
 
 // Helper to get entity type info from registry (with fallback)
@@ -81,9 +82,20 @@ export function handleMessage(ws, msg, projectRoot) {
           ? available[Math.floor(Math.random() * available.length)]
           : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
       }
+
+      // Determine working directory - use selected project path if provided
+      let workingDir = projectRoot
+      if (data.project) {
+        const projectConfig = projects.loadProject(data.project)
+        if (projectConfig?.path) {
+          // Expand ~ to home directory
+          workingDir = projectConfig.path.replace(/^~/, process.env.HOME || '')
+        }
+      }
+
       // Clear any orphaned buffer from a previous incarnation
       clearOutputBuffer(godName)
-      const god = createGodSession(godName, data.task, projectRoot, {
+      const god = createGodSession(godName, data.task, workingDir, {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName,
         personality: data.personality
@@ -98,7 +110,8 @@ export function handleMessage(ws, msg, projectRoot) {
           order: getNextOrder(appState.activeTabId),
           mission: god.mission || null,
           spawnedAt: Date.now(),
-          sessionId: god.sessionId || null
+          sessionId: god.sessionId || null,
+          project: workingDir  // Store working directory for git branch display
         }
 
         // Create a new stage for this entity
@@ -959,7 +972,8 @@ export function handleMessage(ws, msg, projectRoot) {
           tabId: appState.activeTabId,
           order: getNextOrder(appState.activeTabId),
           mission: data.summary || null,
-          spawnedAt: Date.now()
+          spawnedAt: Date.now(),
+          project: projectRoot
         }
 
         // Create a new stage for this entity
@@ -1481,7 +1495,8 @@ export function handleMessage(ws, msg, projectRoot) {
           spawnedAt: Date.now(),
           mission: mission || null,
           title: title || null,
-          sessionId: sessionId
+          sessionId: sessionId,
+          project: projectRoot
         }
 
         // Create a new stage for this entity
@@ -2252,6 +2267,81 @@ export function handleMessage(ws, msg, projectRoot) {
 
       ws.send(JSON.stringify({
         event: 'traits:delete:response',
+        name
+      }))
+      break
+    }
+
+    // ==================== MCP SERVERS ====================
+
+    case 'mcp-servers:list': {
+      const allServers = mcpServers.listMcpServers()
+      ws.send(JSON.stringify({
+        event: 'mcp-servers:list:response',
+        servers: allServers
+      }))
+      break
+    }
+
+    case 'mcp-servers:get': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: 'MCP server name required' }))
+        break
+      }
+
+      const config = mcpServers.loadMcpServer(name)
+      if (!config) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: `MCP server "${name}" not found` }))
+        break
+      }
+
+      const info = mcpServers.getMcpServerInfo(name)
+      ws.send(JSON.stringify({
+        event: 'mcp-servers:get:response',
+        name,
+        config,
+        source: info?.source || 'unknown'
+      }))
+      break
+    }
+
+    case 'mcp-servers:save': {
+      const { name, config } = data
+      if (!name || !config) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: 'MCP server name and config required' }))
+        break
+      }
+
+      try {
+        const savedPath = mcpServers.saveMcpServer(name, config)
+        ws.send(JSON.stringify({
+          event: 'mcp-servers:save:response',
+          name,
+          path: savedPath,
+          source: 'user'
+        }))
+      } catch (err) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: err.message }))
+      }
+      break
+    }
+
+    case 'mcp-servers:delete': {
+      const { name } = data
+      if (!name) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: 'MCP server name required' }))
+        break
+      }
+
+      const deleted = mcpServers.deleteMcpServer(name)
+      if (!deleted) {
+        ws.send(JSON.stringify({ event: 'mcp-servers:error', error: `Could not delete MCP server "${name}"` }))
+        break
+      }
+
+      ws.send(JSON.stringify({
+        event: 'mcp-servers:delete:response',
         name
       }))
       break

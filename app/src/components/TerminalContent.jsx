@@ -201,6 +201,18 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
         return
       }
 
+      // Super+V (Meta+V) to paste from clipboard
+      if (e.metaKey && key === 'v') {
+        e.preventDefault()
+        e.stopPropagation()
+        navigator.clipboard.readText().then(text => {
+          if (text) {
+            term.paste(text)
+          }
+        }).catch(err => console.error('Paste failed:', err))
+        return
+      }
+
       const isCtrlShortcut = e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
       const isAltShortcut = e.altKey && (
         ['n', 'k', ',', '.'].includes(key) ||
@@ -302,8 +314,10 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
       resizeObserver.disconnect()
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
+        textarea.removeEventListener('copy', handleCopy, true)
       }
       container.removeEventListener('keydown', handleShortcut, true)
+      container.removeEventListener('copy', handleCopy, true)
       term.dispose()
       ws.close()
     }

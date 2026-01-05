@@ -98,6 +98,17 @@ body.alt-held .terminal-content {
   height: 100% !important;
 }
 
+/* Stage performance optimizations */
+.stage {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.stage-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100vh;
+}
+
 /* Animations */
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }

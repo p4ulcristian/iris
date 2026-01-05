@@ -4,8 +4,12 @@ import os from 'os'
 import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
-import { getComposedPrompt } from './personalities.js'
+import { getComposedPrompt, getPersonalityMcpConfig } from './personalities.js'
 import { getProjectsContext } from './projects.js'
+
+// Get Iris root directory for relative MCP paths
+const __dirname = path.dirname(new URL(import.meta.url).pathname)
+const IRIS_ROOT = path.resolve(__dirname, '../..')
 
 const SESSION_PREFIX = 'iris-'
 const HOME = os.homedir()
@@ -169,6 +173,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   // Build claude command
   let claudeArgs = ['--dangerously-skip-permissions']
   let personalityTempFile = null
+  let mcpConfigJson = null
 
   // Load and apply personality (if not resuming)
   // getComposedPrompt handles both legacy (MD) and trait-based (JSON) personalities
@@ -190,6 +195,12 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       personalityTempFile = path.join(os.tmpdir(), `iris-personality-${godKey}-${Date.now()}.md`)
       fs.writeFileSync(personalityTempFile, systemContent)
       // Don't add to claudeArgs - we'll handle it separately in the command
+    }
+
+    // Get MCP config from personality
+    const mcpConfig = getPersonalityMcpConfig(personality, IRIS_ROOT)
+    if (mcpConfig) {
+      mcpConfigJson = JSON.stringify(mcpConfig)
     }
   }
 
@@ -219,9 +230,20 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Build command parts separately to handle personality file with proper shell expansion
     let claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
 
-    // Add personality from temp file using shell expansion (preserves newlines)
+    // Build extra flags for personality and MCP config
+    let extraFlags = ''
     if (personalityTempFile) {
-      claudeCmd = `claude --dangerously-skip-permissions --append-system-prompt "$(cat '${personalityTempFile}')" ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
+      extraFlags += ` --append-system-prompt "$(cat '${personalityTempFile}')"`
+    }
+    if (mcpConfigJson) {
+      // Escape single quotes in JSON for shell
+      const escapedJson = mcpConfigJson.replace(/'/g, "'\\''")
+      extraFlags += ` --mcp-config '${escapedJson}'`
+    }
+
+    // Add personality and MCP config to command
+    if (extraFlags) {
+      claudeCmd = `claude --dangerously-skip-permissions${extraFlags} ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
     }
 
     // Step 1: Create detached zellij session in background

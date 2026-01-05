@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faPuzzlePiece, faDna, faFolder } from '@fortawesome/free-solid-svg-icons'
+import { faPlus, faPuzzlePiece, faDna, faFolder, faPlug } from '@fortawesome/free-solid-svg-icons'
 import PersonalityCard from './PersonalityCard'
 import TraitCard from './TraitCard'
 import ProjectCard from './ProjectCard'
+import McpServerCard from './McpServerCard'
 import PersonalityEditor from './PersonalityEditor'
 import TraitEditor from './TraitEditor'
 import ProjectEditor from './ProjectEditor'
+import McpServerEditor from './McpServerEditor'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
@@ -15,13 +17,15 @@ export default function PersonalitiesView() {
   const { send } = useWebSocket(WS_URL)
   const [personalities, setPersonalities] = useState([])
   const [traits, setTraits] = useState([])
+  const [mcpServers, setMcpServers] = useState([])
   const [projects, setProjects] = useState([])
   const [isLoading, setIsLoading] = useState(true)
 
   // Navigation state
-  const [view, setView] = useState('list')  // 'list' | 'personality' | 'trait' | 'project'
+  const [view, setView] = useState('list')  // 'list' | 'personality' | 'trait' | 'mcp-server' | 'project'
   const [selectedPersonality, setSelectedPersonality] = useState(null)
   const [selectedTrait, setSelectedTrait] = useState(null)
+  const [selectedMcpServer, setSelectedMcpServer] = useState(null)
   const [selectedProject, setSelectedProject] = useState(null)
   const [navigationStack, setNavigationStack] = useState([])
 
@@ -32,6 +36,7 @@ export default function PersonalitiesView() {
       view,
       personality: selectedPersonality,
       trait: selectedTrait,
+      mcpServer: selectedMcpServer,
       project: selectedProject
     }])
 
@@ -39,15 +44,19 @@ export default function PersonalitiesView() {
     if (newView === 'personality') {
       setSelectedPersonality(data)
       setSelectedTrait(null)
+      setSelectedMcpServer(null)
       setSelectedProject(null)
     }
     if (newView === 'trait') {
       setSelectedTrait(data)
     }
+    if (newView === 'mcp-server') {
+      setSelectedMcpServer(data)
+    }
     if (newView === 'project') {
       setSelectedProject(data)
     }
-  }, [view, selectedPersonality, selectedTrait, selectedProject])
+  }, [view, selectedPersonality, selectedTrait, selectedMcpServer, selectedProject])
 
   const goBack = useCallback(() => {
     const prev = navigationStack[navigationStack.length - 1]
@@ -55,15 +64,17 @@ export default function PersonalitiesView() {
       setView(prev.view)
       setSelectedPersonality(prev.personality)
       setSelectedTrait(prev.trait)
+      setSelectedMcpServer(prev.mcpServer)
       setSelectedProject(prev.project)
       setNavigationStack(stack => stack.slice(0, -1))
     }
   }, [navigationStack])
 
-  // Fetch personalities, traits, and projects on mount
+  // Fetch personalities, traits, MCP servers, and projects on mount
   useEffect(() => {
     send({ event: 'personalities:list' })
     send({ event: 'traits:list' })
+    send({ event: 'mcp-servers:list' })
     send({ event: 'projects:list' })
   }, [send])
 
@@ -90,6 +101,14 @@ export default function PersonalitiesView() {
           send({ event: 'traits:list' })
         }
 
+        if (msg.event === 'mcp-servers:list:response') {
+          setMcpServers(msg.servers || [])
+        }
+
+        if (msg.event === 'mcp-servers:save:response' || msg.event === 'mcp-servers:delete:response') {
+          send({ event: 'mcp-servers:list' })
+        }
+
         if (msg.event === 'projects:list:response') {
           setProjects(msg.projects || [])
         }
@@ -104,6 +123,10 @@ export default function PersonalitiesView() {
 
         if (msg.event === 'traits:error') {
           console.error('Trait error:', msg.error)
+        }
+
+        if (msg.event === 'mcp-servers:error') {
+          console.error('MCP server error:', msg.error)
         }
 
         if (msg.event === 'projects:error') {
@@ -149,6 +172,21 @@ export default function PersonalitiesView() {
     navigateTo('trait', { name: '', source: 'user', isNew: true })
   }, [navigateTo])
 
+  // MCP server handlers
+  const handleEditMcpServer = useCallback((server) => {
+    navigateTo('mcp-server', server)
+  }, [navigateTo])
+
+  const handleDeleteMcpServer = useCallback((server) => {
+    if (confirm(`Delete MCP server "${server.name}"?`)) {
+      send({ event: 'mcp-servers:delete', name: server.name })
+    }
+  }, [send])
+
+  const handleNewMcpServer = useCallback(() => {
+    navigateTo('mcp-server', { name: '', source: 'user', isNew: true })
+  }, [navigateTo])
+
   // Project handlers
   const handleEditProject = useCallback((project) => {
     navigateTo('project', project)
@@ -188,6 +226,16 @@ export default function PersonalitiesView() {
     return (
       <TraitEditor
         trait={selectedTrait}
+        onBack={goBack}
+      />
+    )
+  }
+
+  // Render MCP server editor view
+  if (view === 'mcp-server' && selectedMcpServer) {
+    return (
+      <McpServerEditor
+        server={selectedMcpServer}
         onBack={goBack}
       />
     )
@@ -251,6 +299,49 @@ export default function PersonalitiesView() {
                         trait={trait}
                         onEdit={handleEditTrait}
                         onDelete={handleDeleteTrait}
+                        staggerIndex={index}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/10" />
+
+            {/* MCP Servers Section */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-white/70">
+                  <FontAwesomeIcon icon={faPlug} size="sm" className="text-cyan-400" />
+                  <span className="text-xs font-medium uppercase tracking-wide">MCP Servers</span>
+                  <span className="text-xs text-white/40">({mcpServers.length})</span>
+                </div>
+                <motion.button
+                  onClick={handleNewMcpServer}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 rounded transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <FontAwesomeIcon icon={faPlus} size="xs" />
+                  New
+                </motion.button>
+              </div>
+
+              {mcpServers.length === 0 ? (
+                <div className="text-xs text-white/40 py-4 text-center">
+                  No MCP servers yet. Add one to extend Claude's capabilities.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <AnimatePresence mode="popLayout">
+                    {mcpServers.map((server, index) => (
+                      <McpServerCard
+                        key={server.name}
+                        server={server}
+                        onEdit={handleEditMcpServer}
+                        onDelete={handleDeleteMcpServer}
                         staggerIndex={index}
                       />
                     ))}

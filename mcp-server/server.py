@@ -47,17 +47,18 @@ async def run_terminal(command: str, god_name: str = "Hermes") -> str:
 
 
 @server.tool()
-async def spawn_god(task: str, god_name: str = None) -> str:
+async def spawn_god(task: str, god_name: str = None, project: str = None) -> str:
     """Summon a new god (Claude instance) in Iris to work on a task.
 
     Args:
         task: Description of what the god should work on
         god_name: Optional god name (random if not specified)
+        project: Optional project name to work in (e.g., "ironrainbow")
 
     Returns:
         Confirmation message
     """
-    result = await iris.spawn_god(god_name=god_name, task=task)
+    result = await iris.spawn_god(god_name=god_name, task=task, project=project)
     return result
 
 

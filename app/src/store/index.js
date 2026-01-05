@@ -49,6 +49,9 @@ const initialState = {
   // Git projects
   gitProjects: [],
 
+  // Git branches by project path - { [projectPath]: branchName }
+  gitBranches: {},
+
   // Cemetery - fallen gods
   cemetery: [],
 
@@ -247,6 +250,11 @@ export const useStore = create(
 
       setServiceLoading: (service, loading) => set((state) => {
         state.servicesLoading[service] = loading
+      }),
+
+      // Git branches
+      setGitBranch: (projectPath, branch) => set((state) => {
+        state.gitBranches[projectPath] = branch
       }),
 
       // ============ SELECTORS (computed) ============

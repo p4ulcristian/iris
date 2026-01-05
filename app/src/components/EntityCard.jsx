@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
 import { EntityIcon } from '../entities'
 
 // Convert hex to RGB for CSS (comma-separated)
@@ -30,10 +30,12 @@ function formatElapsed(ms) {
 
 
 export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false }) {
-  const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
+  const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const isAltHeld = useStore(s => s.isAltHeld)
+  const gitBranches = useStore(s => s.gitBranches)
+  const setGitBranch = useStore(s => s.setGitBranch)
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
@@ -94,6 +96,38 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
     const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
   }, [spawnedAt])
+
+  // Fetch git branch when entity has a project
+  useEffect(() => {
+    console.log('[EntityCard] project for', name, ':', project)
+    if (!project) return
+
+    const ws = window.__irisWs
+    if (!ws) {
+      console.log('[EntityCard] No WebSocket available')
+      return
+    }
+
+    // Request git status for this project
+    console.log('[EntityCard] Requesting git status for:', project)
+    ws.send(JSON.stringify({ event: 'git:status', project }))
+
+    // Listen for response
+    const handleMessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.event === 'git:status:response' && msg.project === project && msg.branch) {
+          setGitBranch(project, msg.branch)
+        }
+      } catch {}
+    }
+
+    ws.addEventListener('message', handleMessage)
+    return () => ws.removeEventListener('message', handleMessage)
+  }, [project, setGitBranch])
+
+  // Get branch for this entity's project
+  const branch = project ? gitBranches[project] : null
 
   // Get entity color - theme color for gods, custom color for others
   const godColors = useStore(s => s.godColors)
@@ -283,6 +317,13 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
             </span>
           )}
           <div className="flex-1" />
+          {/* Branch pill */}
+          {branch && (
+            <span className="liquid-glass-pill text-white/70 font-mono flex items-center gap-1">
+              <FontAwesomeIcon icon={faCodeBranch} size="xs" />
+              {branch}
+            </span>
+          )}
           {/* Time pill */}
           {elapsed !== null && (
             <span className="liquid-glass-pill text-white/70 font-mono">

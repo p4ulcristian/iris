@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSave, faDna, faPuzzlePiece, faArrowLeft, faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { faSave, faDna, faPuzzlePiece, faArrowLeft, faPenToSquare, faPlug } from '@fortawesome/free-solid-svg-icons'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
@@ -25,19 +25,27 @@ export default function PersonalityEditor({
   const [enabledTraits, setEnabledTraits] = useState(personality.traits || [])
   const [originalEnabledTraits, setOriginalEnabledTraits] = useState([])
 
+  // MCP server management
+  const [availableMcpServers, setAvailableMcpServers] = useState([])
+  const [enabledMcpServers, setEnabledMcpServers] = useState(personality.mcpServers || [])
+  const [originalEnabledMcpServers, setOriginalEnabledMcpServers] = useState([])
+
   const [isLoading, setIsLoading] = useState(!isNew)
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
   const [saveMessage, setSaveMessage] = useState(null)
 
-  // Load personality content and traits on mount
+  // Load personality content, traits, and MCP servers on mount
   useEffect(() => {
-    // Fetch available traits
+    // Fetch available traits and MCP servers
     send({ event: 'traits:list' })
+    send({ event: 'mcp-servers:list' })
 
     if (isNew) {
       setEnabledTraits([])
       setOriginalEnabledTraits([])
+      setEnabledMcpServers([])
+      setOriginalEnabledMcpServers([])
       setIsLoading(false)
       return
     }
@@ -57,9 +65,15 @@ export default function PersonalityEditor({
           setAvailableTraits(msg.traits || [])
         }
 
+        if (msg.event === 'mcp-servers:list:response') {
+          setAvailableMcpServers(msg.servers || [])
+        }
+
         if (msg.event === 'personalities:get:response' && msg.name === personality.name) {
           setEnabledTraits(msg.config?.traits || [])
           setOriginalEnabledTraits(msg.config?.traits || [])
+          setEnabledMcpServers(msg.config?.mcpServers || [])
+          setOriginalEnabledMcpServers(msg.config?.mcpServers || [])
           setDescription(msg.config?.description || '')
           setIsLoading(false)
         }
@@ -67,6 +81,7 @@ export default function PersonalityEditor({
         if (msg.event === 'personalities:save:response') {
           setIsSaving(false)
           setOriginalEnabledTraits([...enabledTraits])
+          setOriginalEnabledMcpServers([...enabledMcpServers])
           setHasChanges(false)
           setSaveMessage('Saved!')
           setTimeout(() => setSaveMessage(null), 2000)
@@ -90,8 +105,9 @@ export default function PersonalityEditor({
   // Track changes
   useEffect(() => {
     const traitsChanged = JSON.stringify([...enabledTraits].sort()) !== JSON.stringify([...originalEnabledTraits].sort())
-    setHasChanges(traitsChanged || (isNew && personalityName))
-  }, [enabledTraits, originalEnabledTraits, isNew, personalityName])
+    const mcpServersChanged = JSON.stringify([...enabledMcpServers].sort()) !== JSON.stringify([...originalEnabledMcpServers].sort())
+    setHasChanges(traitsChanged || mcpServersChanged || (isNew && personalityName))
+  }, [enabledTraits, originalEnabledTraits, enabledMcpServers, originalEnabledMcpServers, isNew, personalityName])
 
   const handleSave = useCallback(() => {
     const name = isNew ? personalityName : personality.name
@@ -109,10 +125,11 @@ export default function PersonalityEditor({
       config: {
         name: name.trim(),
         description: description.trim(),
-        traits: enabledTraits
+        traits: enabledTraits,
+        mcpServers: enabledMcpServers
       }
     })
-  }, [send, isNew, personalityName, personality.name, enabledTraits, description])
+  }, [send, isNew, personalityName, personality.name, enabledTraits, enabledMcpServers, description])
 
   const toggleTrait = useCallback((traitName) => {
     setEnabledTraits(prev => {
@@ -120,6 +137,16 @@ export default function PersonalityEditor({
         return prev.filter(t => t !== traitName)
       } else {
         return [...prev, traitName]
+      }
+    })
+  }, [])
+
+  const toggleMcpServer = useCallback((serverName) => {
+    setEnabledMcpServers(prev => {
+      if (prev.includes(serverName)) {
+        return prev.filter(s => s !== serverName)
+      } else {
+        return [...prev, serverName]
       }
     })
   }, [])
@@ -296,10 +323,69 @@ export default function PersonalityEditor({
             )}
           </div>
 
+          {/* MCP Servers checkboxes */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <FontAwesomeIcon icon={faPlug} className="text-cyan-400" size="sm" />
+              <span className="text-sm font-medium text-white">MCP Servers</span>
+              <span className="text-xs text-white/40">({enabledMcpServers.length} selected)</span>
+            </div>
+
+            {availableMcpServers.length === 0 ? (
+              <div className="text-xs text-white/40 py-4">
+                No MCP servers available.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {availableMcpServers.map((server) => (
+                  <div
+                    key={server.name}
+                    className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
+                      enabledMcpServers.includes(server.name)
+                        ? 'bg-cyan-500/20 border border-cyan-500/40'
+                        : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                    }`}
+                  >
+                    <label className="flex items-start gap-3 flex-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enabledMcpServers.includes(server.name)}
+                        onChange={() => toggleMcpServer(server.name)}
+                        className="mt-0.5 accent-cyan-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">{server.name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            server.source === 'bundled'
+                              ? 'bg-blue-500/20 text-blue-300'
+                              : 'bg-green-500/20 text-green-300'
+                          }`}>
+                            {server.source}
+                          </span>
+                        </div>
+                        {server.description && (
+                          <div className="text-xs text-white/40 mt-1 line-clamp-1">
+                            {server.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Preview hint */}
-          {enabledTraits.length > 0 && (
-            <div className="text-xs text-white/40 pt-4 border-t border-white/10">
-              This personality will compose {enabledTraits.length} trait{enabledTraits.length > 1 ? 's' : ''}: {enabledTraits.join(', ')}
+          {(enabledTraits.length > 0 || enabledMcpServers.length > 0) && (
+            <div className="text-xs text-white/40 pt-4 border-t border-white/10 space-y-1">
+              {enabledTraits.length > 0 && (
+                <div>Traits: {enabledTraits.join(', ')}</div>
+              )}
+              {enabledMcpServers.length > 0 && (
+                <div>MCP Servers: {enabledMcpServers.join(', ')}</div>
+              )}
             </div>
           )}
         </div>

@@ -1,0 +1,7 @@
+{
+  "name": "iris",
+  "description": "Control Iris - spawn gods, run terminals, manage entities",
+  "command": "./mcp-server/run.sh",
+  "args": [],
+  "relative": true
+}

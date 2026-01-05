@@ -55,13 +55,11 @@ else:
             self,
             on_press: Optional[Callable] = None,
             on_release: Optional[Callable] = None,
-            on_enter: Optional[Callable] = None,
             on_tap: Optional[Callable] = None,
             key: int = 58,  # KEY_CAPSLOCK
         ):
             self.on_press = on_press
             self.on_release = on_release
-            self.on_enter = on_enter
             self.on_tap = on_tap
             self.key = key
             self._running = False
