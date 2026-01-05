@@ -8,10 +8,12 @@ import {
   faXmark,
   faChevronRight,
   faChevronDown,
+  faChevronLeft,
   faRefresh,
   faFolderTree,
   faEye,
-  faEyeSlash
+  faEyeSlash,
+  faBars
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -83,40 +85,49 @@ function getFileIcon(filename) {
 }
 
 // File tree node component
-function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder }) {
+function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders }) {
   if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
+  const isLoading = loadingFolders?.has(node.path)
 
   return (
     <div>
       <div
         onClick={() => isFolder ? toggleFolder(node.path) : onFileClick(node)}
         className={`
-          flex items-center gap-1.5 px-2 py-1 cursor-pointer
-          hover:bg-white/10 transition-colors text-sm
-          ${isFolder ? 'text-text-secondary' : 'text-text-primary'}
+          flex items-center gap-2 py-1.5 cursor-pointer rounded-lg mx-1
+          hover:bg-white/8 active:bg-white/12 transition-all duration-150
+          ${isFolder ? 'text-white/70' : 'text-white/85'}
+          ${isExpanded ? 'bg-white/5' : ''}
         `}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        style={{ paddingLeft: `${depth * 14 + 10}px`, paddingRight: '10px' }}
       >
         {isFolder && (
-          <FontAwesomeIcon
-            icon={isExpanded ? faChevronDown : faChevronRight}
-            className="w-2.5 h-2.5 text-text-tertiary"
-          />
+          <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>
+            <FontAwesomeIcon
+              icon={faChevronRight}
+              className={`w-2 h-2 ${isLoading ? 'animate-pulse text-accent' : 'text-white/40'}`}
+            />
+          </span>
         )}
         {isFolder ? (
           <FontAwesomeIcon
             icon={isExpanded ? faFolderOpen : faFolder}
-            className="w-4 h-4 text-yellow-500"
+            className={`w-4 h-4 transition-colors ${isExpanded ? 'text-yellow-400' : 'text-yellow-500/70'}`}
           />
         ) : (
-          <span className="w-4 text-center text-xs">{getFileIcon(node.name)}</span>
+          <span className="w-4 text-center text-xs opacity-80">{getFileIcon(node.name)}</span>
         )}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate text-[13px]">{node.name}</span>
       </div>
       {isFolder && isExpanded && node.children && (
-        <div>
+        <div className="relative">
+          {/* Subtle indent guide line */}
+          <div
+            className="absolute top-0 bottom-0 w-px bg-white/8"
+            style={{ left: `${depth * 14 + 18}px` }}
+          />
           {node.children.map(child => (
             <TreeNode
               key={child.path}
@@ -125,6 +136,7 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder 
               onFileClick={onFileClick}
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
+              loadingFolders={loadingFolders}
             />
           ))}
         </div>
@@ -139,29 +151,29 @@ function EditorTab({ file, isActive, onClick, onClose }) {
     <div
       onClick={onClick}
       className={`
-        group flex items-center gap-2 px-3 py-1.5 min-w-0 max-w-48
-        cursor-pointer transition-all border-b-2
+        group flex items-center gap-2 px-3 py-2 min-w-0 max-w-52
+        cursor-pointer transition-all duration-150 rounded-t-lg mx-0.5
         ${isActive
-          ? 'bg-black/40 border-accent'
-          : 'bg-black/20 hover:bg-black/30 border-transparent'
+          ? 'bg-white/10 text-white border-b-2 border-accent/60'
+          : 'bg-white/5 hover:bg-white/8 text-white/70 border-b-2 border-transparent'
         }
       `}
     >
-      <span className="text-xs">{getFileIcon(file.name)}</span>
-      <span className="truncate text-sm text-text-primary">
+      <span className="text-xs opacity-80">{getFileIcon(file.name)}</span>
+      <span className="truncate text-[13px]">
         {file.name}
       </span>
       {file.modified && (
-        <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" title="Unsaved changes" />
+        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse flex-shrink-0" title="Unsaved changes" />
       )}
       <button
         onClick={(e) => {
           e.stopPropagation()
           onClose(file.path)
         }}
-        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-white/10 rounded transition-opacity"
+        className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-white/15 rounded-full transition-all"
       >
-        <FontAwesomeIcon icon={faXmark} className="w-3 h-3 text-text-tertiary" />
+        <FontAwesomeIcon icon={faXmark} className="w-2.5 h-2.5 text-white/50 hover:text-white/80" />
       </button>
     </div>
   )
@@ -175,9 +187,11 @@ export default function CodeView({ entityId }) {
   const [expandedFolders, setExpandedFolders] = useState(new Set())
   const [highlights, setHighlights] = useState({}) // {filePath: [{line, endLine, color, note}]}
   const [loading, setLoading] = useState(false)
+  const [loadingFolders, setLoadingFolders] = useState(new Set())
   const [pendingFileHandled, setPendingFileHandled] = useState(null)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
@@ -302,6 +316,52 @@ export default function CodeView({ entityId }) {
     return () => window.removeEventListener('iris:code:open', handleCodeOpen)
   }, [entityId, loadFile])
 
+  // Helper to update children in the tree
+  const updateTreeChildren = useCallback((tree, targetPath, children) => {
+    if (!tree) return tree
+    if (tree.path === targetPath) {
+      return { ...tree, children }
+    }
+    if (tree.children) {
+      return {
+        ...tree,
+        children: tree.children.map(child => updateTreeChildren(child, targetPath, children))
+      }
+    }
+    return tree
+  }, [])
+
+  // Find node in tree
+  const findNode = useCallback((tree, targetPath) => {
+    if (!tree) return null
+    if (tree.path === targetPath) return tree
+    if (tree.children) {
+      for (const child of tree.children) {
+        const found = findNode(child, targetPath)
+        if (found) return found
+      }
+    }
+    return null
+  }, [])
+
+  // Load folder children on-demand
+  const loadFolderChildren = useCallback(async (folderPath) => {
+    setLoadingFolders(prev => new Set([...prev, folderPath]))
+    try {
+      const response = await fetch(`${API_URL}/api/folder?path=${encodeURIComponent(folderPath)}&showHidden=${showHidden}`)
+      const children = await response.json()
+      setFileTree(prev => updateTreeChildren(prev, folderPath, children))
+    } catch (err) {
+      console.error('Failed to load folder children:', err)
+    } finally {
+      setLoadingFolders(prev => {
+        const next = new Set(prev)
+        next.delete(folderPath)
+        return next
+      })
+    }
+  }, [showHidden, updateTreeChildren])
+
   // Toggle folder expansion
   const toggleFolder = useCallback((path) => {
     setExpandedFolders(prev => {
@@ -310,10 +370,15 @@ export default function CodeView({ entityId }) {
         next.delete(path)
       } else {
         next.add(path)
+        // Check if folder needs children loaded
+        const node = findNode(fileTree, path)
+        if (node && node.type === 'directory' && (!node.children || node.children.length === 0)) {
+          loadFolderChildren(path)
+        }
       }
       return next
     })
-  }, [])
+  }, [fileTree, findNode, loadFolderChildren])
 
   // Close file tab
   const closeFile = useCallback((path) => {
@@ -473,78 +538,128 @@ export default function CodeView({ entityId }) {
   }, [loadDirectory, entity?.pendingFile])
 
   return (
-    <div className="absolute inset-0 flex overflow-hidden bg-bg-secondary">
-      {/* File tree sidebar */}
-      <div className="w-56 flex-shrink-0 flex flex-col border-r border-white/10 bg-black/30">
+    <div className="absolute inset-0 flex overflow-hidden">
+      {/* File tree sidebar - liquid glass */}
+      <div
+        className={`flex-shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl transition-all duration-200 ${
+          sidebarCollapsed ? 'w-10' : 'w-60'
+        }`}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
-          <span className="text-xs font-medium text-text-secondary uppercase tracking-wide">Explorer</span>
-          <div className="flex gap-1">
+        <div className={`flex items-center border-b border-white/8 ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'justify-between px-3 py-2'}`}>
+          {!sidebarCollapsed && (
+            <span className="text-xs font-medium text-white/50 uppercase tracking-wider">Explorer</span>
+          )}
+          <div className={`flex ${sidebarCollapsed ? 'flex-col gap-1' : 'gap-0.5'}`}>
             <button
-              onClick={() => {
-                const newVal = !showHidden
-                setShowHidden(newVal)
-                if (rootPath) loadDirectory(rootPath, newVal)
-              }}
-              className={`p-1 hover:bg-white/10 rounded transition-colors ${showHidden ? 'text-accent' : ''}`}
-              title={showHidden ? "Hide hidden files" : "Show hidden files"}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <FontAwesomeIcon icon={showHidden ? faEye : faEyeSlash} className="w-3 h-3 text-text-tertiary" />
+              <FontAwesomeIcon icon={sidebarCollapsed ? faChevronRight : faChevronLeft} className="w-3 h-3" />
             </button>
-            <button
-              onClick={() => rootPath && loadDirectory(rootPath)}
-              className="p-1 hover:bg-white/10 rounded transition-colors"
-              title="Refresh"
-            >
-              <FontAwesomeIcon icon={faRefresh} className="w-3 h-3 text-text-tertiary" />
-            </button>
+            {!sidebarCollapsed && (
+              <>
+                <button
+                  onClick={() => {
+                    const newVal = !showHidden
+                    setShowHidden(newVal)
+                    if (rootPath) loadDirectory(rootPath, newVal)
+                  }}
+                  className={`p-1.5 rounded-lg transition-all duration-150 ${showHidden ? 'bg-white/10 text-accent' : 'hover:bg-white/8 text-white/40'}`}
+                  title={showHidden ? "Hide hidden files" : "Show hidden files"}
+                >
+                  <FontAwesomeIcon icon={showHidden ? faEye : faEyeSlash} className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => rootPath && loadDirectory(rootPath)}
+                  className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
+                  title="Refresh"
+                >
+                  <FontAwesomeIcon icon={faRefresh} className="w-3 h-3" />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Path input with folder picker */}
-        <div className="px-2 py-2 border-b border-white/10">
-          <div className="flex gap-1">
-            <input
-              type="text"
-              value={rootPath || ''}
-              onChange={(e) => loadDirectory(e.target.value)}
-              placeholder="Path..."
-              className="flex-1 px-2 py-1 bg-black/40 border border-white/10 rounded text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50"
-            />
+        {/* Path input with folder picker - hidden when collapsed */}
+        {!sidebarCollapsed && (
+          <div className="px-2 py-2 border-b border-white/8">
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={rootPath || ''}
+                onChange={(e) => loadDirectory(e.target.value)}
+                placeholder="Path..."
+                className="flex-1 min-w-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/85 placeholder:text-white/30 focus:outline-none focus:bg-white/8 focus:border-white/20 transition-all"
+              />
+              <button
+                onClick={async () => {
+                  const selectedPath = await window.iris?.selectFolder()
+                  if (selectedPath) loadDirectory(selectedPath)
+                }}
+                className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white/8 border border-white/10 rounded-lg text-white/60 hover:bg-white/12 hover:text-white/80 transition-all"
+                title="Browse folder"
+              >
+                <FontAwesomeIcon icon={faFolderTree} className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tree - hidden when collapsed */}
+        {!sidebarCollapsed && (
+          <div className="flex-1 overflow-y-auto overflow-x-hidden py-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+            {loading && (
+              <div className="p-6 text-center text-white/40 text-sm">
+                <div className="animate-pulse">Loading...</div>
+              </div>
+            )}
+            {!loading && fileTree && (
+              <TreeNode
+                node={fileTree}
+                onFileClick={loadFile}
+                expandedFolders={expandedFolders}
+                toggleFolder={toggleFolder}
+                loadingFolders={loadingFolders}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Collapsed state - show folder icon to expand */}
+        {sidebarCollapsed && (
+          <div className="flex-1 flex flex-col items-center pt-2 gap-1">
             <button
               onClick={async () => {
                 const selectedPath = await window.iris?.selectFolder()
-                if (selectedPath) loadDirectory(selectedPath)
+                if (selectedPath) {
+                  loadDirectory(selectedPath)
+                  setSidebarCollapsed(false)
+                }
               }}
-              className="px-2 py-1 bg-accent/20 border border-accent/30 rounded text-accent hover:bg-accent/30 transition-colors"
+              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
               title="Browse folder"
             >
-              <FontAwesomeIcon icon={faFolderTree} className="w-3 h-3" />
+              <FontAwesomeIcon icon={faFolderTree} className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => rootPath && loadDirectory(rootPath)}
+              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
+              title="Refresh"
+            >
+              <FontAwesomeIcon icon={faRefresh} className="w-3 h-3" />
             </button>
           </div>
-        </div>
-
-        {/* Tree */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {loading && (
-            <div className="p-4 text-center text-text-tertiary text-sm">Loading...</div>
-          )}
-          {!loading && fileTree && (
-            <TreeNode
-              node={fileTree}
-              onFileClick={loadFile}
-              expandedFolders={expandedFolders}
-              toggleFolder={toggleFolder}
-            />
-          )}
-        </div>
+        )}
       </div>
 
       {/* Editor area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-black/30">
         {/* Tab bar */}
         {openFiles.length > 0 && (
-          <div className="flex-shrink-0 flex items-center border-b border-white/10 bg-black/20 overflow-x-auto">
+          <div className="flex-shrink-0 flex items-end pt-1.5 px-1 border-b border-white/8 bg-black/20 overflow-x-auto scrollbar-none">
             {openFiles.map(file => (
               <EditorTab
                 key={file.path}
@@ -586,10 +701,11 @@ export default function CodeView({ entityId }) {
               />
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-text-tertiary">
-              <div className="text-center">
-                <p className="text-lg mb-2">No file open</p>
-                <p className="text-sm opacity-70">Select a file from the explorer</p>
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center text-white/30">
+                <FontAwesomeIcon icon={faFile} className="w-12 h-12 mb-4 opacity-30" />
+                <p className="text-base mb-1">No file open</p>
+                <p className="text-sm opacity-60">Select a file from the explorer</p>
               </div>
             </div>
           )}

@@ -187,6 +187,50 @@ const oauthServer = http.createServer(async (req, res) => {
     return
   }
 
+  // API: Get folder children (lazy loading for deep folders)
+  if (url.pathname === '/api/folder') {
+    const dirPath = url.searchParams.get('path')
+    const showHidden = url.searchParams.get('showHidden') === 'true'
+    if (!dirPath) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Missing path parameter' }))
+      return
+    }
+    try {
+      const stats = await fs.promises.stat(dirPath)
+      if (!stats.isDirectory()) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Path is not a directory' }))
+        return
+      }
+      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+      // Sort: folders first, then files, alphabetically
+      entries.sort((a, b) => {
+        if (a.isDirectory() && !b.isDirectory()) return -1
+        if (!a.isDirectory() && b.isDirectory()) return 1
+        return a.name.localeCompare(b.name)
+      })
+      // Filter common ignores
+      const filtered = entries.filter(e => {
+        if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) return false
+        if (!showHidden && e.name.startsWith('.')) return false
+        return true
+      })
+      const children = filtered.map(entry => ({
+        name: entry.name,
+        path: path.join(dirPath, entry.name),
+        type: entry.isDirectory() ? 'directory' : 'file',
+        children: entry.isDirectory() ? [] : undefined
+      }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(children))
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message }))
+    }
+    return
+  }
+
   // API: Get file content
   if (url.pathname === '/api/file' && req.method === 'GET') {
     const filePath = url.searchParams.get('path')
