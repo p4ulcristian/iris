@@ -178,6 +178,29 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     // Intercept keyboard shortcuts before xterm handles them
     const handleShortcut = (e) => {
       const key = e.key.toLowerCase()
+
+      // DEBUG: Log all key events with modifiers
+      if (key === 'c') {
+        console.log('C key pressed:', {
+          key,
+          metaKey: e.metaKey,
+          ctrlKey: e.ctrlKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          hasSelection: term.hasSelection(),
+          selection: term.getSelection()
+        })
+      }
+
+      // Super+C (Meta+C) to copy selection
+      if (e.metaKey && key === 'c' && term.hasSelection()) {
+        console.log('Meta+C handler triggered, copying:', term.getSelection())
+        e.preventDefault()
+        e.stopPropagation()
+        navigator.clipboard.writeText(term.getSelection())
+        return
+      }
+
       const isCtrlShortcut = e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
       const isAltShortcut = e.altKey && (
         ['n', 'k', ',', '.'].includes(key) ||
@@ -204,6 +227,18 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
 
     const container = containerRef.current
     container.addEventListener('keydown', handleShortcut, true)
+
+    // Bridge xterm selection to system clipboard
+    const handleCopy = (e) => {
+      if (term.hasSelection()) {
+        e.preventDefault()
+        e.clipboardData.setData('text/plain', term.getSelection())
+      }
+    }
+    container.addEventListener('copy', handleCopy, true)
+    if (textarea) {
+      textarea.addEventListener('copy', handleCopy, true)
+    }
 
     // ResizeObserver: measure actual container size and resize terminal
     const resizeObserver = new ResizeObserver((entries) => {

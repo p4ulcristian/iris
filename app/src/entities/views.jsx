@@ -81,7 +81,7 @@ export const ENTITY_VIEWS = {
   },
   'youtube-music': {
     component: YouTubeMusicView,
-    props: () => ({})
+    props: (entity) => ({ entityId: entity.id })
   },
   messenger: {
     component: MessengerView,

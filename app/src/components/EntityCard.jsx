@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons'
 import { EntityIcon } from '../entities'
 
 // Convert hex to RGB for CSS (comma-separated)
@@ -39,8 +39,11 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
   const [showMoveMenu, setShowMoveMenu] = useState(false)
   const [isSummoning, setIsSummoning] = useState(true)
   const [isTileDragging, setIsTileDragging] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const moveMenuRef = useRef(null)
   const cardRef = useRef(null)
+
+  const COLLAPSED_HEIGHT = 120
 
   // Clear summon glow after animation completes
   useEffect(() => {
@@ -153,16 +156,18 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       <div
         ref={cardRef}
         onClick={() => !isAltHeld && onClick()}
-        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isTileDragging ? 'opacity-50' : ''}`}
+        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing overflow-hidden flex flex-col ${isTileDragging ? 'opacity-50' : ''}`}
         style={{
           '--god-color': entityColor,
           '--god-color-rgb': hexToRgbCss(entityColor),
           borderRadius: '12px 16px 16px 12px',
           borderRight: `6px solid ${isActive ? entityColor : entityColor + '66'}`,
+          height: isExpanded ? 'auto' : COLLAPSED_HEIGHT,
+          transition: 'height 0.25s ease-out',
         }}
       >
-      {/* Header row */}
-      <div className="flex items-center h-8 px-3 gap-2">
+      {/* Header row - fixed */}
+      <div className="flex items-center h-8 px-3 gap-2 shrink-0">
         {/* Type icon */}
         <EntityIcon type={type} />
         <span className="text-sm font-medium text-white truncate flex-1">
@@ -245,39 +250,60 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
         </button>
       </div>
 
-      {/* Content */}
-      <div className="px-3 pb-2">
-        {/* Title (goal) */}
-        {displayTitle && (
-          <span className="text-sm block font-medium text-white/90">
-            {displayTitle}
-          </span>
-        )}
-        {/* Status (current action) */}
-        {displayStatus && (
-          <span className="text-xs mt-0.5 block text-white/60">
-            {displayStatus}
-          </span>
-        )}
-        {/* Pills row - status & time */}
-        {(statusPill || elapsed !== null) && (
-          <div className="flex items-center justify-between mt-2 gap-2">
-            {/* Status pill */}
-            {statusPill && (
-              <span className={`liquid-glass-pill ${statusPill.className}`}>
-                <FontAwesomeIcon icon={statusPill.icon} size="xs" />
-                {statusPill.label}
-              </span>
-            )}
-            <div className="flex-1" />
-            {/* Time pill */}
-            {elapsed !== null && (
-              <span className="liquid-glass-pill text-white/70 font-mono">
-                {formatElapsed(elapsed)}
-              </span>
-            )}
-          </div>
-        )}
+      {/* Content wrapper */}
+      <div className="flex flex-col flex-1 min-h-0">
+        {/* Text content area - clips when collapsed */}
+        <div
+          className="flex-1 px-3 overflow-hidden min-h-0"
+          style={!isExpanded ? {
+            maskImage: 'linear-gradient(to bottom, black 0%, black 70%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 70%, transparent 100%)',
+          } : undefined}
+        >
+          {/* Title (goal) */}
+          {displayTitle && (
+            <span className="text-sm block font-medium text-white/90">
+              {displayTitle}
+            </span>
+          )}
+          {/* Status (current action) */}
+          {displayStatus && (
+            <span className="text-xs mt-0.5 block text-white/60">
+              {displayStatus}
+            </span>
+          )}
+        </div>
+        {/* Pills row - fixed at bottom, always visible */}
+        <div className="flex items-center px-3 pb-2 pt-1 gap-2 shrink-0">
+          {/* Status pill */}
+          {statusPill && (
+            <span className={`liquid-glass-pill ${statusPill.className}`}>
+              <FontAwesomeIcon icon={statusPill.icon} size="xs" />
+              {statusPill.label}
+            </span>
+          )}
+          <div className="flex-1" />
+          {/* Time pill */}
+          {elapsed !== null && (
+            <span className="liquid-glass-pill text-white/70 font-mono">
+              {formatElapsed(elapsed)}
+            </span>
+          )}
+          {/* Expand/collapse button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsExpanded(!isExpanded)
+            }}
+            className="liquid-glass-pill h-[22px] px-2 text-white/70 hover:text-white hover:bg-white/20 transition-colors cursor-pointer"
+            title={isExpanded ? 'Collapse' : 'Expand'}
+          >
+            <FontAwesomeIcon
+              icon={isExpanded ? faChevronUp : faChevronDown}
+              size="xs"
+            />
+          </button>
+        </div>
       </div>
       </div>
     </motion.div>

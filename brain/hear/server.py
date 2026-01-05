@@ -303,6 +303,168 @@ def chronicle_recent():
     return jsonify({"lines": [l.strip() for l in recent]})
 
 
+@app.route('/chronicle/history', methods=['GET'])
+def chronicle_history():
+    """Get paginated transcript history with cursor-based navigation.
+
+    Query params:
+        cursor: ISO timestamp (e.g., "2026-01-05T16:38:08") - omit for newest
+        count: Number of lines to fetch (default 20, max 100)
+        direction: "before" (older) or "after" (newer), default "before"
+    """
+    from datetime import datetime
+    from chronicle import TRANSCRIPT_DIR
+
+    cursor_str = request.args.get('cursor')
+    count = min(request.args.get('count', 20, type=int), 100)
+    direction = request.args.get('direction', 'before')
+
+    # Parse cursor
+    cursor_dt = None
+    if cursor_str:
+        try:
+            cursor_dt = datetime.fromisoformat(cursor_str)
+        except ValueError:
+            return jsonify({"error": "Invalid cursor format"}), 400
+
+    # Get all transcript files sorted by date (newest first)
+    if not TRANSCRIPT_DIR.exists():
+        return jsonify({"lines": [], "nextCursor": None, "hasMore": False})
+
+    files = sorted(TRANSCRIPT_DIR.glob("*.txt"), reverse=True)
+    if not files:
+        return jsonify({"lines": [], "nextCursor": None, "hasMore": False})
+
+    def parse_line(line, file_date):
+        """Parse a transcript line into structured data."""
+        line = line.strip()
+        if not line:
+            return None
+
+        # Format: [HH:MM:SS] [input] text  or  [HH:MM:SS] text
+        if not line.startswith('['):
+            return None
+
+        try:
+            # Extract timestamp
+            time_end = line.index(']')
+            time_str = line[1:time_end]
+            rest = line[time_end + 1:].strip()
+
+            # Parse source if present
+            source = "ambient"
+            text = rest
+            if rest.startswith('['):
+                src_end = rest.index(']')
+                source = rest[1:src_end]
+                text = rest[src_end + 1:].strip()
+
+            # Build full timestamp
+            h, m, s = map(int, time_str.split(':'))
+            full_ts = datetime(file_date.year, file_date.month, file_date.day, h, m, s)
+
+            return {
+                "timestamp": full_ts.isoformat(),
+                "source": source,
+                "text": text
+            }
+        except (ValueError, IndexError):
+            return None
+
+    results = []
+    next_cursor = None
+    has_more = False
+
+    if direction == 'before':
+        # Going backwards in time (scroll up to load older)
+        for file_path in files:
+            try:
+                file_date = datetime.strptime(file_path.stem, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+
+            # Skip files newer than cursor date
+            if cursor_dt and file_date > cursor_dt.date():
+                continue
+
+            # Read and parse file
+            with open(file_path, 'r', encoding='utf-8') as f:
+                file_lines = f.readlines()
+
+            # Process lines in reverse (newest first within file)
+            for line in reversed(file_lines):
+                parsed = parse_line(line, file_date)
+                if not parsed:
+                    continue
+
+                line_dt = datetime.fromisoformat(parsed["timestamp"])
+
+                # Skip lines at or after cursor
+                if cursor_dt and line_dt >= cursor_dt:
+                    continue
+
+                results.append(parsed)
+
+                if len(results) >= count:
+                    # Check if there's more
+                    has_more = True
+                    next_cursor = parsed["timestamp"]
+                    break
+
+            if len(results) >= count:
+                break
+
+        # Check if we might have more history
+        if len(results) < count:
+            has_more = False
+            next_cursor = None
+        elif results:
+            next_cursor = results[-1]["timestamp"]
+
+    else:  # direction == 'after'
+        # Going forward in time (poll for new entries)
+        for file_path in reversed(files):  # oldest first
+            try:
+                file_date = datetime.strptime(file_path.stem, "%Y-%m-%d").date()
+            except ValueError:
+                continue
+
+            # Skip files older than cursor date
+            if cursor_dt and file_date < cursor_dt.date():
+                continue
+
+            with open(file_path, 'r', encoding='utf-8') as f:
+                file_lines = f.readlines()
+
+            for line in file_lines:
+                parsed = parse_line(line, file_date)
+                if not parsed:
+                    continue
+
+                line_dt = datetime.fromisoformat(parsed["timestamp"])
+
+                # Skip lines at or before cursor
+                if cursor_dt and line_dt <= cursor_dt:
+                    continue
+
+                results.append(parsed)
+
+                if len(results) >= count:
+                    has_more = True
+                    break
+
+            if len(results) >= count:
+                break
+
+        next_cursor = results[-1]["timestamp"] if results else None
+
+    return jsonify({
+        "lines": results,
+        "nextCursor": next_cursor,
+        "hasMore": has_more
+    })
+
+
 def main():
     """Start the server"""
     logger.info(f"Starting Iris Hear server on {HOST}:{PORT}")

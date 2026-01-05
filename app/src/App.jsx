@@ -7,6 +7,7 @@ import EntityGroup from './components/EntityGroup'
 import LeftWing from './components/LeftWing'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
+import ShortcutsPopup from './components/ShortcutsPopup'
 import DevPanel from './components/DevPanel'
 import HistoryView from './components/HistoryView'
 import BrowserView from './components/BrowserView'
@@ -68,6 +69,7 @@ export default function App() {
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   // Sidebar responsive breakpoint
   const SIDEBAR_BREAKPOINT = 900
@@ -580,6 +582,53 @@ export default function App() {
     focusedEntity, activeEntities,
     toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
+
+  // Alt key hold for shortcuts popup
+  useEffect(() => {
+    let altHeldTimer = null
+
+    const handleKeyDown = (e) => {
+      // Intercept bare Alt key to prevent terminal from reacting
+      if (e.key === 'Alt') {
+        e.preventDefault()
+        // Show shortcuts when Alt is held (but not if a modal is open)
+        if (!summonModalOpen && !confirmModal) {
+          // Small delay to avoid flickering on Alt+key combos
+          altHeldTimer = setTimeout(() => setShowShortcuts(true), 150)
+        }
+      } else if (e.altKey) {
+        // If another key is pressed with Alt, cancel showing shortcuts
+        clearTimeout(altHeldTimer)
+        setShowShortcuts(false)
+      }
+    }
+
+    const handleKeyUp = (e) => {
+      if (e.key === 'Alt') {
+        e.preventDefault()
+        clearTimeout(altHeldTimer)
+        setShowShortcuts(false)
+      }
+    }
+
+    const handleBlur = () => {
+      // Hide shortcuts if window loses focus (e.g., Alt+Tab)
+      clearTimeout(altHeldTimer)
+      setShowShortcuts(false)
+    }
+
+    // Use capture phase to intercept before terminal gets the event
+    window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('keyup', handleKeyUp, true)
+    window.addEventListener('blur', handleBlur)
+
+    return () => {
+      clearTimeout(altHeldTimer)
+      window.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('keyup', handleKeyUp, true)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [summonModalOpen, confirmModal])
 
   // Get ALL gods for persistent terminal rendering
   const allGods = getAllGods()
@@ -1159,6 +1208,9 @@ export default function App() {
         }}
         onCancel={() => setSummonModalOpen(false)}
       />
+
+      {/* Shortcuts popup (shown while Alt is held) */}
+      <ShortcutsPopup isOpen={showShortcuts} />
 
       {/* Dev panel */}
       <DevPanel />

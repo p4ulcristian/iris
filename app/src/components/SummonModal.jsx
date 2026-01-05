@@ -12,7 +12,7 @@ export default function SummonModal({
 }) {
   const [selectedGod, setSelectedGod] = useState('')
   const [task, setTask] = useState('')
-  const [selectedPersonality, setSelectedPersonality] = useState('gods')
+  const [selectedPersonality, setSelectedPersonality] = useState('god')
   const [personalities, setPersonalities] = useState([])
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
@@ -44,7 +44,7 @@ export default function SummonModal({
       const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
       setSelectedGod(randomGod)
       setTask('')
-      setSelectedPersonality('gods')
+      setSelectedPersonality('god')
       // Focus input after a brief delay for modal animation
       setTimeout(() => inputRef.current?.focus(), 50)
     }

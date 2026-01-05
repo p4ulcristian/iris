@@ -5,6 +5,9 @@ import { appState, saveState, broadcastState, broadcast, applySettingsToEnv, gen
 import { startService, stopService, startChronicle, stopChronicle } from './services.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from './gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, ptyProcesses, getOutputBuffer, clearOutputBuffer, killPty } from './pty.js'
+import { execSync } from 'child_process'
+import { ZELLIJ_BIN, ZELLIJ_CONFIG_DIR } from './config.js'
+import { getSessionName } from './gods.js'
 import { listSessions } from './history.js'
 import * as git from './git.js'
 import * as linear from './linear.js'
@@ -322,6 +325,193 @@ export function handleMessage(ws, msg, projectRoot) {
       } else if (service && SERVICES[service]) {
         stopService(service)
       }
+      break
+    }
+
+    // MCP Integration - run commands in god terminals
+    case 'mcp:run': {
+      const { requestId, godName, terminalName, command } = data
+      if (!requestId || !command) {
+        ws.send(JSON.stringify({
+          event: 'mcp:run:response',
+          requestId,
+          error: 'Missing requestId or command'
+        }))
+        break
+      }
+
+      const targetGodName = godName || 'Hermes'
+      const targetTerminalName = terminalName || `Terminal of ${targetGodName}`
+
+      // Terminal ID follows createTerminalSession naming: sanitized + capitalized first letter
+      const sanitized = targetTerminalName.toLowerCase().replace(/[^a-z0-9]/g, '-')
+      const terminalId = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
+
+      // Check if MCP terminal for this god already exists
+      let terminal = appState.entities[terminalId]
+      let actualTerminalId = terminalId
+
+      if (!terminal) {
+        // Create a new terminal for this god
+        clearOutputBuffer(terminalId)
+        const created = createTerminalSession({
+          command: null,  // Just bash
+          name: targetTerminalName,
+          color: '#00ff88',  // MCP green
+          cwd: projectRoot
+        }, projectRoot)
+
+        if (created && !created.exists) {
+          // createTerminalSession uses its own naming, so use what it returns
+          actualTerminalId = created.name
+
+          appState.entities[actualTerminalId] = {
+            id: actualTerminalId,
+            type: 'terminal',
+            name: created.displayName || targetTerminalName,
+            tabId: appState.activeTabId,
+            order: getNextOrder(appState.activeTabId),
+            spawnedAt: Date.now(),
+            color: '#00ff88',
+            mcpGod: targetGodName
+          }
+
+          // Create a new stage for this entity
+          const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+          if (tab) {
+            const stageId = generateStageId()
+            const tileNode = layout.createTile([actualTerminalId], actualTerminalId)
+            const newStage = { id: stageId, layout: tileNode }
+            tab.stages.push(newStage)
+            tab.activeStageId = stageId
+            appState.focusedTile = tileNode.id
+          }
+
+          appState.focusedEntity = actualTerminalId
+          saveState()
+          broadcastState()
+          terminal = appState.entities[actualTerminalId]
+        }
+      }
+
+      // Send command directly to Zellij session (bypasses PTY attachment requirement)
+      const sessionName = getSessionName(actualTerminalId)
+      const fs = require('fs')
+      const outputFile = `/tmp/iris-mcp-${requestId}.out`
+      const exitFile = `/tmp/iris-mcp-${requestId}.exit`
+
+      // Helper to send command to zellij using byte values (write-chars doesn't handle newlines)
+      const sendToZellij = (cmd) => {
+        try {
+          // Convert command to byte values
+          const bytes = []
+          for (let i = 0; i < cmd.length; i++) {
+            bytes.push(cmd.charCodeAt(i))
+          }
+          bytes.push(13) // Add Enter key (carriage return)
+
+          const byteArgs = bytes.join(' ')
+          execSync(`"${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" -s "${sessionName}" action write ${byteArgs}`, {
+            timeout: 5000,
+            stdio: 'pipe'
+          })
+          return true
+        } catch (e) {
+          console.error('Failed to send to zellij:', e.message)
+          return false
+        }
+      }
+
+      // Wait a bit for new terminals to initialize, then send command
+      const initDelay = terminal ? 100 : 1500
+      setTimeout(() => {
+        // First send Ctrl+C to clear any stuck input (important for session recovery)
+        try {
+          execSync(`"${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" -s "${sessionName}" action write 3`, {
+            timeout: 1000,
+            stdio: 'pipe'
+          })
+        } catch {}
+
+        // Small delay after Ctrl+C
+        setTimeout(() => {
+          // Wrap command to capture output to a file (more reliable than dump-screen)
+          // Use a subshell to capture both stdout and stderr
+          const wrappedCommand = `( ${command} ) > "${outputFile}" 2>&1; echo $? > "${exitFile}"`
+
+          const success = sendToZellij(wrappedCommand)
+
+          if (!success) {
+            ws.send(JSON.stringify({
+              event: 'mcp:run:response',
+              requestId,
+              terminalId: actualTerminalId,
+              godName: targetGodName,
+              output: 'Failed to send command to terminal.'
+            }))
+            return
+          }
+
+          // Poll for output file (command may take varying time)
+          let attempts = 0
+          const maxAttempts = 30  // 30 * 200ms = 6 seconds max
+          const pollInterval = setInterval(() => {
+            attempts++
+
+            // Check if exit file exists (command completed)
+            if (fs.existsSync(exitFile)) {
+              clearInterval(pollInterval)
+
+              let output = ''
+              let exitCode = '0'
+
+              try {
+                if (fs.existsSync(outputFile)) {
+                  output = fs.readFileSync(outputFile, 'utf-8').trim()
+                  fs.unlinkSync(outputFile)
+                }
+                exitCode = fs.readFileSync(exitFile, 'utf-8').trim()
+                fs.unlinkSync(exitFile)
+              } catch (e) {
+                console.error('Error reading output files:', e.message)
+              }
+
+              // Truncate if too long
+              if (output.length > 10000) {
+                output = output.slice(0, 10000) + '\n... (truncated)'
+              }
+
+              ws.send(JSON.stringify({
+                event: 'mcp:run:response',
+                requestId,
+                terminalId: actualTerminalId,
+                godName: targetGodName,
+                exitCode: parseInt(exitCode) || 0,
+                output: output || '(No output)'
+              }))
+              return
+            }
+
+            // Timeout after max attempts
+            if (attempts >= maxAttempts) {
+              clearInterval(pollInterval)
+
+              // Clean up any partial files
+              try { fs.unlinkSync(outputFile) } catch {}
+              try { fs.unlinkSync(exitFile) } catch {}
+
+              ws.send(JSON.stringify({
+                event: 'mcp:run:response',
+                requestId,
+                terminalId: actualTerminalId,
+                godName: targetGodName,
+                output: '(Command timed out - may still be running in Iris terminal)'
+              }))
+            }
+          }, 200)
+        }, 100)  // 100ms delay after Ctrl+C
+      }, initDelay)
+
       break
     }
 

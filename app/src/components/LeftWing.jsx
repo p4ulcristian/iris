@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -25,29 +25,142 @@ function Spinner() {
 function ChronicleButton() {
   const [open, setOpen] = useState(false)
   const [lines, setLines] = useState([])
+  const [cursor, setCursor] = useState(null)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   const [status, setStatus] = useState({ running: false, volume: 0, start_time: null })
-  const menuRef = useRef(null)
 
-  // Fetch recent lines when opened, auto-refresh every 3s
+  const menuRef = useRef(null)
+  const scrollRef = useRef(null)
+  const loadMoreRef = useRef(null)
+  const prevScrollHeight = useRef(0)
+
+  // Fetch history with cursor-based pagination
+  const fetchHistory = useCallback((reset = false) => {
+    const params = new URLSearchParams({ count: '20', direction: 'before' })
+    if (cursor && !reset) {
+      params.set('cursor', cursor)
+    }
+
+    return fetch(`http://127.0.0.1:8766/chronicle/history?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (reset) {
+          setLines(data.lines || [])
+        } else {
+          // Prepend older lines
+          setLines(prev => [...(data.lines || []), ...prev])
+        }
+        setCursor(data.nextCursor)
+        setHasMore(data.hasMore)
+        return data
+      })
+      .catch(() => {
+        if (reset) setLines([])
+        setHasMore(false)
+      })
+  }, [cursor])
+
+  // Initial load when opened
   useEffect(() => {
     if (!open) return
 
-    const fetchData = () => {
-      fetch('http://127.0.0.1:8766/chronicle/recent?count=5')
-        .then(r => r.json())
-        .then(data => setLines(data.lines || []))
-        .catch(() => setLines([]))
+    setInitialLoading(true)
+    setCursor(null)
+    setHasMore(true)
 
+    fetch('http://127.0.0.1:8766/chronicle/history?count=20&direction=before')
+      .then(r => r.json())
+      .then(data => {
+        setLines(data.lines || [])
+        setCursor(data.nextCursor)
+        setHasMore(data.hasMore)
+        setInitialLoading(false)
+
+        // Scroll to bottom after initial load
+        setTimeout(() => {
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+          }
+        }, 50)
+      })
+      .catch(() => {
+        setLines([])
+        setHasMore(false)
+        setInitialLoading(false)
+      })
+  }, [open])
+
+  // Poll for new entries and status
+  useEffect(() => {
+    if (!open || initialLoading) return
+
+    const pollNew = () => {
+      // Get newest line's timestamp
+      const newestTs = lines.length > 0 ? lines[lines.length - 1]?.timestamp : null
+
+      if (newestTs) {
+        const params = new URLSearchParams({
+          cursor: newestTs,
+          count: '10',
+          direction: 'after'
+        })
+        fetch(`http://127.0.0.1:8766/chronicle/history?${params}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.lines?.length) {
+              setLines(prev => [...prev, ...data.lines])
+            }
+          })
+          .catch(() => {})
+      }
+
+      // Status for volume bar
       fetch('http://127.0.0.1:8766/chronicle/status')
         .then(r => r.json())
         .then(data => setStatus(data))
         .catch(() => {})
     }
 
-    fetchData()
-    const interval = setInterval(fetchData, 500)  // Faster refresh for volume
+    const interval = setInterval(pollNew, 1000)
     return () => clearInterval(interval)
-  }, [open])
+  }, [open, initialLoading, lines])
+
+  // IntersectionObserver for loading older entries when scrolling up
+  useEffect(() => {
+    if (!open || !loadMoreRef.current || loadingMore || !hasMore || initialLoading) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          // Save scroll height before loading
+          if (scrollRef.current) {
+            prevScrollHeight.current = scrollRef.current.scrollHeight
+          }
+
+          setLoadingMore(true)
+          fetchHistory(false).finally(() => setLoadingMore(false))
+        }
+      },
+      { threshold: 0.1, root: scrollRef.current }
+    )
+
+    observer.observe(loadMoreRef.current)
+    return () => observer.disconnect()
+  }, [open, loadingMore, hasMore, initialLoading, fetchHistory])
+
+  // Preserve scroll position when prepending content
+  useEffect(() => {
+    if (scrollRef.current && prevScrollHeight.current > 0 && !initialLoading) {
+      const newScrollHeight = scrollRef.current.scrollHeight
+      const scrollDiff = newScrollHeight - prevScrollHeight.current
+      if (scrollDiff > 0) {
+        scrollRef.current.scrollTop += scrollDiff
+      }
+      prevScrollHeight.current = 0
+    }
+  }, [lines, initialLoading])
 
   // Format elapsed time
   const formatTime = (startTime) => {
@@ -56,6 +169,41 @@ function ChronicleButton() {
     const mins = Math.floor(elapsed / 60)
     const secs = elapsed % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // Format relative time
+  const formatRelativeTime = (timestamp) => {
+    const now = new Date()
+    const ts = new Date(timestamp)
+    const diff = Math.floor((now - ts) / 1000)
+
+    if (diff < 60) return 'just now'
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+    return ts.toLocaleDateString()
+  }
+
+  // Group lines by day
+  const groupByDay = (lines) => {
+    const groups = {}
+    for (const line of lines) {
+      const day = line.timestamp.split('T')[0]
+      if (!groups[day]) groups[day] = []
+      groups[day].push(line)
+    }
+    return groups
+  }
+
+  // Format day header
+  const formatDayHeader = (dateStr) => {
+    const date = new Date(dateStr)
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    if (dateStr === today.toISOString().split('T')[0]) return 'Today'
+    if (dateStr === yesterday.toISOString().split('T')[0]) return 'Yesterday'
+    return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
   // Close on outside click
@@ -70,6 +218,9 @@ function ChronicleButton() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
+  const grouped = groupByDay(lines)
+  const days = Object.keys(grouped).sort()  // oldest first (top)
+
   return (
     <div className="relative" ref={menuRef}>
       <IconButton
@@ -80,26 +231,59 @@ function ChronicleButton() {
         title="Chronicle preview"
       />
       {open && (
-        <div className="absolute left-full bottom-0 ml-2 min-w-[280px] max-w-[400px] liquid-glass-popup p-3 z-50">
-          {lines.length === 0 ? (
-            <p className="text-white/40 text-xs">No recent transcripts</p>
-          ) : (
-            <ul className="space-y-2 mb-3">
-              {lines.map((line, i) => (
-                <li key={i} className="text-xs text-white/70">{line}</li>
-              ))}
-            </ul>
-          )}
+        <div className="absolute left-full bottom-0 ml-2 w-[400px] max-h-[60vh] liquid-glass-popup flex flex-col z-50">
+          {/* Scrollable content */}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-3 min-h-[200px] max-h-[calc(60vh-60px)]"
+          >
+            {/* Load more sentinel at top */}
+            {hasMore && !initialLoading && (
+              <div ref={loadMoreRef} className="py-2 text-center">
+                {loadingMore && <Spinner />}
+              </div>
+            )}
 
-          {/* Volume bar and timer */}
-          <div className="flex items-center gap-3 pt-2 border-t border-white/10">
+            {initialLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <Spinner />
+              </div>
+            ) : lines.length === 0 ? (
+              <p className="text-white/40 text-xs text-center py-4">No transcripts yet</p>
+            ) : (
+              <div className="space-y-3">
+                {days.map(day => (
+                  <div key={day}>
+                    <div className="sticky top-0 text-[10px] text-white/40 py-1 bg-inherit backdrop-blur-sm z-10">
+                      {formatDayHeader(day)}
+                    </div>
+                    <ul className="space-y-1.5">
+                      {grouped[day].map((line, i) => (
+                        <li
+                          key={`${line.timestamp}-${i}`}
+                          className={`text-xs ${line.source === 'input' ? 'text-blue-300/80' : 'text-white/60'}`}
+                          title={new Date(line.timestamp).toLocaleTimeString()}
+                        >
+                          <span className="text-white/30 mr-1.5">
+                            {new Date(line.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {line.text}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Volume bar and timer - always visible footer */}
+          <div className="flex items-center gap-3 p-3 border-t border-white/10">
             <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden relative">
-              {/* Volume level */}
               <div
                 className="h-full bg-green-500 transition-all duration-100"
                 style={{ width: `${(status.volume || 0) * 100}%` }}
               />
-              {/* VAD indicator line */}
               <div
                 className="absolute top-0 h-full w-0.5 bg-yellow-400 transition-all duration-100"
                 style={{ left: `${(status.vad || 0) * 100}%` }}

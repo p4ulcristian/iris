@@ -27,6 +27,11 @@
   --color-accent: #888888;
 }
 
+/* Enable CSS transitions to/from auto, max-content, etc. */
+:root {
+  interpolate-size: allow-keywords;
+}
+
 /* Frameless window resize handles */
 .resize-handle {
   position: fixed;
