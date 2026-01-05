@@ -708,6 +708,46 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
+    case 'stages:reorder': {
+      // data.stageOrder: array of stage IDs in new order
+      // Stages are sorted by their first entity's order, so we update entity order values
+      const { stageOrder } = data
+      if (!Array.isArray(stageOrder)) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab?.stages) break
+
+      // For each stage in the new order, find its first entity and update its order
+      stageOrder.forEach((stageId, idx) => {
+        const stage = tab.stages.find(s => s.id === stageId)
+        if (!stage?.layout) return
+
+        // Collect all entity IDs in this stage
+        const collectEntityIds = (node) => {
+          if (!node) return []
+          if (node.type === 'tile') {
+            if (node.entityId) return [node.entityId]
+            if (node.entityIds?.length) return node.entityIds
+            return []
+          }
+          if (node.type === 'split' && node.children) {
+            return node.children.flatMap(child => collectEntityIds(child))
+          }
+          return []
+        }
+
+        const entityIds = collectEntityIds(stage.layout)
+        const firstEntityId = entityIds[0]
+        if (firstEntityId && appState.entities[firstEntityId]) {
+          appState.entities[firstEntityId].order = idx
+        }
+      })
+
+      saveState()
+      broadcastState()
+      break
+    }
+
     case 'nvim:spawn': {
       const terminal = createTerminalSession({
         command: 'nvim',

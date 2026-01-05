@@ -29,7 +29,7 @@ function formatElapsed(ms) {
 }
 
 
-export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0 }) {
+export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
@@ -123,28 +123,31 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
     <motion.div
       className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
       style={{ borderRadius: '12px 16px 16px 12px' }}
-      initial={{ opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
-      animate={{
+      initial={disableAnimation ? false : { opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
+      animate={disableAnimation ? {
+        opacity: isActive ? 1 : 0.6,
+        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
+      } : {
         opacity: shouldShow ? (isActive ? 1 : 0.6) : 0,
         y: shouldShow ? 0 : -40,
         scale: shouldShow ? 1 : 0.9,
         filter: shouldShow ? (isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)') : 'blur(8px)',
       }}
-      exit={{
+      exit={disableAnimation ? undefined : {
         opacity: 0,
         y: 30,
         scale: 0.85,
         filter: 'blur(12px)',
         transition: { duration: 0.15, ease: 'easeIn' }
       }}
-      transition={{
+      transition={disableAnimation ? { duration: 0.2 } : {
         type: 'spring',
         stiffness: 400,
         damping: 25,
         mass: 0.8,
         delay: staggerDelay,
       }}
-      layout="position"
+      layout={disableAnimation ? false : "position"}
     >
       {/* Draggable card wrapper for tile splitting */}
       <div

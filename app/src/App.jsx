@@ -847,7 +847,16 @@ export default function App() {
                       transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
                     >
                       {activeStages.length > 0 ? (
-                        <div className="flex flex-col gap-3">
+                        <Reorder.Group
+                          axis="y"
+                          values={activeStages}
+                          onReorder={(newOrder) => {
+                            // Extract stage IDs in new order and send to backend
+                            const stageOrder = newOrder.map(s => s.id)
+                            send({ event: 'stages:reorder', stageOrder })
+                          }}
+                          className="flex flex-col gap-3"
+                        >
                           {activeStages.map((stage, stageIdx) => {
                             const activeTab = tabs.find(t => t.id === activeTabId)
                             const isActiveStage = stage.id === activeTab?.activeStageId
@@ -882,7 +891,7 @@ export default function App() {
                               />
                             )
                           })}
-                        </div>
+                        </Reorder.Group>
                       ) : activeEntities.length > 0 ? (
                         /* Fallback: no stages data, render flat entity list */
                         <Reorder.Group
