@@ -3,7 +3,6 @@ import claudeIcon from '../assets/icons/claude.svg'
 import linearIcon from '../assets/icons/linear.png'
 import gitIcon from '../assets/icons/git.svg'
 import calendarIcon from '../assets/icons/google-calendar.svg'
-import nvimIcon from '../assets/icons/neovim.svg'
 import terminalIcon from '../assets/icons/terminal.svg'
 import browserIcon from '../assets/icons/chrome.svg'
 import vscodeIcon from '../assets/icons/vscode.svg'
@@ -17,7 +16,6 @@ export const ENTITY_TYPES = {
   browser:  { label: 'Browser',  description: 'Web browser',          icon: browserIcon, color: '#4285F4' },
   code:     { label: 'Code',     description: 'Code viewer',          icon: vscodeIcon,  color: '#007ACC' },
   git:      { label: 'Git',      description: 'Git repository view',  icon: gitIcon,     color: '#F05032' },
-  nvim:     { label: 'Nvim',     description: 'Neovim editor',        icon: nvimIcon,    color: '#57A143' },
   linear:   { label: 'Linear',   description: 'Linear issues',        icon: linearIcon,  color: '#5E6AD2' },
   history:  { label: 'History',  description: 'Session history',      faIcon: 'faClockRotateLeft', color: '#8B5CF6' },
   cemetery: { label: 'Cemetery', description: 'Fallen gods',          faIcon: 'faSkull', color: '#1F2937' },
@@ -29,6 +27,7 @@ export const ENTITY_TYPES = {
   messenger: { label: 'Messenger', description: 'Facebook Messenger', icon: messengerIcon, color: '#0099FF' },
   discord: { label: 'Discord', description: 'Discord', icon: discordIcon, color: '#5865F2' },
   rsvp: { label: 'RSVP', description: 'Speed reader', faIcon: 'faBook', color: '#10B981' },
+  markdown: { label: 'Markdown', description: 'Markdown viewer', faIcon: 'faFileLines', color: '#89b4fa' },
 }
 
 // List format for pickers/iteration

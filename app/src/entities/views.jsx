@@ -25,6 +25,7 @@ import MessengerView from '../components/MessengerView'
 import DiscordView from '../components/DiscordView'
 import PersonalitiesView from '../components/PersonalitiesView'
 import RSVPView from '../components/RSVPView'
+import MarkdownView from '../components/MarkdownView'
 
 /**
  * Entity Views Registry
@@ -96,6 +97,10 @@ export const ENTITY_VIEWS = {
   },
   rsvp: {
     component: RSVPView,
+    props: (entity) => ({ entityId: entity.id })
+  },
+  markdown: {
+    component: MarkdownView,
     props: (entity) => ({ entityId: entity.id })
   }
 }

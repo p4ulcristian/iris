@@ -20,6 +20,7 @@ import OracleView from './components/OracleView'
 import PersonalitiesView from './components/PersonalitiesView'
 import PersonalityEditor from './components/PersonalityEditor'
 import TraitEditor from './components/TraitEditor'
+import MarkdownView from './components/MarkdownView'
 import Surface from './components/Surface'
 import DraggableTypeButton from './components/DraggableTypeButton'
 import RootDropZone from './components/RootDropZone'
@@ -236,6 +237,11 @@ export default function App() {
       case 'code:file:open':
         // Dispatch window event for CodeView to handle
         window.dispatchEvent(new CustomEvent('iris:code:open', { detail: data }))
+        break
+
+      case 'md:file:open':
+        // Dispatch window event for MarkdownView to handle
+        window.dispatchEvent(new CustomEvent('iris:md:open', { detail: data }))
         break
 
       case 'warning':
@@ -812,6 +818,9 @@ export default function App() {
                               {entity.type === 'trait-editor' && (
                                 <TraitEditor entity={entity} />
                               )}
+                              {entity.type === 'markdown' && (
+                                <MarkdownView entityId={entity.id} />
+                              )}
                           </TileCard>
                         </motion.div>
                       )
@@ -1052,17 +1061,12 @@ export default function App() {
                                 onClick={() => handleSpawnEntity('rsvp')}
                               />
                             </div>
-                            {/* Row 2: Terminal, Nvim, Browser */}
+                            {/* Row 2: Terminal, Browser */}
                             <div className="flex gap-1.5">
                               <DraggableTypeButton
                                 entityType="terminal"
                                 title="New terminal (Alt+R) - drag to split"
                                 onClick={handleSpawnTerminal}
-                              />
-                              <DraggableTypeButton
-                                entityType="nvim"
-                                title="New nvim - drag to split"
-                                onClick={() => send({ event: 'nvim:spawn' })}
                               />
                               <DraggableTypeButton
                                 entityType="browser"

@@ -152,7 +152,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       {/* Draggable card wrapper for tile splitting */}
       <div
         ref={cardRef}
-        onMouseEnter={() => !isAltHeld && onClick()}
+        onClick={() => !isAltHeld && onClick()}
         className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing ${isTileDragging ? 'opacity-50' : ''}`}
         style={{
           '--god-color': entityColor,

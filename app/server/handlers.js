@@ -748,43 +748,6 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
-    case 'nvim:spawn': {
-      const terminal = createTerminalSession({
-        command: 'nvim',
-        name: data.name,
-        color: '#57A143'  // nvim green
-      }, projectRoot)
-      if (terminal && !terminal.exists) {
-        appState.entities[terminal.name] = {
-          id: terminal.name,
-          type: 'terminal',
-          name: terminal.displayName || terminal.name,
-          tabId: appState.activeTabId,
-          order: getNextOrder(appState.activeTabId),
-          spawnedAt: Date.now(),
-          color: terminal.color
-        }
-
-        // Create a new stage for this entity
-        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-        if (tab) {
-          const stageId = generateStageId()
-          const tileNode = layout.createTile([terminal.name], terminal.name)
-          const newStage = { id: stageId, layout: tileNode }
-          tab.stages.push(newStage)
-          tab.activeStageId = stageId
-          appState.focusedTile = tileNode.id
-        }
-
-        appState.focusedEntity = terminal.name
-        saveState()
-        broadcastState()
-      } else if (terminal?.exists) {
-        ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
-      }
-      break
-    }
-
     // History management
     case 'history:list': {
       listSessions(projectRoot, data.limit || 20, data.offset || 0).then(sessions => {
@@ -1464,6 +1427,69 @@ export function handleMessage(ws, msg, projectRoot) {
 
       saveState()
       broadcastState()
+      break
+    }
+
+    // Markdown viewer management
+    case 'md:open': {
+      const { filePath, entityId, forceNew } = data
+      if (!filePath) break
+
+      // Find or create a markdown entity
+      let mdEntity = entityId ? appState.entities[entityId] : null
+      let isNewEntity = false
+
+      if (!mdEntity && !forceNew) {
+        // Find first markdown entity in active tab
+        mdEntity = Object.values(appState.entities).find(
+          e => e.type === 'markdown' && e.tabId === appState.activeTabId
+        )
+      }
+
+      if (!mdEntity) {
+        // Create a new markdown entity
+        const newId = generateEntityId('markdown')
+        const num = getNextEntityNumber('markdown')
+        const fileName = path.basename(filePath)
+
+        appState.entities[newId] = {
+          id: newId,
+          type: 'markdown',
+          name: fileName,
+          tabId: appState.activeTabId,
+          order: getNextOrder(appState.activeTabId),
+          spawnedAt: Date.now()
+        }
+        mdEntity = appState.entities[newId]
+        isNewEntity = true
+
+        // Create a new stage for this entity
+        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+        if (tab) {
+          const stageId = generateStageId()
+          const tileNode = layout.createTile([newId], newId)
+          const newStage = { id: stageId, layout: tileNode }
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          appState.focusedTile = tileNode.id
+        }
+      }
+
+      // Store pending file in entity
+      mdEntity.pendingFile = filePath
+      mdEntity.name = path.basename(filePath)
+
+      appState.focusedEntity = mdEntity.id
+      saveState()
+      broadcastState()
+
+      // For existing entities, broadcast event
+      if (!isNewEntity) {
+        broadcast('md:file:open', {
+          entityId: mdEntity.id,
+          filePath
+        })
+      }
       break
     }
 
