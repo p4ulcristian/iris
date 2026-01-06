@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useLayoutEffect } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
+import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { generatePalette, getThemeTerminalSettings } from '../themes'
 import { useStore } from '../store'
 import { WS_URL } from '../config'
@@ -162,6 +163,10 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     term.open(containerRef.current)
     termRef.current = term
 
+    // Load clipboard addon for OSC 52 support (consistent across all platforms)
+    const clipboardAddon = new ClipboardAddon()
+    term.loadAddon(clipboardAddon)
+
     // Capture cell dimensions after first render for accurate sizing
     const onFirstRender = term.onRender(() => {
       onFirstRender.dispose()
@@ -179,30 +184,18 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const handleShortcut = (e) => {
       const key = e.key.toLowerCase()
 
-      // DEBUG: Log all key events with modifiers
-      if (key === 'c') {
-        console.log('C key pressed:', {
-          key,
-          metaKey: e.metaKey,
-          ctrlKey: e.ctrlKey,
-          altKey: e.altKey,
-          shiftKey: e.shiftKey,
-          hasSelection: term.hasSelection(),
-          selection: term.getSelection()
-        })
-      }
-
-      // Super+C (Meta+C) to copy selection
-      if (e.metaKey && key === 'c' && term.hasSelection()) {
-        console.log('Meta+C handler triggered, copying:', term.getSelection())
+      // Cmd+C (macOS) or Ctrl+Shift+C (Linux) to copy selection
+      const isCopyShortcut = (e.metaKey && key === 'c') || (e.ctrlKey && e.shiftKey && key === 'c')
+      if (isCopyShortcut && term.hasSelection()) {
         e.preventDefault()
         e.stopPropagation()
         navigator.clipboard.writeText(term.getSelection())
         return
       }
 
-      // Super+V (Meta+V) to paste from clipboard
-      if (e.metaKey && key === 'v') {
+      // Cmd+V (macOS) or Ctrl+Shift+V (Linux) to paste
+      const isPasteShortcut = (e.metaKey && key === 'v') || (e.ctrlKey && e.shiftKey && key === 'v')
+      if (isPasteShortcut) {
         e.preventDefault()
         e.stopPropagation()
         navigator.clipboard.readText().then(text => {
@@ -213,7 +206,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
         return
       }
 
-      const isCtrlShortcut = e.ctrlKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
+      const isCtrlShortcut = e.ctrlKey && !e.shiftKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
       const isAltShortcut = e.altKey && (
         ['n', 'k', ',', '.'].includes(key) ||
         (e.key >= '1' && e.key <= '9')
@@ -239,18 +232,6 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
 
     const container = containerRef.current
     container.addEventListener('keydown', handleShortcut, true)
-
-    // Bridge xterm selection to system clipboard
-    const handleCopy = (e) => {
-      if (term.hasSelection()) {
-        e.preventDefault()
-        e.clipboardData.setData('text/plain', term.getSelection())
-      }
-    }
-    container.addEventListener('copy', handleCopy, true)
-    if (textarea) {
-      textarea.addEventListener('copy', handleCopy, true)
-    }
 
     // ResizeObserver: measure actual container size and resize terminal
     const resizeObserver = new ResizeObserver((entries) => {
@@ -314,10 +295,8 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
       resizeObserver.disconnect()
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
-        textarea.removeEventListener('copy', handleCopy, true)
       }
       container.removeEventListener('keydown', handleShortcut, true)
-      container.removeEventListener('copy', handleCopy, true)
       term.dispose()
       ws.close()
     }

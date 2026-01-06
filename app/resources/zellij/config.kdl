@@ -15,7 +15,9 @@ show_startup_tips false
 pane_frames false
 default_layout "compact"
 simplified_ui true
+// Clipboard: use OSC 52 to system clipboard (handled by xterm addon)
 copy_on_select true
+copy_clipboard "system"
 // Disable session manager UI
 disable_session_metadata true
 // Use Kitty keyboard protocol to prevent Alt from toggling mouse mode
