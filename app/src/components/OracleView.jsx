@@ -9,8 +9,7 @@ import {
   faTrash
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
-
-const OLLAMA_BASE = 'http://localhost:11434'
+import { OLLAMA_URL } from '../config'
 
 function MessageBubble({ message, isUser }) {
   return (
@@ -129,7 +128,7 @@ export default function OracleView({ entityId }) {
     setModelsLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${OLLAMA_BASE}/api/tags`)
+      const response = await fetch(`${OLLAMA_URL}/api/tags`)
       if (!response.ok) throw new Error('Failed to fetch models')
       const data = await response.json()
       setModels(data.models || [])
@@ -163,7 +162,7 @@ export default function OracleView({ entityId }) {
     setMessages((prev) => [...prev, assistantMessage])
 
     try {
-      const response = await fetch(`${OLLAMA_BASE}/api/chat`, {
+      const response = await fetch(`${OLLAMA_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

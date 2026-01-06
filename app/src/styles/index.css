@@ -277,6 +277,59 @@ body.alt-held .terminal-content {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+.liquid-glass-pill-failed {
+  background: rgba(220, 38, 38, 0.25);
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #fca5a5;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 12px rgba(220, 38, 38, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.liquid-glass-pill-spawning {
+  background: rgba(147, 51, 234, 0.2);
+  border-color: rgba(147, 51, 234, 0.3);
+  color: #c084fc;
+  animation: spawning-text-pulse 1.2s ease-in-out infinite;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    0 0 12px rgba(147, 51, 234, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+@keyframes spawning-text-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Spawning card pulse animation */
+.spawning-pulse {
+  animation: spawning-card-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes spawning-card-pulse {
+  0%, 100% {
+    opacity: 0.7;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.1);
+  }
+}
+
+@keyframes spawning-glow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.7;
+  }
+}
+
 /* Focused state - brighter, lifted */
 .liquid-glass-focused {
   backdrop-filter: blur(30px) saturate(180%);

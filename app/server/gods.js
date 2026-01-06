@@ -191,10 +191,10 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
 
     if (systemContent) {
-      // Write to temp file to preserve newlines (shell args mangle them)
+      // Write to temp file - content has complex chars (backticks, code blocks)
+      // that are hard to escape through multiple shell layers
       personalityTempFile = path.join(os.tmpdir(), `iris-personality-${godKey}-${Date.now()}.md`)
       fs.writeFileSync(personalityTempFile, systemContent)
-      // Don't add to claudeArgs - we'll handle it separately in the command
     }
 
     // Get MCP config from personality
@@ -227,7 +227,6 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   try {
     // Create zellij session with claude command
-    // Build command parts separately to handle personality file with proper shell expansion
     let claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
 
     // Build extra flags for personality and MCP config
@@ -241,46 +240,70 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       extraFlags += ` --mcp-config '${escapedJson}'`
     }
 
-    // Add personality and MCP config to command
+    // Add extra flags to command
     if (extraFlags) {
       claudeCmd = `claude --dangerously-skip-permissions${extraFlags} ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
     }
 
-    // Step 1: Create detached zellij session in background
     const zellijEnv = {
       ...process.env,
       PATH: getExtendedPath(),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      GOD_NAME: name
+      GOD_NAME: name,
+      IRIS_HOME: IRIS_ROOT  // For brain module access: python -m brain.say
     }
 
-    spawnSync(ZELLIJ_BIN, ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
+    // Create temp layout file that runs Claude command directly
+    // This creates session + runs command in ONE atomic operation (no polling needed)
+    const layoutFile = path.join(os.tmpdir(), `iris-layout-${godKey}-${Date.now()}.kdl`)
+    const layoutContent = `layout {
+    pane command="bash" {
+        args "-c" "cd '${projectRoot.replace(/'/g, "'\\''")}' && ${claudeCmd.replace(/"/g, '\\"')}"
+    }
+}`
+    fs.writeFileSync(layoutFile, layoutContent)
+
+    // Create session with layout in background using shell subshell
+    // This runs zellij detached from the parent process, creating session + command atomically
+    const bgCmd = `("${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > /dev/null 2>&1 &)`
+    execSync(bgCmd, {
       cwd: projectRoot,
       env: zellijEnv,
-      stdio: 'ignore'
+      shell: true
     })
 
-    // Wait for session to be ready
-    sleepSync(500)
+    // Wait for session to actually exist (poll with timeout)
+    // This is the correct fix - don't assume, verify
+    const maxWaitMs = 5000
+    const pollIntervalMs = 100
+    let waited = 0
+    while (waited < maxWaitMs) {
+      if (sessionExists(godKey)) {
+        break
+      }
+      sleepSync(pollIntervalMs)
+      waited += pollIntervalMs
+    }
 
-    // Step 2: Run claude command in-place (replaces the default shell pane)
-    spawnSync(ZELLIJ_BIN, [
-      '--config-dir', ZELLIJ_CONFIG_DIR,
-      '-s', sessionName,
-      'run', '-i', '--',
-      'bash', '-c', `cd "${projectRoot}" && ${claudeCmd}`
-    ], {
-      env: zellijEnv,
-      stdio: 'ignore'
-    })
+    // Clean up layout file only after session confirmed (or timeout)
+    try { fs.unlinkSync(layoutFile) } catch {}
 
-    // Wait for session to be created
-    sleepSync(800)
+    // Verify session actually started
+    if (!sessionExists(godKey)) {
+      console.error(`[gods] Session ${sessionName} failed to start within ${maxWaitMs}ms`)
+      if (personalityTempFile) {
+        try { fs.unlinkSync(personalityTempFile) } catch {}
+      }
+      return null
+    }
 
-    // Clean up temp personality file
+    // Delayed cleanup of personality temp file
+    // The $(cat ...) runs inside zellij pane asynchronously, so we wait
     if (personalityTempFile) {
-      try { fs.unlinkSync(personalityTempFile) } catch {}
+      setTimeout(() => {
+        try { fs.unlinkSync(personalityTempFile) } catch {}
+      }, 5000)
     }
 
     return {
@@ -295,7 +318,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
   } catch (e) {
     console.error('Failed to create zellij session:', e)
-    // Clean up temp personality file on error
+    // Clean up temp file on error (no async process started)
     if (personalityTempFile) {
       try { fs.unlinkSync(personalityTempFile) } catch {}
     }

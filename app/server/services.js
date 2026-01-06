@@ -1,4 +1,5 @@
 import http from 'http'
+import fs from 'fs'
 import { spawn, execSync } from 'child_process'
 import { SERVICES } from './config.js'
 import { isPowersEnabled } from './state.js'
@@ -16,6 +17,7 @@ export const serviceStatus = {
   hear: false,
   chronicle: false,
   express: false,
+  draw: false,
   wake: false,
   ollama: false
 }
@@ -99,6 +101,7 @@ export async function checkAllServices() {
     checkServiceHealth('speak', SERVICES.speak.port),
     checkServiceHealth('hear', SERVICES.hear.port),
     checkServiceHealth('express', SERVICES.express.port),
+    checkServiceHealth('draw', SERVICES.draw.port),
     checkServiceHealth('wake', SERVICES.wake.port),
     checkServiceHealth('ollama', SERVICES.ollama.port)
   ])
@@ -106,8 +109,9 @@ export async function checkAllServices() {
   serviceStatus.speak = results[0]
   serviceStatus.hear = results[1]
   serviceStatus.express = results[2]
-  serviceStatus.wake = results[3]
-  serviceStatus.ollama = results[4]
+  serviceStatus.draw = results[3]
+  serviceStatus.wake = results[4]
+  serviceStatus.ollama = results[5]
 
   // Check chronicle status (depends on hear being up)
   const chronicleStatus = await checkChronicleStatus()
@@ -117,8 +121,9 @@ export async function checkAllServices() {
     serviceStatus.hear !== results[1] ||
     serviceStatus.chronicle !== chronicleStatus ||
     serviceStatus.express !== results[2] ||
-    serviceStatus.wake !== results[3] ||
-    serviceStatus.ollama !== results[4]
+    serviceStatus.draw !== results[3] ||
+    serviceStatus.wake !== results[4] ||
+    serviceStatus.ollama !== results[5]
   )
 
   serviceStatus.chronicle = chronicleStatus
@@ -172,15 +177,43 @@ export function startService(name, projectRoot) {
     const scriptPath = `${projectRoot}/${script}`
     const uvPath = process.env.HOME + '/.local/bin/uv'
 
-    proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
-      cwd: projectRoot,
-      detached: true,
-      stdio: 'ignore',
-      env: {
-        ...process.env,
-        CUDA_VISIBLE_DEVICES: '0'
+    // Draw service uses its own venv (created by setup.sh)
+    if (name === 'draw') {
+      const drawVenvPython = `${projectRoot}/brain/draw/.venv/bin/python`
+
+      if (fs.existsSync(drawVenvPython)) {
+        proc = spawn('setsid', [drawVenvPython, scriptPath], {
+          cwd: projectRoot,
+          detached: true,
+          stdio: 'ignore',
+          env: {
+            ...process.env,
+            CUDA_VISIBLE_DEVICES: '0'
+          }
+        })
+      } else {
+        // Fallback to uv run (will use dummy model)
+        proc = spawn('setsid', [uvPath, 'run', scriptPath], {
+          cwd: projectRoot,
+          detached: true,
+          stdio: 'ignore',
+          env: {
+            ...process.env,
+            CUDA_VISIBLE_DEVICES: '0'
+          }
+        })
       }
-    })
+    } else {
+      proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
+        cwd: projectRoot,
+        detached: true,
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          CUDA_VISIBLE_DEVICES: '0'
+        }
+      })
+    }
 
     proc.on('error', (err) => {
       console.error(`Service ${name} spawn error:`, err.message)

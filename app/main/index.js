@@ -16,6 +16,7 @@ if (!gotTheLock) {
 }
 
 let mainWindow = null
+let splashWindow = null
 let serverProcess = null
 
 function startServer() {
@@ -79,11 +80,50 @@ function stopServer() {
   }
 }
 
+function createSplash() {
+  console.log('[splash] Creating splash window...')
+  splashWindow = new BrowserWindow({
+    width: 300,
+    height: 200,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#0a0a0f',
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    center: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    }
+  })
+
+  const splashPath = path.join(__dirname, 'splash.html')
+  console.log('[splash] Loading:', splashPath)
+  splashWindow.loadFile(splashPath)
+  splashWindow.show()
+  console.log('[splash] Shown')
+
+  splashWindow.on('closed', () => {
+    console.log('[splash] Closed')
+    splashWindow = null
+  })
+}
+
+function closeSplash() {
+  console.log('[splash] closeSplash called')
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close()
+    splashWindow = null
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     title: 'Iris',
     width: 1400,
     height: 900,
+    show: false,
     backgroundColor: '#0a0a0a',
     autoHideMenuBar: true,
     webPreferences: {
@@ -92,6 +132,16 @@ function createWindow() {
       webviewTag: true,
       preload: path.join(__dirname, 'preload.js')
     }
+  })
+
+  // Show main window when ready, close splash
+  mainWindow.once('ready-to-show', () => {
+    console.log('[main] ready-to-show fired, waiting 2s before closing splash')
+    setTimeout(() => {
+      console.log('[main] Now closing splash')
+      closeSplash()
+      mainWindow.show()
+    }, 2000)
   })
 
   mainWindow.setMenuBarVisibility(false)
@@ -195,10 +245,14 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(() => {
-  startServer()
+  console.log('[app] whenReady fired')
 
-  // Give server a moment to start
-  setTimeout(createWindow, 500)
+  // Show splash immediately
+  createSplash()
+
+  // Start server and main window
+  startServer()
+  createWindow()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -214,5 +268,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  closeSplash()
   stopServer()
 })

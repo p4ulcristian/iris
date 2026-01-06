@@ -77,12 +77,36 @@ export function attachPty(godName, ws, cols, rows) {
   const sessionName = getSessionName(godName)
   ptyLog(`[pty:attach] START ${godName} (session: ${sessionName})`)
 
-  // Check if zellij session exists
-  if (!sessionExists(godName)) {
-    ptyLog(`[pty:attach] ${godName}: zellij session not found`)
-    ws.send(JSON.stringify({ event: 'error', message: `Session not found: ${sessionName}` }))
-    return
+  // Wait for zellij session to exist (it may still be starting)
+  // Poll up to 3 seconds for session to appear
+  const maxAttempts = 30
+  const pollInterval = 100
+  let attempts = 0
+
+  const waitForSession = () => {
+    attempts++
+    if (sessionExists(godName)) {
+      ptyLog(`[pty:attach] ${godName}: session found after ${attempts * pollInterval}ms`)
+      doAttach()
+      return
+    }
+    if (attempts >= maxAttempts) {
+      ptyLog(`[pty:attach] ${godName}: session not found after ${maxAttempts * pollInterval}ms`)
+      ws.send(JSON.stringify({ event: 'error', message: `Session not found: ${sessionName}` }))
+      return
+    }
+    setTimeout(waitForSession, pollInterval)
   }
+
+  const doAttach = () => {
+    // Session exists, proceed with attach
+    attachPtyInternal(godName, ws, cols, rows, sessionName)
+  }
+
+  waitForSession()
+}
+
+function attachPtyInternal(godName, ws, cols, rows, sessionName) {
 
   // If PTY already exists for this god, just add client and send buffered content
   if (ptyProcesses.has(godName)) {

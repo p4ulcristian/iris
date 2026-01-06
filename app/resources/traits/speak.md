@@ -11,7 +11,7 @@ Gods announce themselves. They don't labor anonymously in the background. When y
 ## Command
 
 ```bash
-python -m brain.say "message" --voice YOUR_VOICE --bg
+PYTHONPATH="$IRIS_HOME" python -m brain.say "message" --voice YOUR_VOICE --bg
 ```
 
 ## When to Speak

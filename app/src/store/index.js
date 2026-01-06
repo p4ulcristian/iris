@@ -17,6 +17,7 @@ const initialState = {
     speak: false,
     hear: false,
     express: false,
+    draw: false,
     wake: false,
     ollama: false
   },
@@ -24,6 +25,7 @@ const initialState = {
     speak: false,
     hear: false,
     express: false,
+    draw: false,
     wake: false,
     ollama: false
   },
@@ -159,6 +161,48 @@ export const useStore = create(
           status: entity.status || 'working',
           tabId: state.activeTabId,
         }
+        state.focusedEntity = id
+      }),
+
+      // Add optimistic entity while spawning (will be replaced by server state)
+      addSpawningEntity: (entity) => set((state) => {
+        const id = entity.id
+        // Don't add if already exists
+        if (state.entities[id]) return
+
+        state.entities[id] = {
+          id,
+          type: entity.type || 'god',
+          name: entity.name || id,
+          color: entity.color || '#888',
+          voice: entity.voice,
+          status: null,
+          readyState: 'spawning',
+          tabId: state.activeTabId,
+          order: entity.order || 0,
+          spawnedAt: Date.now(),
+          mission: entity.mission || null,
+        }
+
+        // Also add optimistic stage so entity appears in sidebar
+        const tab = state.tabs.find(t => t.id === state.activeTabId)
+        if (tab) {
+          const stageId = `spawning-${id}-${Date.now()}`
+          const tileId = `tile-spawning-${id}-${Date.now()}`
+          const newStage = {
+            id: stageId,
+            layout: {
+              type: 'tile',
+              id: tileId,
+              entityId: id
+            }
+          }
+          if (!tab.stages) tab.stages = []
+          tab.stages.push(newStage)
+          tab.activeStageId = stageId
+          state.focusedTile = tileId
+        }
+
         state.focusedEntity = id
       }),
 

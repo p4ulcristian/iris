@@ -117,6 +117,7 @@ export const SERVICES = {
   speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'brain/speak/server.py' },
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'brain/hear/server.py' },
   express: { port: 8767, name: 'Express', icon: '💬', script: 'brain/express/server.py' },
+  draw: { port: 8768, name: 'Draw', icon: '🎨', script: 'brain/draw/server.py' },
   wake: { port: null, name: 'Wake', icon: '⌨️', script: 'brain/wake/listener.py' },
   ollama: { port: 11434, name: 'Ollama', icon: '🧠', script: 'ollama serve' }
 }

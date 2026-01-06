@@ -26,6 +26,7 @@ import DiscordView from '../components/DiscordView'
 import PersonalitiesView from '../components/PersonalitiesView'
 import RSVPView from '../components/RSVPView'
 import MarkdownView from '../components/MarkdownView'
+import DrawView from '../components/DrawView'
 
 /**
  * Entity Views Registry
@@ -102,6 +103,10 @@ export const ENTITY_VIEWS = {
   markdown: {
     component: MarkdownView,
     props: (entity) => ({ entityId: entity.id })
+  },
+  draw: {
+    component: DrawView,
+    props: () => ({})
   }
 }
 

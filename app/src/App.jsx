@@ -46,6 +46,7 @@ export default function App() {
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
+  const addSpawningEntity = useStore(s => s.addSpawningEntity)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
   const setServices = useStore(s => s.setServices)
@@ -81,7 +82,7 @@ export default function App() {
   // Track if animation is in progress to prevent ResizeObserver interference
   const sidebarAnimatingRef = useRef(false)
 
-  // Handle sidebar toggle with sequenced animation
+  // Handle sidebar toggle - simplified
   const handleSidebarToggle = useCallback((auto = false) => {
     // If manual toggle, disable auto mode
     if (!auto) {
@@ -89,38 +90,15 @@ export default function App() {
       sidebarAutoModeRef.current = false
     }
 
-    // Prevent re-triggering during animation
-    if (sidebarAnimatingRef.current) return
-    sidebarAnimatingRef.current = true
-
-    if (!sidebarCollapsed) {
-      // CLOSING: buttons slide left → cards slide up → icons slide up → width collapses
-      setSidebarShowButtons(false)
-      setTimeout(() => {
-        setSidebarShowCards(false)
-        setTimeout(() => {
-          setSidebarShowIcons(true)
-          setTimeout(() => {
-            setSidebarCollapsed(true)
-            sidebarAnimatingRef.current = false
-          }, ICONS_DURATION)
-        }, CARDS_DURATION)
-      }, BUTTON_DURATION)
-    } else {
-      // OPENING: width expands → icons slide down → cards slide down → buttons slide in
-      setSidebarCollapsed(false)
-      setTimeout(() => {
-        setSidebarShowIcons(false)
-        setTimeout(() => {
-          setSidebarShowCards(true)
-          setTimeout(() => {
-            setSidebarShowButtons(true)
-            sidebarAnimatingRef.current = false
-          }, CARDS_DURATION)
-        }, ICONS_DURATION)
-      }, WIDTH_DURATION)
-    }
-  }, [sidebarCollapsed])
+    // Simple toggle
+    setSidebarCollapsed(prev => {
+      const newCollapsed = !prev
+      setSidebarShowCards(!newCollapsed)
+      setSidebarShowIcons(newCollapsed)
+      setSidebarShowButtons(!newCollapsed)
+      return newCollapsed
+    })
+  }, [])
 
   // Auto-collapse sidebar based on container size (works with dev tools too)
   const mainContainerRef = useRef(null)
@@ -234,6 +212,24 @@ export default function App() {
         window.dispatchEvent(new CustomEvent('iris:md:open', { detail: data }))
         break
 
+      case 'god:spawn:failed': {
+        // Spawn failed - update entity to show error state
+        const failedGodName = data.godName
+        console.error(`⛔ God spawn failed: ${failedGodName}`, data.error)
+
+        // Update entity status to failed (no need to check if exists - updateEntityStatus handles that)
+        updateEntityStatus(failedGodName, 'failed')
+
+        // Show notification to user
+        if (window.Notification?.permission === 'granted') {
+          new Notification('Spawn Failed', {
+            body: data.error || `Failed to summon ${failedGodName}`,
+            icon: '/icon.png'
+          })
+        }
+        break
+      }
+
       case 'warning':
         console.warn(`⚠️ ${data.message}`, data.hint ? `\n   ${data.hint}` : '')
         break
@@ -295,6 +291,22 @@ export default function App() {
 
   // Summon a new god (with specific name)
   const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null) => {
+    // Optimistic UI: add entity immediately with 'spawning' state
+    const godKey = name.toLowerCase()
+    const color = godColors[godKey] || '#888'
+    const currentEntities = Object.values(entities).filter(e => e.tabId === activeTabId)
+    const maxOrder = currentEntities.reduce((max, e) => Math.max(max, e.order || 0), -1)
+
+    addSpawningEntity({
+      id: name,
+      type: 'god',
+      name,
+      color,
+      order: maxOrder + 1,
+      mission: task || null,
+    })
+
+    // Send spawn request to server
     send({
       event: 'god:spawn',
       name,
@@ -302,7 +314,7 @@ export default function App() {
       personality,
       project
     })
-  }, [send])
+  }, [send, godColors, entities, activeTabId, addSpawningEntity])
 
   // Spawn a random available god
   const handleSpawnRandomGod = useCallback(() => {

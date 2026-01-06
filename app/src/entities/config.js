@@ -28,6 +28,7 @@ export const ENTITY_TYPES = {
   discord: { label: 'Discord', description: 'Discord', icon: discordIcon, color: '#5865F2' },
   rsvp: { label: 'RSVP', description: 'Speed reader', faIcon: 'faBook', color: '#10B981' },
   markdown: { label: 'Markdown', description: 'Markdown viewer', faIcon: 'faFileLines', color: '#89b4fa' },
+  draw: { label: 'Draw', description: 'StarVector SVG generator', faIcon: 'faPaintBrush', color: '#9333EA' },
 }
 
 // List format for pickers/iteration

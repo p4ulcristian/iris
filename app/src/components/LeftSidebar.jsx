@@ -11,14 +11,34 @@ import {
   faXmark,
   faPlus,
   faBrain,
-  faScroll
+  faScroll,
+  faPaintBrush
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import { REALM_COLORS } from '../themes'
+import { CHRONICLE_URL } from '../config'
 
 function Spinner() {
   return (
     <span className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+  )
+}
+
+function SystemTime() {
+  const [time, setTime] = useState(new Date())
+
+  useEffect(() => {
+    const interval = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const hours = time.getHours().toString().padStart(2, '0')
+  const minutes = time.getMinutes().toString().padStart(2, '0')
+
+  return (
+    <span className="text-white/20 text-[10px] font-mono mt-1">
+      {hours}:{minutes}
+    </span>
   )
 }
 
@@ -43,7 +63,7 @@ function ChronicleButton() {
       params.set('cursor', cursor)
     }
 
-    return fetch(`http://127.0.0.1:8766/chronicle/history?${params}`)
+    return fetch(`${CHRONICLE_URL}/chronicle/history?${params}`)
       .then(r => r.json())
       .then(data => {
         if (reset) {
@@ -70,7 +90,7 @@ function ChronicleButton() {
     setCursor(null)
     setHasMore(true)
 
-    fetch('http://127.0.0.1:8766/chronicle/history?count=20&direction=before')
+    fetch(`${CHRONICLE_URL}/chronicle/history?count=20&direction=before`)
       .then(r => r.json())
       .then(data => {
         setLines(data.lines || [])
@@ -106,7 +126,7 @@ function ChronicleButton() {
           count: '10',
           direction: 'after'
         })
-        fetch(`http://127.0.0.1:8766/chronicle/history?${params}`)
+        fetch(`${CHRONICLE_URL}/chronicle/history?${params}`)
           .then(r => r.json())
           .then(data => {
             if (data.lines?.length) {
@@ -117,7 +137,7 @@ function ChronicleButton() {
       }
 
       // Status for volume bar
-      fetch('http://127.0.0.1:8766/chronicle/status')
+      fetch(`${CHRONICLE_URL}/chronicle/status`)
         .then(r => r.json())
         .then(data => setStatus(data))
         .catch(() => {})
@@ -321,6 +341,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
     { name: 'Chronicle', key: 'chronicle', icon: faScroll, parent: 'hear' },
     { name: 'Speak', key: 'speak', icon: faVolumeHigh },
     { name: 'Express', key: 'express', icon: faCommentDots },
+    { name: 'Draw', key: 'draw', icon: faPaintBrush },
     { name: 'Ollama', key: 'ollama', icon: faBrain },
   ]
 
@@ -520,6 +541,7 @@ export default function LeftSidebar({
         {version && (
           <span className="text-white/30 text-[10px] font-mono mt-2">{version}</span>
         )}
+        <SystemTime />
       </div>
 
       {/* Chronicle preview button - above Powers */}

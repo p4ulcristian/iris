@@ -101,7 +101,19 @@ export function handleMessage(ws, msg, projectRoot) {
         personality: data.personality
       })
       console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
-      if (god && !god.exists) {
+
+      // Handle spawn failure - notify frontend
+      if (!god) {
+        console.error('[god:spawn] FAILED - createGodSession returned null')
+        ws.send(JSON.stringify({
+          event: 'god:spawn:failed',
+          godName,
+          error: 'Session failed to start. Check if zellij and claude are installed.'
+        }))
+        break
+      }
+
+      if (!god.exists) {
         appState.entities[god.name] = {
           id: god.name,
           type: 'god',

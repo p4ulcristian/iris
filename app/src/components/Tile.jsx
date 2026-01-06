@@ -255,8 +255,33 @@ export default function Tile({
         </div>
       )}
 
+      {/* Spawning entity placeholder */}
+      {tileEntity && tileEntity.readyState === 'spawning' && (
+        <TileCard
+          entity={tileEntity}
+          isFocused={isFocused}
+          onClick={() => {}}
+        >
+          <div className="h-full flex flex-col items-center justify-center gap-4 spawning-pulse">
+            <div
+              className="w-16 h-16 rounded-full opacity-60"
+              style={{
+                background: `radial-gradient(circle, ${tileEntity.color || '#888'}44 0%, transparent 70%)`,
+                animation: 'spawning-glow 2s ease-in-out infinite'
+              }}
+            />
+            <div className="text-center">
+              <p className="text-lg font-medium text-white/90">Summoning {tileEntity.name}...</p>
+              {tileEntity.mission && (
+                <p className="text-sm text-white/50 mt-1 max-w-xs">{tileEntity.mission}</p>
+              )}
+            </div>
+          </div>
+        </TileCard>
+      )}
+
       {/* Entity display - single entity per tile */}
-      {tileEntity && (
+      {tileEntity && tileEntity.readyState !== 'spawning' && (
         <TileCard
           entity={tileEntity}
           isFocused={isFocused}

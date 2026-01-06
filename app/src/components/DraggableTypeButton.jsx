@@ -9,7 +9,8 @@ export default function DraggableTypeButton({
   entityType,
   iconComponent, // Optional override - prefer using entityType for icon
   title,
-  onClick
+  onClick,
+  size = 'medium' // 'medium' | 'large'
 }) {
   const ref = useRef(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -40,19 +41,21 @@ export default function DraggableTypeButton({
     }
   }, [entityType])
 
+  const sizeClass = size === 'large' ? 'btn-icon-lg' : 'btn-icon-md'
+
   return (
     <button
       ref={ref}
       onClick={onClick}
       className={`
-        btn btn-glass btn-icon btn-icon-md
+        btn btn-glass btn-icon ${sizeClass}
         cursor-grab active:cursor-grabbing
         ${isDragging ? 'opacity-50' : ''}
       `}
       style={{ touchAction: 'none' }}
       title={title}
     >
-      {iconComponent || <EntityIcon type={entityType} />}
+      {iconComponent || <EntityIcon type={entityType} size={size} />}
     </button>
   )
 }

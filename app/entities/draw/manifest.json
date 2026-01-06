@@ -1,0 +1,10 @@
+{
+  "type": "draw",
+  "label": "Draw",
+  "description": "StarVector SVG generator",
+  "icon": "faPaintBrush",
+  "color": "#9333EA",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

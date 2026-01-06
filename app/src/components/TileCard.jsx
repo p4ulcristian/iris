@@ -1,13 +1,7 @@
 import { forwardRef } from 'react'
 import { useStore } from '../store'
 import { getEntityColor } from '../entities'
-
-// Convert hex to RGB for CSS (comma-separated)
-function hexToRgbCss(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return '128, 128, 128'
-  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-}
+import { hexToRgbCss } from '../utils/colors'
 
 const TileCard = forwardRef(function TileCard({
   entity,
@@ -44,4 +38,3 @@ const TileCard = forwardRef(function TileCard({
 })
 
 export default TileCard
-export { hexToRgbCss }

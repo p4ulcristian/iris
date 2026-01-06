@@ -5,13 +5,7 @@ import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
 import { EntityIcon } from '../entities'
-
-// Convert hex to RGB for CSS (comma-separated)
-function hexToRgbCss(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return '128, 128, 128'
-  return `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}`
-}
+import { hexToRgbCss } from '../utils/colors'
 
 function formatElapsed(ms) {
   if (!ms || ms < 0) return null
@@ -142,7 +136,12 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   // Get status pill config for ready state
   const getStatusPill = () => {
+    // Check status first for failed state
+    if (status === 'failed') {
+      return { icon: faXmark, label: 'spawn failed', className: 'liquid-glass-pill-failed' }
+    }
     switch (readyState) {
+      case 'spawning': return { icon: null, label: 'summoning...', className: 'liquid-glass-pill-spawning' }
       case 'done': return { icon: faCheck, label: 'done', className: 'liquid-glass-pill-done' }
       case 'stuck': return { icon: faTriangleExclamation, label: 'stuck', className: 'liquid-glass-pill-stuck' }
       case 'question': return { icon: faQuestion, label: 'question', className: 'liquid-glass-pill-question' }
@@ -150,6 +149,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
     }
   }
   const statusPill = getStatusPill()
+  const isSpawning = readyState === 'spawning'
 
   // Calculate stagger delay: only apply on initial load before stage 5
   const staggerDelay = (!initialLoadDone || loadStage < 5) ? staggerIndex * 0.08 : 0
@@ -158,7 +158,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   return (
     <motion.div
-      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''}`}
+      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''} ${isSpawning ? 'spawning-pulse' : ''}`}
       style={{ borderRadius: '12px 16px 16px 12px' }}
       initial={disableAnimation ? false : { opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
       animate={disableAnimation ? {
@@ -312,7 +312,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
           {/* Status pill */}
           {statusPill && (
             <span className={`liquid-glass-pill ${statusPill.className}`}>
-              <FontAwesomeIcon icon={statusPill.icon} size="xs" />
+              {statusPill.icon && <FontAwesomeIcon icon={statusPill.icon} size="xs" />}
               {statusPill.label}
             </span>
           )}
