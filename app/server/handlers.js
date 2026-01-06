@@ -83,17 +83,52 @@ export function handleMessage(ws, msg, projectRoot) {
           : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
       }
 
+      // Check if god already exists
+      if (appState.entities[godName]) {
+        console.log('[god:spawn] God already exists:', godName)
+        ws.send(JSON.stringify({ event: 'god:spawned', name: godName, exists: true }))
+        break
+      }
+
       // Determine working directory - use selected project path if provided
       let workingDir = projectRoot
       if (data.project) {
         const projectConfig = projects.loadProject(data.project)
         if (projectConfig?.path) {
-          // Expand ~ to home directory
           workingDir = projectConfig.path.replace(/^~/, process.env.HOME || '')
         }
       }
 
-      // Clear any orphaned buffer from a previous incarnation
+      // STEP 1: Add entity immediately with 'spawning' state
+      appState.entities[godName] = {
+        id: godName,
+        type: 'god',
+        name: godName,
+        tabId: appState.activeTabId,
+        order: getNextOrder(appState.activeTabId),
+        mission: data.task || null,
+        spawnedAt: Date.now(),
+        sessionId: null,
+        project: workingDir,
+        readyState: 'spawning'
+      }
+
+      // Create stage for this entity
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (tab) {
+        const stageId = generateStageId()
+        const tileId = layout.createTile([godName], godName)
+        const newStage = { id: stageId, layout: tileId }
+        tab.stages.push(newStage)
+        tab.activeStageId = stageId
+        appState.focusedTile = tileId.id
+      }
+      appState.focusedEntity = godName
+      saveState()
+      console.log('[god:spawn] Added spawning entity, broadcasting...')
+      broadcastState()
+
+      // STEP 2: Create the zellij session
       clearOutputBuffer(godName)
       const god = createGodSession(godName, data.task, workingDir, {
         startPrompt: appState.settings?.startPrompt,
@@ -102,52 +137,23 @@ export function handleMessage(ws, msg, projectRoot) {
       })
       console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
 
-      // Handle spawn failure - notify frontend
+      // STEP 3: Update state based on result
       if (!god) {
+        // Spawn failed - update state to show failure
         console.error('[god:spawn] FAILED - createGodSession returned null')
-        ws.send(JSON.stringify({
-          event: 'god:spawn:failed',
-          godName,
-          error: 'Session failed to start. Check if zellij and claude are installed.'
-        }))
+        appState.entities[godName].readyState = 'failed'
+        appState.entities[godName].status = 'Session failed to start'
+        saveState()
+        broadcastState()
         break
       }
 
-      if (!god.exists) {
-        appState.entities[god.name] = {
-          id: god.name,
-          type: 'god',
-          name: god.name,
-          tabId: appState.activeTabId,
-          order: getNextOrder(appState.activeTabId),
-          mission: god.mission || null,
-          spawnedAt: Date.now(),
-          sessionId: god.sessionId || null,
-          project: workingDir,  // Store working directory for git branch display
-          readyState: 'working'  // Explicit initialization
-        }
-
-        // Create a new stage for this entity
-        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-        if (tab) {
-          const stageId = generateStageId()
-          const tileId = layout.createTile([god.name], god.name)
-          const newStage = { id: stageId, layout: tileId }
-          tab.stages.push(newStage)
-          tab.activeStageId = stageId
-          appState.focusedTile = tileId.id
-        }
-
-        appState.focusedEntity = god.name
-        saveState()
-        console.log('[god:spawn] SUCCESS - broadcasting state')
-        broadcastState()
-      } else if (god?.exists) {
-        console.log('[god:spawn] God already exists, sending spawned event')
-        ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
-      } else {
-        console.log('[god:spawn] FAILED - god is null or undefined')
-      }
+      // Success - update to working state
+      appState.entities[godName].readyState = 'working'
+      appState.entities[godName].sessionId = god.sessionId || null
+      saveState()
+      console.log('[god:spawn] SUCCESS - broadcasting final state')
+      broadcastState()
       break
     }
 

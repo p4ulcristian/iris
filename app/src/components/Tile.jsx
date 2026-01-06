@@ -280,8 +280,29 @@ export default function Tile({
         </TileCard>
       )}
 
+      {/* Failed entity placeholder */}
+      {tileEntity && tileEntity.readyState === 'failed' && (
+        <TileCard
+          entity={tileEntity}
+          isFocused={isFocused}
+          onClick={() => {}}
+        >
+          <div className="h-full flex flex-col items-center justify-center gap-4">
+            <div className="w-16 h-16 rounded-full opacity-60 flex items-center justify-center text-red-400 text-3xl">
+              ✕
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-medium text-red-400">Failed to summon {tileEntity.name}</p>
+              {tileEntity.status && (
+                <p className="text-sm text-white/50 mt-1">{tileEntity.status}</p>
+              )}
+            </div>
+          </div>
+        </TileCard>
+      )}
+
       {/* Entity display - single entity per tile */}
-      {tileEntity && tileEntity.readyState !== 'spawning' && (
+      {tileEntity && tileEntity.readyState !== 'spawning' && tileEntity.readyState !== 'failed' && (
         <TileCard
           entity={tileEntity}
           isFocused={isFocused}

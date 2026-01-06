@@ -136,12 +136,9 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   // Get status pill config for ready state
   const getStatusPill = () => {
-    // Check status first for failed state
-    if (status === 'failed') {
-      return { icon: faXmark, label: 'spawn failed', className: 'liquid-glass-pill-failed' }
-    }
     switch (readyState) {
       case 'spawning': return { icon: null, label: 'summoning...', className: 'liquid-glass-pill-spawning' }
+      case 'failed': return { icon: faXmark, label: 'spawn failed', className: 'liquid-glass-pill-failed' }
       case 'done': return { icon: faCheck, label: 'done', className: 'liquid-glass-pill-done' }
       case 'stuck': return { icon: faTriangleExclamation, label: 'stuck', className: 'liquid-glass-pill-stuck' }
       case 'question': return { icon: faQuestion, label: 'question', className: 'liquid-glass-pill-question' }

@@ -46,7 +46,6 @@ export default function App() {
 
   // Actions
   const updateEntityStatus = useStore(s => s.updateEntityStatus)
-  const addSpawningEntity = useStore(s => s.addSpawningEntity)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
   const setServices = useStore(s => s.setServices)
@@ -213,17 +212,12 @@ export default function App() {
         break
 
       case 'god:spawn:failed': {
-        // Spawn failed - update entity to show error state
-        const failedGodName = data.godName
-        console.error(`⛔ God spawn failed: ${failedGodName}`, data.error)
-
-        // Update entity status to failed (no need to check if exists - updateEntityStatus handles that)
-        updateEntityStatus(failedGodName, 'failed')
-
-        // Show notification to user
+        // Server now handles failure state via state:sync
+        // Just log and notify
+        console.error(`⛔ God spawn failed: ${data.godName}`, data.error)
         if (window.Notification?.permission === 'granted') {
           new Notification('Spawn Failed', {
-            body: data.error || `Failed to summon ${failedGodName}`,
+            body: data.error || `Failed to summon ${data.godName}`,
             icon: '/icon.png'
           })
         }
@@ -290,23 +284,8 @@ export default function App() {
 
 
   // Summon a new god (with specific name)
+  // Server handles all state - no optimistic UI needed
   const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null) => {
-    // Optimistic UI: add entity immediately with 'spawning' state
-    const godKey = name.toLowerCase()
-    const color = godColors[godKey] || '#888'
-    const currentEntities = Object.values(entities).filter(e => e.tabId === activeTabId)
-    const maxOrder = currentEntities.reduce((max, e) => Math.max(max, e.order || 0), -1)
-
-    addSpawningEntity({
-      id: name,
-      type: 'god',
-      name,
-      color,
-      order: maxOrder + 1,
-      mission: task || null,
-    })
-
-    // Send spawn request to server
     send({
       event: 'god:spawn',
       name,
@@ -314,7 +293,7 @@ export default function App() {
       personality,
       project
     })
-  }, [send, godColors, entities, activeTabId, addSpawningEntity])
+  }, [send])
 
   // Spawn a random available god
   const handleSpawnRandomGod = useCallback(() => {
