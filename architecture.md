@@ -23,11 +23,11 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 │ ┌────────┐ ┌───────────────────────────────┐ ┌──────────────┐ │
 │ │        │ │           STAGE               │ │              │ │
 │ │  LEFT  │ │ ┌─────────────┬─────────────┐ │ │    RIGHT     │ │
-│ │  WING  │ │ │    TILE     │    TILE     │ │ │    WING      │ │
+│ │SIDEBAR │ │ │    TILE     │    TILE     │ │ │   SIDEBAR    │ │
 │ │        │ │ │   (Zeus)    │   (Apollo)  │ │ │              │ │
-│ │ Realms │ │ │             │             │ │ │   Scrolls    │ │
+│ │  Tabs  │ │ │             │             │ │ │Entity Cards  │ │
 │ │   +    │ │ └─────────────┴─────────────┘ │ │      +       │ │
-│ │ Powers │ │         SURFACE               │ │ Summon Menu  │ │
+│ │Services│ │         SURFACE               │ │ Spawn Menu   │ │
 │ └────────┘ └───────────────────────────────┘ └──────────────┘ │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -35,8 +35,8 @@ A voice-controlled orchestration system where **Iris** (the messenger of the god
 - **Stage**: Main content area with the Surface layout
 - **Surface**: Splittable workspace containing Tiles
 - **Tiles**: Individual sections holding entities (gods, terminals, etc.)
-- **Left Wing**: Realm tabs + Powers (services)
-- **Right Wing**: Entity Scrolls + Summon menu
+- **Left Sidebar**: Tab buttons + Services dropdown
+- **Right Sidebar**: Entity cards + Spawn menu
 
 ## File Structure
 
@@ -53,9 +53,10 @@ iris/
 │   │   │   ├── TileCard.jsx    # Entity container wrapper (in tiles)
 │   │   │   ├── Tile.jsx        # Single tile in Surface layout
 │   │   │   ├── Surface.jsx     # Recursive layout renderer
-│   │   │   ├── EntityCard.jsx  # Entity status card (right wing)
+│   │   │   ├── EntityCard.jsx  # Entity status card (right sidebar)
 │   │   │   ├── EntityGroup.jsx # Entities grouped by stage
-│   │   │   └── LeftWing.jsx    # Left sidebar (Realms + Powers)
+│   │   │   ├── LeftSidebar.jsx # Left sidebar (Tabs + Services)
+│   │   │   └── RightSidebar.jsx # Right sidebar (Entity cards + Spawn)
 │   │   ├── hooks/
 │   │   │   └── useWebSocket.js # WS connection
 │   │   └── store/

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Reorder, AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import TileCard from './components/TileCard'
 import TerminalContent from './components/TerminalContent'
-import EntityCard from './components/EntityCard'
-import EntityGroup from './components/EntityGroup'
-import LeftWing from './components/LeftWing'
+import LeftSidebar from './components/LeftSidebar'
+import RightSidebar from './components/RightSidebar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
@@ -23,17 +22,12 @@ import PersonalityEditor from './components/PersonalityEditor'
 import TraitEditor from './components/TraitEditor'
 import MarkdownView from './components/MarkdownView'
 import Surface from './components/Surface'
-import DraggableTypeButton from './components/DraggableTypeButton'
 import RootDropZone from './components/RootDropZone'
-import TileUngroupDropZone from './components/TileUngroupDropZone'
 import { DragProvider } from './contexts/DragContext'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
-import { EntityIcon } from './entities'
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -83,12 +77,6 @@ export default function App() {
   const [sidebarAutoMode, setSidebarAutoMode] = useState(true) // Track if user manually toggled
   const sidebarAutoModeRef = useRef(true) // Ref for stable access in callbacks
   const [sidebarButtonsExpanded, setSidebarButtonsExpanded] = useState(false) // Hover expand for extra buttons
-
-  // Sidebar animation timing (in ms)
-  const CARDS_DURATION = 200
-  const ICONS_DURATION = 200
-  const WIDTH_DURATION = 150
-  const BUTTON_DURATION = 150
 
   // Track if animation is in progress to prevent ResizeObserver interference
   const sidebarAnimatingRef = useRef(false)
@@ -684,8 +672,8 @@ export default function App() {
 
       {/* Main layout: sidebar + content */}
       <div ref={mainContainerRef} className="flex flex-1 min-h-0 p-3">
-        {/* Left Wing (Realms + Powers) */}
-        <LeftWing
+        {/* Left Sidebar (Tabs + Services) */}
+        <LeftSidebar
           connected={connected}
           send={send}
           tabs={tabs}
@@ -882,294 +870,40 @@ export default function App() {
               </RootDropZone>
             </div>
 
-            {/* Sidebar with all entities as task cards */}
-            <motion.div
-              className="flex flex-col overflow-hidden relative pl-3"
-              animate={{
-                width: sidebarCollapsed ? 48 : 288
+            {/* Right Sidebar (Entity cards + Spawn buttons) */}
+            <RightSidebar
+              activeStages={activeStages}
+              activeEntities={activeEntities}
+              tabs={tabs}
+              activeTabId={activeTabId}
+              focusedEntity={focusedEntity}
+              effectiveFocusedEntity={effectiveFocusedEntity}
+              godColors={godColors}
+              loadStage={loadStage}
+              initialLoadDone={initialLoadDone}
+              sidebarCollapsed={sidebarCollapsed}
+              sidebarShowCards={sidebarShowCards}
+              sidebarShowIcons={sidebarShowIcons}
+              sidebarButtonsExpanded={sidebarButtonsExpanded}
+              setSidebarButtonsExpanded={setSidebarButtonsExpanded}
+              onSidebarToggle={handleSidebarToggle}
+              onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
+              onEntityClose={handleKillEntity}
+              onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
+              onMoveToTab={(entityId, tabId) => {
+                send({ event: 'entity:move', entityId, tabId })
+                send({ event: 'tab:select', tabId })
               }}
-              transition={{
-                duration: WIDTH_DURATION / 1000,
-                ease: 'easeInOut'
+              onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
+              onEntityReorder={handleEntityReorder}
+              onStagesReorder={(newOrder) => {
+                const stageOrder = newOrder.map(s => s.id)
+                send({ event: 'stages:reorder', stageOrder })
               }}
-            >
-              {/* Two card sets with choreographed animations */}
-              <TileUngroupDropZone className="flex-1 relative overflow-hidden pb-12">
-                {/* Full task cards - slide up to exit, slide down to enter */}
-                <AnimatePresence>
-                  {sidebarShowCards && (
-                    <motion.div
-                      key="cards"
-                      className="absolute inset-0 overflow-y-auto overflow-x-visible pb-16"
-                      initial={{ y: '-100%' }}
-                      animate={{ y: 0 }}
-                      exit={{ y: '-100%' }}
-                      transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
-                    >
-                      {activeStages.length > 0 ? (
-                        <Reorder.Group
-                          axis="y"
-                          values={activeStages}
-                          onReorder={(newOrder) => {
-                            // Extract stage IDs in new order and send to backend
-                            const stageOrder = newOrder.map(s => s.id)
-                            send({ event: 'stages:reorder', stageOrder })
-                          }}
-                          className="flex flex-col gap-3"
-                        >
-                          {activeStages.map((stage, stageIdx) => {
-                            const activeTab = tabs.find(t => t.id === activeTabId)
-                            const isActiveStage = stage.id === activeTab?.activeStageId
-                            // Calculate stagger offset: sum of entities in previous stages
-                            const staggerOffset = activeStages
-                              .slice(0, stageIdx)
-                              .reduce((sum, s) => sum + s.entities.length, 0)
-                            return (
-                              <EntityGroup
-                                key={stage.id}
-                                stage={stage}
-                                entities={stage.entities}
-                                isFocused={isActiveStage}
-                                focusedEntityId={focusedEntity}
-                                onClick={(entityId) => {
-                                  send({ event: 'focus:set', entityId })
-                                }}
-                                onClose={(entityId) => handleKillEntity(entityId)}
-                                onSplit={(entityId) => {
-                                  send({ event: 'stage:split', entityId, stageId: stage.id })
-                                }}
-                                tabs={tabs}
-                                activeTabId={activeTabId}
-                                onMoveToTab={(entityId, tabId) => {
-                                  send({ event: 'entity:move', entityId, tabId })
-                                  send({ event: 'tab:select', tabId })
-                                }}
-                                onMoveToNewTab={(entityId) => {
-                                  send({ event: 'entity:move-to-new-tab', entityId })
-                                }}
-                                staggerOffset={staggerOffset}
-                              />
-                            )
-                          })}
-                        </Reorder.Group>
-                      ) : activeEntities.length > 0 ? (
-                        /* Fallback: no stages data, render flat entity list */
-                        <Reorder.Group
-                          axis="y"
-                          values={activeEntities}
-                          onReorder={handleEntityReorder}
-                          className="flex flex-col gap-3"
-                        >
-                          {activeEntities.map((entity, idx) => (
-                            <EntityCard
-                              key={entity.id}
-                              entity={entity}
-                              isActive={entity.id === effectiveFocusedEntity}
-                              onClick={() => handleSetFocus(entity.id)}
-                              onClose={() => handleKillEntity(entity.id)}
-                              tabs={tabs}
-                              activeTabId={activeTabId}
-                              onMoveToTab={(entityId, tabId) => {
-                                send({ event: 'entity:move', entityId, tabId })
-                                send({ event: 'tab:select', tabId })
-                              }}
-                              onMoveToNewTab={(entityId) => {
-                                send({ event: 'entity:move-to-new-tab', entityId })
-                              }}
-                              staggerIndex={idx}
-                            />
-                          ))}
-                        </Reorder.Group>
-                      ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-text-secondary text-sm">
-                          <p>Add an entity</p>
-                        </div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Icon strip - slide up from bottom to enter, slide down to exit */}
-                <AnimatePresence>
-                  {sidebarShowIcons && (
-                    <motion.div
-                      key="icons"
-                      className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5 pt-1"
-                      initial={{ y: '100%' }}
-                      animate={{ y: 0 }}
-                      exit={{ y: '100%' }}
-                      transition={{ duration: ICONS_DURATION / 1000, ease: 'easeInOut' }}
-                    >
-                      {activeEntities.map((entity) => {
-                        const entityColor = entity.type === 'god'
-                          ? (godColors[entity.name?.toLowerCase()] || entity.color || '#888')
-                          : (entity.color || '#888')
-                        return (
-                          <motion.button
-                            key={entity.id}
-                            onClick={() => handleSetFocus(entity.id)}
-                            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-all hover:bg-white/10"
-                            style={{
-                              backgroundColor: entity.id === effectiveFocusedEntity ? `${entityColor}33` : 'transparent',
-                              border: `2px solid ${entity.id === effectiveFocusedEntity ? entityColor : 'transparent'}`
-                            }}
-                            title={entity.displayName || entity.name}
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <EntityIcon type={entity.type} />
-                          </motion.button>
-                        )
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* Floating collapse button - bottom left, centered when collapsed */}
-                <button
-                  onClick={() => handleSidebarToggle()}
-                  className="absolute bottom-0 left-0 z-10 flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 text-white/60 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
-                  title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                >
-                  <FontAwesomeIcon
-                    icon={sidebarCollapsed ? faChevronLeft : faChevronRight}
-                    className="w-4 h-4"
-                  />
-                </button>
-
-                {/* Floating favorites + extras - bottom right */}
-                <AnimatePresence>
-                  {sidebarShowButtons && (
-                    <motion.div
-                      className="absolute bottom-0 right-0 z-10 flex flex-col items-end"
-                      initial={{ x: '100%', opacity: 0 }}
-                      animate={{
-                        x: loadStage >= 5 ? 0 : '100%',
-                        opacity: loadStage >= 5 ? 1 : 0
-                      }}
-                      exit={{ x: '100%', opacity: 0 }}
-                      transition={{
-                        duration: BUTTON_DURATION / 1000,
-                        ease: 'easeInOut',
-                        delay: (!initialLoadDone || loadStage < 5) ? 0.2 : 0
-                      }}
-                      onMouseEnter={() => setSidebarButtonsExpanded(true)}
-                      onMouseLeave={() => setSidebarButtonsExpanded(false)}
-                    >
-                      {/* Extra buttons - slide up on hover */}
-                      <AnimatePresence>
-                        {sidebarButtonsExpanded && (
-                          <motion.div
-                            className="mb-1.5 flex flex-col gap-1.5 items-end p-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10"
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            exit={{ y: 20, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeOut' }}
-                          >
-                            {/* Row 4: Settings, Cemetery, Oracle, Personalities */}
-                            <div className="flex gap-1.5">
-                              <DraggableTypeButton
-                                entityType="settings"
-                                title="Settings - drag to split"
-                                onClick={() => handleSpawnEntity('settings')}
-                              />
-                              <DraggableTypeButton
-                                entityType="cemetery"
-                                title="Cemetery - drag to split"
-                                onClick={() => handleSpawnEntity('cemetery')}
-                              />
-                              <DraggableTypeButton
-                                entityType="oracle"
-                                title="Oracle (Local LLM) - drag to split"
-                                onClick={() => handleSpawnEntity('oracle')}
-                              />
-                              <DraggableTypeButton
-                                entityType="personalities"
-                                title="Personalities - drag to split"
-                                onClick={() => handleSpawnEntity('personalities')}
-                              />
-                            </div>
-                            {/* Row 2: Calendar, Git, History, RSVP */}
-                            <div className="flex gap-1.5">
-                              <DraggableTypeButton
-                                entityType="calendar"
-                                title="Calendar - drag to split"
-                                onClick={() => handleSpawnEntity('calendar')}
-                              />
-                              <DraggableTypeButton
-                                entityType="git"
-                                title="Git - drag to split"
-                                onClick={() => handleSpawnEntity('git')}
-                              />
-                              <DraggableTypeButton
-                                entityType="history"
-                                title="History - drag to split"
-                                onClick={() => handleSpawnEntity('history')}
-                              />
-                              <DraggableTypeButton
-                                entityType="rsvp"
-                                title="RSVP Speed Reader - drag to split"
-                                onClick={() => handleSpawnEntity('rsvp')}
-                              />
-                            </div>
-                            {/* Row 2: Terminal, Browser */}
-                            <div className="flex gap-1.5">
-                              <DraggableTypeButton
-                                entityType="terminal"
-                                title="New terminal (Alt+R) - drag to split"
-                                onClick={handleSpawnTerminal}
-                              />
-                              <DraggableTypeButton
-                                entityType="browser"
-                                title="New browser - drag to split"
-                                onClick={() => handleSpawnEntity('browser')}
-                              />
-                            </div>
-                            {/* Row 1: YouTube Music, Messenger, Discord */}
-                            <div className="flex gap-1.5">
-                              <DraggableTypeButton
-                                entityType="youtube-music"
-                                title="YouTube Music - drag to split"
-                                onClick={() => handleSpawnEntity('youtube-music')}
-                              />
-                              <DraggableTypeButton
-                                entityType="messenger"
-                                title="Messenger - drag to split"
-                                onClick={() => handleSpawnEntity('messenger')}
-                              />
-                              <DraggableTypeButton
-                                entityType="discord"
-                                title="Discord - drag to split"
-                                onClick={() => handleSpawnEntity('discord')}
-                              />
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Favorites row */}
-                      <div className="flex gap-1.5 p-1.5 bg-black/40 backdrop-blur-md rounded-xl border border-white/10">
-                        <DraggableTypeButton
-                          entityType="god"
-                          title="New god (Alt+N) - drag to split"
-                          onClick={() => setSummonModalOpen(true)}
-                        />
-                        <DraggableTypeButton
-                          entityType="linear"
-                          title="Linear - drag to split"
-                          onClick={() => handleSpawnEntity('linear')}
-                        />
-                        <DraggableTypeButton
-                          entityType="code"
-                          title="Code viewer - drag to split"
-                          onClick={() => handleSpawnEntity('code')}
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </TileUngroupDropZone>
-            </motion.div>
+              onSpawnEntity={handleSpawnEntity}
+              onSpawnTerminal={handleSpawnTerminal}
+              onOpenSummonModal={() => setSummonModalOpen(true)}
+            />
           </div>
       </main>
       </div>

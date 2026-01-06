@@ -5,15 +5,15 @@
 | Term | Meaning |
 |------|---------|
 | **Stage** | Main content area where entities are displayed |
-| **Surface** | Workspace layout on the stage (one per realm) |
+| **Surface** | Workspace layout on the stage (one per tab) |
 | **Tile** | A divided section on the surface containing entities |
 | **Entity** | Any item in a tile: god, terminal, browser, etc. |
-| **Left Wing** | Left sidebar (Realms + Powers) |
-| **Right Wing** | Right sidebar (Scrolls + Summon menu) |
-| **Realm** | A tab/workspace (Olympus, Elysium, etc.) |
-| **Powers** | Services: speak, hear, wake, express |
-| **Scrolls** | Entity status cards in the right wing |
-| **Summon menu** | Bottom-right buttons to create entities |
+| **Left Sidebar** | Left sidebar with tab buttons and services |
+| **Right Sidebar** | Right sidebar with entity cards and spawn menu |
+| **Tab** | A workspace (named Olympus, Elysium, etc.) |
+| **Services** | speak, hear, wake, express |
+| **Entity Cards** | Status cards in the right sidebar |
+| **Spawn menu** | Bottom-right buttons to create entities |
 
 ## App Components
 
@@ -41,7 +41,7 @@
 | **question** | God is waiting for user input |
 | **scattered** | God crashed |
 
-## Powers (Services)
+## Services
 
 | Term | Meaning |
 |------|---------|

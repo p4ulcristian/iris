@@ -25,10 +25,10 @@ Animate the UI in **layers**, creating a cascade effect:
 ### Stage 1: Shell (0ms)
 - App container fades in
 - Wallpaper blobs appear
-- Left Wing skeleton (just the IRIS branding)
+- Left Sidebar skeleton (just the IRIS branding)
 
 ### Stage 2: Structure (100ms delay)
-- Left Wing realm tabs stagger in (one by one, 50ms apart)
+- Left Sidebar tab buttons stagger in (one by one, 50ms apart)
 - Services indicator appears
 - Right sidebar skeleton
 
@@ -138,7 +138,7 @@ transition={{
    - Pass `staggerIndex` to entity maps
    - Conditionally render sections based on `loadStage`
 
-3. **`app/src/components/LeftWing.jsx`**
+3. **`app/src/components/LeftSidebar.jsx`**
    - Stagger tab buttons with delay per index
    - Services dropdown delays slightly more
 
@@ -157,8 +157,8 @@ transition={{
 | Element | Start | Duration | Stagger |
 |---------|-------|----------|---------|
 | App container | 0ms | 200ms | - |
-| Left Wing shell | 0ms | 150ms | - |
-| Realm tabs | 100ms | 150ms | 50ms/item |
+| Left Sidebar shell | 0ms | 150ms | - |
+| Tab buttons | 100ms | 150ms | 50ms/item |
 | Services dot | 200ms | 100ms | - |
 | Surface area | 200ms | 200ms | - |
 | Entity cards | 300ms | 200ms | 80ms/item |

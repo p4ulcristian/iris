@@ -387,7 +387,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   )
 }
 
-export default function LeftWing({
+export default function LeftSidebar({
   connected,
   send,
   tabs,
