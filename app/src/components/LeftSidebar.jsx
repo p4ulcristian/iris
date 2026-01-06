@@ -452,7 +452,7 @@ export default function LeftSidebar({
   }
 
   return (
-    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pl-3 pr-3">
+    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3">
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
         <AnimatePresence>
