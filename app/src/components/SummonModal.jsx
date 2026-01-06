@@ -52,15 +52,24 @@ export default function SummonModal({
     }
   }, [lastMessage])
 
-  // Pick random god on open
+  // Pick random god on open (or when godPool becomes available)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && godPool.length > 0 && !selectedGod) {
       const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
       setSelectedGod(randomGod)
+    }
+  }, [isOpen, godPool, selectedGod])
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
       setTask('')
       setSelectedPersonality('god')
       // Focus input after a brief delay for modal animation
       setTimeout(() => inputRef.current?.focus(), 50)
+    } else {
+      // Reset selectedGod when modal closes so it picks new one next time
+      setSelectedGod('')
     }
   }, [isOpen])
 
@@ -81,7 +90,10 @@ export default function SummonModal({
 
   const handleSubmit = (e) => {
     e?.preventDefault()
-    const name = selectedGod.charAt(0).toUpperCase() + selectedGod.slice(1)
+    // Use selectedGod or fall back to first available god
+    const god = selectedGod || godPool[0]
+    if (!god) return
+    const name = god.charAt(0).toUpperCase() + god.slice(1)
     onSummon(name, task.trim(), selectedPersonality, selectedProject)
   }
 

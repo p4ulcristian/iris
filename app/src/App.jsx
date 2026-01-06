@@ -319,6 +319,7 @@ export default function App() {
   // Spawn a random available god
   const handleSpawnRandomGod = useCallback(() => {
     const allGods = Object.keys(godColors)
+    if (allGods.length === 0) return // Not loaded yet
     const usedNames = getAllGodNames().map(n => n.toLowerCase())
     const availableGods = allGods.filter(g => !usedNames.includes(g))
     const godPool = availableGods.length > 0 ? availableGods : allGods

@@ -228,11 +228,12 @@ class IrisClient:
                 data = json.loads(response)
 
                 if data.get("event") == "state:sync":
-                    entities = data.get("entities", {})
+                    entities = data.get("entities", [])
                     result = []
-                    for entity_id, entity in entities.items():
+                    # entities is an array from the server, not a dict
+                    for entity in entities:
                         result.append({
-                            "id": entity_id,
+                            "id": entity.get("id"),
                             "type": entity.get("type"),
                             "name": entity.get("name"),
                             "title": entity.get("title"),
