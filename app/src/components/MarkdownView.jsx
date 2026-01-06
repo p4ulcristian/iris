@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRefresh } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
-import { API_URL } from '../config'
+import { useWebSocket } from '../hooks/useWebSocket'
+import { WS_URL } from '../config'
 import MarkdownRenderer from '../utils/MarkdownRenderer'
 
 export default function MarkdownView({ entityId }) {
@@ -10,36 +11,42 @@ export default function MarkdownView({ entityId }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const { request } = useWebSocket(WS_URL)
   const entities = useStore(s => s.entities)
   const entity = entities[entityId]
   const filePath = entity?.pendingFile
 
-  const loadFile = async (path) => {
+  const loadFile = useCallback(async (path) => {
     if (!path) return
+    if (!request) {
+      // WebSocket not ready, retry shortly
+      setTimeout(() => loadFile(path), 100)
+      return
+    }
 
     setLoading(true)
     setError(null)
 
     try {
-      const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(path)}`)
-      if (!response.ok) {
-        throw new Error(`Failed to load file: ${response.statusText}`)
+      const response = await request('file:read', { path })
+      if (response.ok) {
+        setContent(response.content)
+      } else {
+        throw new Error(response.error || 'Failed to load file')
       }
-      const text = await response.text()
-      setContent(text)
     } catch (err) {
       console.error('Failed to load markdown file:', err)
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [request])
 
   useEffect(() => {
     if (filePath) {
       loadFile(filePath)
     }
-  }, [filePath])
+  }, [filePath, loadFile])
 
   // Listen for file open events
   useEffect(() => {
@@ -52,7 +59,7 @@ export default function MarkdownView({ entityId }) {
 
     window.addEventListener('iris:md:open', handleMdOpen)
     return () => window.removeEventListener('iris:md:open', handleMdOpen)
-  }, [entityId])
+  }, [entityId, loadFile])
 
   if (loading) {
     return (

@@ -2457,8 +2457,144 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
+    // ==================== FILE OPERATIONS (WebSocket) ====================
+
+    case 'file:list': {
+      const { id } = msg
+      const dirPath = data.path || process.env.HOME
+      const showHidden = data.showHidden || false
+      const maxDepth = data.maxDepth || 3
+
+      readDirectoryTree(dirPath, maxDepth, 0, showHidden).then(tree => {
+        ws.send(JSON.stringify({ id, event: 'file:list', ok: true, tree }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ id, event: 'file:list', ok: false, error: err.message }))
+      })
+      break
+    }
+
+    case 'file:children': {
+      const { id } = msg
+      const dirPath = data.path
+      const showHidden = data.showHidden || false
+
+      if (!dirPath) {
+        ws.send(JSON.stringify({ id, event: 'file:children', ok: false, error: 'Missing path parameter' }))
+        break
+      }
+
+      fs.promises.stat(dirPath).then(async stats => {
+        if (!stats.isDirectory()) {
+          ws.send(JSON.stringify({ id, event: 'file:children', ok: false, error: 'Path is not a directory' }))
+          return
+        }
+
+        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+        entries.sort((a, b) => {
+          if (a.isDirectory() && !b.isDirectory()) return -1
+          if (!a.isDirectory() && b.isDirectory()) return 1
+          return a.name.localeCompare(b.name)
+        })
+
+        const filtered = entries.filter(e => {
+          if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) return false
+          if (!showHidden && e.name.startsWith('.')) return false
+          return true
+        })
+
+        const children = filtered.map(entry => ({
+          name: entry.name,
+          path: path.join(dirPath, entry.name),
+          type: entry.isDirectory() ? 'directory' : 'file',
+          children: entry.isDirectory() ? [] : undefined
+        }))
+
+        ws.send(JSON.stringify({ id, event: 'file:children', ok: true, children }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ id, event: 'file:children', ok: false, error: err.message }))
+      })
+      break
+    }
+
+    case 'file:read': {
+      const { id } = msg
+      const filePath = data.path
+
+      if (!filePath) {
+        ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: 'Missing path parameter' }))
+        break
+      }
+
+      fs.promises.readFile(filePath, 'utf-8').then(content => {
+        ws.send(JSON.stringify({ id, event: 'file:read', ok: true, content }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: err.message }))
+      })
+      break
+    }
+
+    case 'file:write': {
+      const { id } = msg
+      const filePath = data.path
+      const content = data.content
+
+      if (!filePath || content === undefined) {
+        ws.send(JSON.stringify({ id, event: 'file:write', ok: false, error: 'Missing path or content' }))
+        break
+      }
+
+      fs.promises.writeFile(filePath, content, 'utf-8').then(() => {
+        ws.send(JSON.stringify({ id, event: 'file:write', ok: true }))
+      }).catch(err => {
+        ws.send(JSON.stringify({ id, event: 'file:write', ok: false, error: err.message }))
+      })
+      break
+    }
+
     // Forward other events to all clients
     default:
       broadcast(event, data)
   }
+}
+
+// Helper: Read directory tree recursively
+async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden = false) {
+  const stats = await fs.promises.stat(dirPath)
+  const name = path.basename(dirPath)
+
+  if (!stats.isDirectory()) {
+    return { name, path: dirPath, type: 'file' }
+  }
+
+  const node = { name, path: dirPath, type: 'directory', children: [] }
+
+  if (currentDepth >= maxDepth) return node
+
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+    entries.sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1
+      if (!a.isDirectory() && b.isDirectory()) return 1
+      return a.name.localeCompare(b.name)
+    })
+
+    const filtered = entries.filter(e => {
+      if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) return false
+      if (!showHidden && e.name.startsWith('.')) return false
+      return true
+    })
+
+    for (const entry of filtered) {
+      const childPath = path.join(dirPath, entry.name)
+      if (entry.isDirectory()) {
+        node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1, showHidden))
+      } else {
+        node.children.push({ name: entry.name, path: childPath, type: 'file' })
+      }
+    }
+  } catch (err) {
+    console.error('Error reading directory:', err)
+  }
+
+  return node
 }

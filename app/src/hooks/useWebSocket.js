@@ -6,10 +6,18 @@ let sharedWs = window.__irisWs || null
 let sharedConnected = sharedWs?.readyState === WebSocket.OPEN
 const connectionListeners = window.__irisWsConnectionListeners || new Set()
 const messageListeners = window.__irisWsMessageListeners || new Set()
+const pendingRequests = window.__irisWsPendingRequests || new Map()
 
 // Persist to window for HMR survival
 window.__irisWsConnectionListeners = connectionListeners
 window.__irisWsMessageListeners = messageListeners
+window.__irisWsPendingRequests = pendingRequests
+
+// Generate unique request ID
+let requestId = 0
+function nextRequestId() {
+  return `req-${++requestId}-${Date.now()}`
+}
 
 function notifyConnectionChange(isConnected) {
   sharedConnected = isConnected
@@ -47,6 +55,18 @@ function ensureConnection(url) {
 
   // Attach all registered message listeners to new WebSocket
   ws.onmessage = (event) => {
+    // Check if this is a response to a pending request
+    try {
+      const data = JSON.parse(event.data)
+      if (data.id && pendingRequests.has(data.id)) {
+        const { resolve } = pendingRequests.get(data.id)
+        pendingRequests.delete(data.id)
+        resolve(data)
+        return
+      }
+    } catch (e) {
+      // Not JSON or no id - pass to listeners
+    }
     messageListeners.forEach(fn => fn(event))
   }
 
@@ -95,5 +115,30 @@ export function useWebSocket(url) {
     }
   }, [])
 
-  return { connected, send, lastMessage }
+  // Request/response pattern - sends message with ID and waits for response
+  const request = useCallback((event, data = {}, timeout = 30000) => {
+    return new Promise((resolve, reject) => {
+      if (!sharedWs || sharedWs.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket not connected'))
+        return
+      }
+
+      const id = nextRequestId()
+      const timer = setTimeout(() => {
+        pendingRequests.delete(id)
+        reject(new Error(`Request timeout: ${event}`))
+      }, timeout)
+
+      pendingRequests.set(id, {
+        resolve: (data) => {
+          clearTimeout(timer)
+          resolve(data)
+        }
+      })
+
+      sharedWs.send(JSON.stringify({ id, event, ...data }))
+    })
+  }, [])
+
+  return { connected, send, request, lastMessage }
 }

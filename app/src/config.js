@@ -1,6 +1,25 @@
-// Server URLs
-export const WS_URL = 'ws://localhost:9999'
-export const API_URL = 'http://localhost:9998'
+// Server URLs - dynamic based on environment
+const isElectron = typeof window !== 'undefined' && !!window.iris
+
+// In Electron: use localhost
+// In browser: derive from current host (for cloud deployment)
+function getServerHost() {
+  if (isElectron) return 'localhost'
+  if (typeof window === 'undefined') return 'localhost'
+  return window.location.hostname || 'localhost'
+}
+
+function getWsProtocol() {
+  if (isElectron) return 'ws:'
+  if (typeof window === 'undefined') return 'ws:'
+  return window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+}
+
+const host = getServerHost()
+const wsProtocol = getWsProtocol()
+
+export const WS_URL = `${wsProtocol}//${host}:9999`
+export const API_URL = `http://${host}:9998` // Keep for OAuth callback only
 export const CHRONICLE_URL = 'http://127.0.0.1:8766'
 export const DRAW_URL = 'http://127.0.0.1:8768'
 export const OLLAMA_URL = 'http://localhost:11434'

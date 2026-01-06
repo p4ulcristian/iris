@@ -17,7 +17,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { API_URL, WS_URL } from '../config'
+import { WS_URL } from '../config'
 
 // File icons by extension
 const FILE_ICONS = {
@@ -196,7 +196,7 @@ export default function CodeView({ entityId }) {
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
 
-  const { send } = useWebSocket(WS_URL)
+  const { send, request } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
   const entities = useStore(s => s.entities)
   const entity = entities[entityId]
@@ -210,25 +210,30 @@ export default function CodeView({ entityId }) {
 
   // Load directory tree from server
   const loadDirectory = useCallback(async (dirPath, hidden = showHidden) => {
+    if (!request) return
     setLoading(true)
     try {
-      const response = await fetch(`${API_URL}/api/files?path=${encodeURIComponent(dirPath)}&showHidden=${hidden}`)
-      const data = await response.json()
-      setFileTree(data)
-      setRootPath(dirPath)
-      // Auto-expand first level
-      if (data.children) {
-        setExpandedFolders(new Set([data.path]))
+      const response = await request('file:list', { path: dirPath, showHidden: hidden })
+      if (response.ok) {
+        setFileTree(response.tree)
+        setRootPath(dirPath)
+        // Auto-expand first level
+        if (response.tree?.children) {
+          setExpandedFolders(new Set([response.tree.path]))
+        }
+      } else {
+        console.error('Failed to load directory:', response.error)
       }
     } catch (err) {
       console.error('Failed to load directory:', err)
     } finally {
       setLoading(false)
     }
-  }, [showHidden])
+  }, [showHidden, request])
 
   // Load file content
   const loadFile = useCallback(async (node) => {
+    if (!request) return
     // Check if already open
     const existing = openFiles.find(f => f.path === node.path)
     if (existing) {
@@ -237,19 +242,21 @@ export default function CodeView({ entityId }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(node.path)}`)
-      const content = await response.text()
-
-      setOpenFiles(prev => [...prev, {
-        path: node.path,
-        name: node.name,
-        content
-      }])
-      setActiveFilePath(node.path)
+      const response = await request('file:read', { path: node.path })
+      if (response.ok) {
+        setOpenFiles(prev => [...prev, {
+          path: node.path,
+          name: node.name,
+          content: response.content
+        }])
+        setActiveFilePath(node.path)
+      } else {
+        console.error('Failed to load file:', response.error)
+      }
     } catch (err) {
       console.error('Failed to load file:', err)
     }
-  }, [openFiles])
+  }, [openFiles, request])
 
   // Load pending file from entity (for newly created code entities)
   useEffect(() => {
@@ -264,23 +271,24 @@ export default function CodeView({ entityId }) {
 
     // Try to load as file first, fall back to directory if it fails
     const tryLoadFile = async () => {
+      if (!request) {
+        // If WebSocket not ready, try again shortly
+        setTimeout(tryLoadFile, 100)
+        return
+      }
       try {
-        const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(path)}`)
+        const response = await request('file:read', { path })
         if (response.ok) {
-          const content = await response.text()
-          // Check if it looks like an error response (directory read fails differently)
-          if (!content.startsWith('Error:') && !content.startsWith('EISDIR')) {
-            setOpenFiles([{ path, name, content }])
-            setActiveFilePath(path)
-            // Jump to line if specified
-            if (entity.pendingLine) {
-              setTimeout(() => {
-                editorRef.current?.revealLineInCenter(entity.pendingLine)
-                editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
-              }, 200)
-            }
-            return
+          setOpenFiles([{ path, name, content: response.content }])
+          setActiveFilePath(path)
+          // Jump to line if specified
+          if (entity.pendingLine) {
+            setTimeout(() => {
+              editorRef.current?.revealLineInCenter(entity.pendingLine)
+              editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
+            }, 200)
           }
+          return
         }
       } catch (err) {
         // File load failed, try as directory
@@ -346,11 +354,15 @@ export default function CodeView({ entityId }) {
 
   // Load folder children on-demand
   const loadFolderChildren = useCallback(async (folderPath) => {
+    if (!request) return
     setLoadingFolders(prev => new Set([...prev, folderPath]))
     try {
-      const response = await fetch(`${API_URL}/api/folder?path=${encodeURIComponent(folderPath)}&showHidden=${showHidden}`)
-      const children = await response.json()
-      setFileTree(prev => updateTreeChildren(prev, folderPath, children))
+      const response = await request('file:children', { path: folderPath, showHidden })
+      if (response.ok) {
+        setFileTree(prev => updateTreeChildren(prev, folderPath, response.children))
+      } else {
+        console.error('Failed to load folder children:', response.error)
+      }
     } catch (err) {
       console.error('Failed to load folder children:', err)
     } finally {
@@ -360,7 +372,7 @@ export default function CodeView({ entityId }) {
         return next
       })
     }
-  }, [showHidden, updateTreeChildren])
+  }, [showHidden, updateTreeChildren, request])
 
   // Toggle folder expansion
   const toggleFolder = useCallback((path) => {
@@ -390,28 +402,24 @@ export default function CodeView({ entityId }) {
 
   // Save file to disk
   const saveFile = useCallback(async (filePath) => {
+    if (!request) return
     const file = openFiles.find(f => f.path === filePath)
     if (!file || !file.modified) return
 
     try {
-      const response = await fetch(`${API_URL}/api/file/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: file.content })
-      })
-
+      const response = await request('file:write', { path: filePath, content: file.content })
       if (response.ok) {
         setOpenFiles(prev => prev.map(f =>
           f.path === filePath ? { ...f, modified: false } : f
         ))
         console.log('File saved:', filePath)
       } else {
-        console.error('Failed to save file:', await response.text())
+        console.error('Failed to save file:', response.error)
       }
     } catch (err) {
       console.error('Save error:', err)
     }
-  }, [openFiles])
+  }, [openFiles, request])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -437,12 +445,18 @@ export default function CodeView({ entityId }) {
 
     // Load persisted files
     const loadPersistedFiles = async () => {
+      if (!request) {
+        // If WebSocket not ready, try again shortly
+        setTimeout(loadPersistedFiles, 100)
+        return
+      }
       const loaded = []
       for (const f of entity.openFiles) {
         try {
-          const response = await fetch(`${API_URL}/api/file?path=${encodeURIComponent(f.path)}`)
-          const content = await response.text()
-          loaded.push({ path: f.path, name: f.name, content })
+          const response = await request('file:read', { path: f.path })
+          if (response.ok) {
+            loaded.push({ path: f.path, name: f.name, content: response.content })
+          }
         } catch (err) {
           console.error('Failed to load persisted file:', f.path, err)
         }
@@ -455,7 +469,7 @@ export default function CodeView({ entityId }) {
     }
 
     loadPersistedFiles()
-  }, [entity?.openFiles, entity?.activeFilePath, initialLoadDone])
+  }, [entity?.openFiles, entity?.activeFilePath, initialLoadDone, request])
 
   // Sync open files to server when they change
   useEffect(() => {
