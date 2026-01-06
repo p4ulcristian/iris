@@ -123,7 +123,8 @@ export function handleMessage(ws, msg, projectRoot) {
           mission: god.mission || null,
           spawnedAt: Date.now(),
           sessionId: god.sessionId || null,
-          project: workingDir  // Store working directory for git branch display
+          project: workingDir,  // Store working directory for git branch display
+          readyState: 'working'  // Explicit initialization
         }
 
         // Create a new stage for this entity

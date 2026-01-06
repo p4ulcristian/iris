@@ -138,7 +138,8 @@ def main():
 
     # AskUserQuestion triggers question state
     if tool_name == 'AskUserQuestion':
-        update_ready('question')
+        if not update_ready('question'):
+            print("[hook_focus] Failed to set ready state to 'question'", file=sys.stderr)
         return
 
     status = format_status(tool_name, tool_input, cwd)
@@ -147,7 +148,9 @@ def main():
         update_status(status)
         # Reset ready state to working when actively using tools
         # (implies user responded if we were in question state)
-        update_ready('working')
+        if not update_ready('working'):
+            # Silent fail for 'working' - happens on every tool call, too noisy
+            pass
 
 
 if __name__ == '__main__':
