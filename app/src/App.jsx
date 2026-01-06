@@ -411,49 +411,55 @@ export default function App() {
 
   // Keyboard shortcuts
   useEffect(() => {
+    // Detect if we're on macOS
+    const isMacOS = /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+
+    // Helper to check if the modifier key is pressed (Cmd on Mac, Alt on others)
+    const isModifierPressed = (e) => isMacOS ? e.metaKey : e.altKey
+
     const handleKeyDown = (e) => {
       // Use e.code for physical key detection (works with Mac Option key)
       // On Mac, Option+letter produces special chars (e.g., Option+N = ñ)
       // but e.code still gives us "KeyN"
       const code = e.code
 
-      // Check if this is one of our app shortcuts (all Alt-based for cross-platform)
+      // Check if this is one of our app shortcuts (Cmd-based on Mac, Alt on others)
       const appShortcutCodes = [
         'KeyN', 'KeyT', 'KeyW', 'KeyK', 'KeyR', 'KeyB', 'KeyD', 'KeyF',
         'Comma', 'Period', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
         'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'
       ]
-      const isAppShortcut = e.altKey && appShortcutCodes.includes(code)
+      const isAppShortcut = isModifierPressed(e) && appShortcutCodes.includes(code)
 
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Alt+N: Open summon modal (new god)
-      if (e.altKey && code === 'KeyN') {
+      // Cmd+N (Mac) / Alt+N: Open summon modal (new god)
+      if (isModifierPressed(e) && code === 'KeyN') {
         e.preventDefault()
         e.stopPropagation()
         setSummonModalOpen(true)
         return
       }
 
-      // Alt+B: Toggle sidebar
-      if (e.altKey && code === 'KeyB') {
+      // Cmd+B (Mac) / Alt+B: Toggle sidebar
+      if (isModifierPressed(e) && code === 'KeyB') {
         e.preventDefault()
         e.stopPropagation()
         handleSidebarToggle()
         return
       }
 
-      // Alt+T: New tab
-      if (e.altKey && code === 'KeyT') {
+      // Cmd+T (Mac) / Alt+T: New tab
+      if (isModifierPressed(e) && code === 'KeyT') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'tab:add' })
         return
       }
 
-      // Alt+K: Kill focused entity
-      if (e.altKey && code === 'KeyK') {
+      // Cmd+K (Mac) / Alt+K: Kill focused entity
+      if (isModifierPressed(e) && code === 'KeyK') {
         e.preventDefault()
         e.stopPropagation()
         if (focusedEntity) {
@@ -464,40 +470,40 @@ export default function App() {
         return
       }
 
-      // Alt+W: Kill current tab
-      if (e.altKey && code === 'KeyW') {
+      // Cmd+W (Mac) / Alt+W: Kill current tab
+      if (isModifierPressed(e) && code === 'KeyW') {
         e.preventDefault()
         e.stopPropagation()
         handleKillTab()
         return
       }
 
-      // Alt+R: Spawn raw terminal
-      if (e.altKey && code === 'KeyR') {
+      // Cmd+R (Mac) / Alt+R: Spawn raw terminal
+      if (isModifierPressed(e) && code === 'KeyR') {
         e.preventDefault()
         e.stopPropagation()
         handleSpawnTerminal()
         return
       }
 
-      // Alt+D: Toggle dev panel
-      if (e.altKey && code === 'KeyD') {
+      // Cmd+D (Mac) / Alt+D: Toggle dev panel
+      if (isModifierPressed(e) && code === 'KeyD') {
         e.preventDefault()
         e.stopPropagation()
         toggleDevPanel()
         return
       }
 
-      // Alt+F: Toggle window fullscreen
-      if (e.altKey && code === 'KeyF') {
+      // Cmd+F (Mac) / Alt+F: Toggle window fullscreen
+      if (isModifierPressed(e) && code === 'KeyF') {
         e.preventDefault()
         e.stopPropagation()
         window.iris.windowControl('toggle-fullscreen')
         return
       }
 
-      // Alt+, and Alt+.: Previous/next tab
-      if (e.altKey && code === 'Comma') {
+      // Cmd+, (Mac) / Alt+,: Previous tab
+      if (isModifierPressed(e) && code === 'Comma') {
         e.preventDefault()
         e.stopPropagation()
         const idx = tabs.findIndex(t => t.id === activeTabId)
@@ -505,7 +511,9 @@ export default function App() {
         send({ event: 'tab:select', tabId: tabs[prevIdx].id })
         return
       }
-      if (e.altKey && code === 'Period') {
+
+      // Cmd+. (Mac) / Alt+.: Next tab
+      if (isModifierPressed(e) && code === 'Period') {
         e.preventDefault()
         e.stopPropagation()
         const idx = tabs.findIndex(t => t.id === activeTabId)
@@ -514,8 +522,8 @@ export default function App() {
         return
       }
 
-      // Alt+1-9: Go to tab
-      if (e.altKey && code.startsWith('Digit')) {
+      // Cmd+1-9 (Mac) / Alt+1-9: Go to tab
+      if (isModifierPressed(e) && code.startsWith('Digit')) {
         const num = parseInt(code.charAt(5))
         if (num >= 1 && num <= 9) {
           e.preventDefault()
@@ -532,24 +540,24 @@ export default function App() {
         handleSetFocus(null)
       }
 
-      // Alt+Up: Focus previous entity
-      if (e.altKey && code === 'ArrowUp') {
+      // Cmd+Up (Mac) / Alt+Up: Focus previous entity
+      if (isModifierPressed(e) && code === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:prev' })
         return
       }
 
-      // Alt+Down: Focus next entity
-      if (e.altKey && code === 'ArrowDown') {
+      // Cmd+Down (Mac) / Alt+Down: Focus next entity
+      if (isModifierPressed(e) && code === 'ArrowDown') {
         e.preventDefault()
         e.stopPropagation()
         send({ event: 'focus:next' })
         return
       }
 
-      // Alt+Left: Previous tab
-      if (e.altKey && code === 'ArrowLeft') {
+      // Cmd+Left (Mac) / Alt+Left: Previous tab
+      if (isModifierPressed(e) && code === 'ArrowLeft') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
@@ -562,8 +570,8 @@ export default function App() {
         return
       }
 
-      // Alt+Right: Next tab
-      if (e.altKey && code === 'ArrowRight') {
+      // Cmd+Right (Mac) / Alt+Right: Next tab
+      if (isModifierPressed(e) && code === 'ArrowRight') {
         e.preventDefault()
         e.stopPropagation()
         const t = tabsRef.current
@@ -585,37 +593,38 @@ export default function App() {
     toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
 
-  // Alt key hold for shortcuts popup
+  // Modifier key hold for shortcuts popup (Cmd on Mac, Alt on others)
   useEffect(() => {
-    let altHeldTimer = null
+    const isMacOS = /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+    let modifierHeldTimer = null
 
     const handleKeyDown = (e) => {
-      // Intercept bare Alt key to prevent terminal from reacting
-      if (e.key === 'Alt') {
+      // Intercept bare modifier key to prevent terminal from reacting
+      if ((isMacOS && e.key === 'Meta') || (!isMacOS && e.key === 'Alt')) {
         e.preventDefault()
-        // Show shortcuts when Alt is held (but not if a modal is open)
+        // Show shortcuts when modifier is held (but not if a modal is open)
         if (!summonModalOpen && !confirmModal) {
-          // Small delay to avoid flickering on Alt+key combos
-          altHeldTimer = setTimeout(() => setShowShortcuts(true), 150)
+          // Small delay to avoid flickering on modifier+key combos
+          modifierHeldTimer = setTimeout(() => setShowShortcuts(true), 150)
         }
-      } else if (e.altKey) {
-        // If another key is pressed with Alt, cancel showing shortcuts
-        clearTimeout(altHeldTimer)
+      } else if ((isMacOS && e.metaKey) || (!isMacOS && e.altKey)) {
+        // If another key is pressed with modifier, cancel showing shortcuts
+        clearTimeout(modifierHeldTimer)
         setShowShortcuts(false)
       }
     }
 
     const handleKeyUp = (e) => {
-      if (e.key === 'Alt') {
+      if ((isMacOS && e.key === 'Meta') || (!isMacOS && e.key === 'Alt')) {
         e.preventDefault()
-        clearTimeout(altHeldTimer)
+        clearTimeout(modifierHeldTimer)
         setShowShortcuts(false)
       }
     }
 
     const handleBlur = () => {
-      // Hide shortcuts if window loses focus (e.g., Alt+Tab)
-      clearTimeout(altHeldTimer)
+      // Hide shortcuts if window loses focus (e.g., Cmd+Tab on Mac, Alt+Tab on others)
+      clearTimeout(modifierHeldTimer)
       setShowShortcuts(false)
     }
 
@@ -625,7 +634,7 @@ export default function App() {
     window.addEventListener('blur', handleBlur)
 
     return () => {
-      clearTimeout(altHeldTimer)
+      clearTimeout(modifierHeldTimer)
       window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp, true)
       window.removeEventListener('blur', handleBlur)
