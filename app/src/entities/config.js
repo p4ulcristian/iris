@@ -29,6 +29,8 @@ export const ENTITY_TYPES = {
   rsvp: { label: 'RSVP', description: 'Speed reader', faIcon: 'faBook', color: '#10B981' },
   markdown: { label: 'Markdown', description: 'Markdown viewer', faIcon: 'faFileLines', color: '#89b4fa' },
   draw: { label: 'Draw', description: 'StarVector SVG generator', faIcon: 'faPaintBrush', color: '#9333EA' },
+  pomodoro: { label: 'Pomodoro', description: 'Focus timer', faIcon: 'faClock', color: '#EF4444' },
+  todo: { label: 'Todo', description: 'Task list', faIcon: 'faListCheck', color: '#22C55E' },
 }
 
 // List format for pickers/iteration

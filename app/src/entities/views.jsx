@@ -27,6 +27,8 @@ import PersonalitiesView from '../components/PersonalitiesView'
 import RSVPView from '../components/RSVPView'
 import MarkdownView from '../components/MarkdownView'
 import DrawView from '../components/DrawView'
+import PomodoroView from '../components/PomodoroView'
+import TodoView from '../components/TodoView'
 
 /**
  * Entity Views Registry
@@ -107,6 +109,14 @@ export const ENTITY_VIEWS = {
   draw: {
     component: DrawView,
     props: () => ({})
+  },
+  pomodoro: {
+    component: PomodoroView,
+    props: (entity, { send }) => ({ entityId: entity.id, send })
+  },
+  todo: {
+    component: TodoView,
+    props: (entity, { send }) => ({ entityId: entity.id, send })
   }
 }
 

@@ -260,6 +260,16 @@ export default function RightSidebar({
                   title="Oracle (Local LLM) - drag to split"
                   onClick={() => onSpawnEntity('oracle')}
                 />
+                <DraggableTypeButton
+                  entityType="pomodoro"
+                  title="Pomodoro Timer - drag to split"
+                  onClick={() => onSpawnEntity('pomodoro')}
+                />
+                <DraggableTypeButton
+                  entityType="todo"
+                  title="Todo List - drag to split"
+                  onClick={() => onSpawnEntity('todo')}
+                />
               </div>
 
               {/* Dev Tools */}

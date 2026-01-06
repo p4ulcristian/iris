@@ -818,6 +818,18 @@ export function handleMessage(ws, msg, projectRoot) {
       break
     }
 
+    // Update entity data (for pomodoro, todo, etc.)
+    case 'entity:update-data': {
+      const entityId = data.entityId
+      const entityData = data.data
+      if (entityId && appState.entities[entityId]) {
+        appState.entities[entityId].data = entityData
+        saveState()
+        broadcastState()
+      }
+      break
+    }
+
     case 'focus:set': {
       const entityId = data.entityId || data.godName
       appState.focusedEntity = entityId || null

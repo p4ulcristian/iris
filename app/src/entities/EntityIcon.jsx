@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faRobot, faDna, faBook, faFileLines, faPaintBrush } from '@fortawesome/free-solid-svg-icons'
+import { faTerminal, faClockRotateLeft, faGear, faSkull, faCalendar, faRobot, faDna, faBook, faFileLines, faPaintBrush, faClock, faListCheck } from '@fortawesome/free-solid-svg-icons'
 import { ENTITY_TYPES } from './config'
 
 // Map faIcon string names to actual FontAwesome icons
@@ -14,6 +14,8 @@ const FA_ICONS = {
   faBook,
   faFileLines,
   faPaintBrush,
+  faClock,
+  faListCheck,
 }
 
 export default function EntityIcon({ type, size = 'sm', className = '' }) {
