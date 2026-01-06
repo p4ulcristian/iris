@@ -1,36 +1,42 @@
 import { motion, AnimatePresence } from 'framer-motion'
 
-const shortcuts = [
+// Detect if we're on macOS
+const isMacOS = /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+const modifierKey = isMacOS ? 'Cmd' : 'Alt'
+
+const createShortcuts = (mod) => [
   {
     title: 'Entities',
     items: [
-      { keys: ['Alt', 'N'], action: 'Summon god' },
-      { keys: ['Alt', 'R'], action: 'Raw terminal' },
-      { keys: ['Alt', 'K'], action: 'Kill focused' },
-      { keys: ['Alt', '↑'], action: 'Focus prev' },
-      { keys: ['Alt', '↓'], action: 'Focus next' },
+      { keys: [mod, 'N'], action: 'Summon god' },
+      { keys: [mod, 'R'], action: 'Raw terminal' },
+      { keys: [mod, 'K'], action: 'Kill focused' },
+      { keys: [mod, '↑'], action: 'Focus prev' },
+      { keys: [mod, '↓'], action: 'Focus next' },
     ]
   },
   {
     title: 'Tabs',
     items: [
-      { keys: ['Alt', 'T'], action: 'New tab' },
-      { keys: ['Alt', 'W'], action: 'Close tab' },
-      { keys: ['Alt', '←'], action: 'Prev tab' },
-      { keys: ['Alt', '→'], action: 'Next tab' },
-      { keys: ['Alt', '1-9'], action: 'Go to tab' },
+      { keys: [mod, 'T'], action: 'New tab' },
+      { keys: [mod, 'W'], action: 'Close tab' },
+      { keys: [mod, '←'], action: 'Prev tab' },
+      { keys: [mod, '→'], action: 'Next tab' },
+      { keys: [mod, '1-9'], action: 'Go to tab' },
     ]
   },
   {
     title: 'Window',
     items: [
-      { keys: ['Alt', 'F'], action: 'Fullscreen' },
-      { keys: ['Alt', 'B'], action: 'Toggle sidebar' },
-      { keys: ['Alt', 'D'], action: 'Dev panel' },
+      { keys: [mod, 'F'], action: 'Fullscreen' },
+      { keys: [mod, 'B'], action: 'Toggle sidebar' },
+      { keys: [mod, 'D'], action: 'Dev panel' },
       { keys: ['Esc'], action: 'Clear focus' },
     ]
   },
 ]
+
+const shortcuts = createShortcuts(modifierKey)
 
 function Shortcut({ keys, action }) {
   return (
@@ -96,7 +102,7 @@ export default function ShortcutsPopup({ isOpen }) {
             </div>
 
             <p className="text-xs text-text-secondary text-center mt-4 opacity-60">
-              Release Alt to close
+              Release {modifierKey} to close
             </p>
           </motion.div>
         </motion.div>
