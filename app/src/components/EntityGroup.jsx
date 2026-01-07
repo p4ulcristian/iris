@@ -186,6 +186,7 @@ function EntityCardDropTarget({
       },
       onDragEnter: ({ self, source }) => {
         const edge = extractClosestEdge(self.data)
+        console.log('[dragEnter] on:', entity.id, 'from:', source.data.entityId, 'stageId:', stageId)
         setDropState({ isDraggedOver: true, closestEdge: edge })
       },
       onDrag: ({ self }) => {
@@ -201,17 +202,20 @@ function EntityCardDropTarget({
         const { entityId: draggedEntityId, stageId: sourceStageId } = source.data
         const edge = extractClosestEdge(self.data)
 
+        console.log('[drop] sourceStageId:', sourceStageId, 'targetStageId:', stageId, 'isSoloStage:', isSoloStage, 'edge:', edge)
         if (sourceStageId === stageId) {
           // Same stage: reorder within
           let targetIndex = entityIndex
           if (edge === 'bottom') {
             targetIndex = entityIndex + 1
           }
+          console.log('[client reorder] dragged:', draggedEntityId, 'dropped on:', entity.id, 'edge:', edge, 'entityIndex:', entityIndex, 'targetIndex:', targetIndex)
           onReorderInStage?.(stageId, draggedEntityId, targetIndex)
         } else if (isSoloStage) {
           // Different stage, target is solo: create new stage at position (reorder stages)
           // Drop above = insert at stageIndex, drop below = insert at stageIndex + 1
           const position = edge === 'top' ? stageIndex : stageIndex + 1
+          console.log('[client create-at-position] dragged:', draggedEntityId, 'position:', position)
           onCreateStageAtPosition?.(draggedEntityId, sourceStageId, position)
         } else {
           // Different stage, target is multi-entity: join this stage
@@ -219,6 +223,7 @@ function EntityCardDropTarget({
           if (edge === 'bottom') {
             targetIndex = entityIndex + 1
           }
+          console.log('[client join] dragged:', draggedEntityId, 'targetStage:', stageId, 'targetIndex:', targetIndex)
           onJoinStage?.(draggedEntityId, sourceStageId, stageId, targetIndex)
         }
       }
@@ -226,7 +231,12 @@ function EntityCardDropTarget({
   }, [stageId, stageIndex, entityIndex, entity.id, isSoloStage, onReorderInStage, onJoinStage, onCreateStageAtPosition])
 
   return (
-    <div ref={dropRef} className="relative">
+    <motion.div
+      ref={dropRef}
+      layout
+      transition={{ layout: { type: 'tween', duration: 0.2, ease: 'easeOut' } }}
+      className="relative"
+    >
       {/* Drop indicator - top */}
       {dropState.isDraggedOver && dropState.closestEdge === 'top' && (
         <div className="absolute -top-1.5 left-0 right-0 h-0.5 bg-teal-400 rounded-full z-10" />
@@ -252,6 +262,6 @@ function EntityCardDropTarget({
       {dropState.isDraggedOver && dropState.closestEdge === 'bottom' && (
         <div className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-teal-400 rounded-full z-10" />
       )}
-    </div>
+    </motion.div>
   )
 }

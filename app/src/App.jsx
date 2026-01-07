@@ -270,6 +270,7 @@ export default function App() {
         entities: entityIds
           .map(id => entities[id])
           .filter(Boolean)
+          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       }
     }).sort((a, b) => {
       const aOrder = a.entities[0]?.order ?? Infinity

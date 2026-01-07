@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -8,8 +8,67 @@ import {
   faForward,
   faGear,
   faCoffee,
-  faBrain
+  faBrain,
+  faVolumeHigh,
+  faVolumeXmark
 } from '@fortawesome/free-solid-svg-icons'
+
+// Web Audio API sound generator
+const createAudioContext = () => {
+  if (typeof window !== 'undefined') {
+    return new (window.AudioContext || window.webkitAudioContext)()
+  }
+  return null
+}
+
+const playTone = (frequency, duration, type = 'sine', volume = 0.3) => {
+  const ctx = createAudioContext()
+  if (!ctx) return
+
+  const oscillator = ctx.createOscillator()
+  const gainNode = ctx.createGain()
+
+  oscillator.connect(gainNode)
+  gainNode.connect(ctx.destination)
+
+  oscillator.frequency.value = frequency
+  oscillator.type = type
+
+  // Fade in and out for smooth sound
+  gainNode.gain.setValueAtTime(0, ctx.currentTime)
+  gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.02)
+  gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + duration)
+
+  oscillator.start(ctx.currentTime)
+  oscillator.stop(ctx.currentTime + duration)
+}
+
+// Sound effects
+const sounds = {
+  start: () => {
+    // Ascending double beep - energizing
+    playTone(523.25, 0.15, 'sine', 0.25)  // C5
+    setTimeout(() => playTone(659.25, 0.2, 'sine', 0.3), 150)  // E5
+  },
+  pause: () => {
+    // Descending tone - calming
+    playTone(440, 0.15, 'sine', 0.2)  // A4
+    setTimeout(() => playTone(349.23, 0.2, 'sine', 0.15), 120)  // F4
+  },
+  workDone: () => {
+    // Triumphant chord - achievement!
+    playTone(523.25, 0.4, 'sine', 0.2)  // C5
+    setTimeout(() => playTone(659.25, 0.4, 'sine', 0.2), 50)  // E5
+    setTimeout(() => playTone(783.99, 0.5, 'sine', 0.25), 100)  // G5
+    setTimeout(() => playTone(1046.5, 0.6, 'triangle', 0.2), 200)  // C6
+  },
+  breakDone: () => {
+    // Gentle wake-up chime
+    playTone(392, 0.2, 'sine', 0.2)  // G4
+    setTimeout(() => playTone(523.25, 0.2, 'sine', 0.25), 150)  // C5
+    setTimeout(() => playTone(659.25, 0.3, 'sine', 0.3), 300)  // E5
+  }
+}
 
 const DEFAULT_STATE = {
   workMinutes: 25,
@@ -17,7 +76,8 @@ const DEFAULT_STATE = {
   remaining: 25 * 60 * 1000,
   isRunning: false,
   isBreak: false,
-  completedPomodoros: 0
+  completedPomodoros: 0,
+  soundEnabled: true
 }
 
 export default function PomodoroView({ entityId, send }) {
@@ -35,6 +95,22 @@ export default function PomodoroView({ entityId, send }) {
     const minutes = Math.floor(totalSeconds / 60)
     const seconds = totalSeconds % 60
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+  }
+
+  // Play sound if enabled
+  const playSound = useCallback((soundName) => {
+    if (data.soundEnabled && sounds[soundName]) {
+      sounds[soundName]()
+    }
+  }, [data.soundEnabled])
+
+  // Toggle sound
+  const handleToggleSound = () => {
+    send({
+      event: 'entity:update-data',
+      entityId,
+      data: { ...data, soundEnabled: !data.soundEnabled }
+    })
   }
 
   // Update status on card when timer changes
@@ -70,6 +146,15 @@ export default function PomodoroView({ entityId, send }) {
             : data.workMinutes * 60 * 1000
           const newCompleted = data.isBreak ? data.completedPomodoros : data.completedPomodoros + 1
 
+          // Play completion sound
+          if (data.soundEnabled) {
+            if (data.isBreak) {
+              sounds.breakDone()  // Break finished, back to work
+            } else {
+              sounds.workDone()   // Work finished, time for break
+            }
+          }
+
           send({
             event: 'entity:update-data',
             entityId,
@@ -96,9 +181,15 @@ export default function PomodoroView({ entityId, send }) {
         clearInterval(intervalRef.current)
       }
     }
-  }, [data.isRunning, data.remaining, data.isBreak, entityId, send])
+  }, [data.isRunning, data.remaining, data.isBreak, data.soundEnabled, entityId, send])
 
   const handlePlayPause = () => {
+    // Play appropriate sound
+    if (!data.isRunning) {
+      playSound('start')
+    } else {
+      playSound('pause')
+    }
     send({
       event: 'entity:update-data',
       entityId,
@@ -244,13 +335,26 @@ export default function PomodoroView({ entityId, send }) {
         {data.completedPomodoros} pomodoro{data.completedPomodoros !== 1 ? 's' : ''} completed
       </div>
 
-      {/* Settings toggle */}
-      <button
-        onClick={() => setShowSettings(!showSettings)}
-        className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
-      >
-        <FontAwesomeIcon icon={faGear} />
-      </button>
+      {/* Settings and sound toggles */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleToggleSound}
+          className={`p-2 rounded-lg transition-colors ${
+            data.soundEnabled
+              ? 'bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary'
+              : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+          }`}
+          title={data.soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+        >
+          <FontAwesomeIcon icon={data.soundEnabled ? faVolumeHigh : faVolumeXmark} />
+        </button>
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
+        >
+          <FontAwesomeIcon icon={faGear} />
+        </button>
+      </div>
 
       {/* Settings panel */}
       {showSettings && (

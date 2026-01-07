@@ -2151,15 +2151,21 @@ export function handleMessage(ws, msg, projectRoot) {
       const stage = tab.stages.find(s => s.id === stageId)
       if (!stage?.layout) break
 
-      // Get all entity IDs in this stage's layout
+      // Get all entity IDs in this stage's layout, sorted by order (to match client display)
       const entityIds = layout.getAllEntityIds(stage.layout)
+        .sort((a, b) => (appState.entities[a]?.order ?? 0) - (appState.entities[b]?.order ?? 0))
       const currentIndex = entityIds.indexOf(entityId)
       if (currentIndex === -1) break
+
+      console.log('[reorder] BEFORE:', entityIds.map(id => appState.entities[id]?.name || id))
+      console.log('[reorder] dragged:', entityId, 'currentIndex:', currentIndex, 'targetIndex:', targetIndex)
 
       // Remove from current position and insert at target
       entityIds.splice(currentIndex, 1)
       const insertAt = targetIndex > currentIndex ? targetIndex - 1 : targetIndex
+      console.log('[reorder] insertAt:', insertAt)
       entityIds.splice(insertAt, 0, entityId)
+      console.log('[reorder] AFTER:', entityIds.map(id => appState.entities[id]?.name || id))
 
       // Rebuild the layout with new order
       // For now, just update entity order values to reflect new positions
@@ -2239,10 +2245,22 @@ export function handleMessage(ws, msg, projectRoot) {
       const tab = appState.tabs.find(t => t.id === appState.activeTabId)
       if (!tab) break
 
-      // Find and remove entity from source stage
+      // Find source stage and its position (sorted by first entity's order)
       const sourceStage = sourceStageId
         ? tab.stages.find(s => s.id === sourceStageId)
         : findStageByEntity(tab, entityId)
+
+      // Get source stage's sorted position (by first entity's order)
+      const sortedStages = [...tab.stages].sort((a, b) => {
+        const aIds = layout.getAllEntityIds(a.layout)
+        const bIds = layout.getAllEntityIds(b.layout)
+        const aOrder = aIds.length > 0 ? (appState.entities[aIds[0]]?.order ?? 0) : 0
+        const bOrder = bIds.length > 0 ? (appState.entities[bIds[0]]?.order ?? 0) : 0
+        return aOrder - bOrder
+      })
+      const sourcePosition = sortedStages.findIndex(s => s.id === sourceStage?.id)
+
+      console.log('[create-at-position] sourcePosition:', sourcePosition, 'targetPosition:', position)
 
       if (sourceStage?.layout) {
         sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
@@ -2258,14 +2276,34 @@ export function handleMessage(ws, msg, projectRoot) {
       const tileNode = layout.createTile(entityId)
       const newStage = { id: newStageId, layout: tileNode }
 
-      // Insert at the specified position
-      const insertPosition = Math.min(position, tab.stages.length)
-      tab.stages.splice(insertPosition, 0, newStage)
+      // Adjust position if source was before target (moving down)
+      let targetOrder = position
+      if (sourcePosition !== -1 && sourcePosition < position) {
+        targetOrder = position - 1
+      }
+      console.log('[create-at-position] targetOrder:', targetOrder)
 
-      // Update entity order to match stage position
-      tab.stages.forEach((stage, idx) => {
-        const stageEntityIds = layout.getAllEntityIds(stage.layout)
-        stageEntityIds.forEach((id) => {
+      // Append the new stage
+      tab.stages.push(newStage)
+
+      // Build sorted list of all stages (excluding the moved entity for now)
+      const otherStages = tab.stages
+        .filter(s => s.id !== newStage.id)
+        .map(stage => {
+          const ids = layout.getAllEntityIds(stage.layout)
+          const order = ids.length > 0 ? (appState.entities[ids[0]]?.order ?? 999) : 999
+          return { stage, ids, order }
+        })
+        .sort((a, b) => a.order - b.order)
+
+      // Insert the moved entity at targetOrder position
+      const movedEntity = { stage: newStage, ids: [entityId], order: targetOrder }
+      otherStages.splice(targetOrder, 0, movedEntity)
+
+      // Reassign sequential orders
+      console.log('[create-at-position] final order:', otherStages.map(s => appState.entities[s.ids[0]]?.name || s.ids[0]))
+      otherStages.forEach((item, idx) => {
+        item.ids.forEach(id => {
           if (appState.entities[id]) {
             appState.entities[id].order = idx
           }
