@@ -274,17 +274,21 @@ export default function CodeView({ entityId }) {
   }, [showHidden, send])
 
   // Load file content
-  const loadFile = useCallback(async (node) => {
-    if (!request) return
+  const loadFile = useCallback(async (node, retries = 3) => {
+    console.log('[CodeView] loadFile called:', node.path)
+
     // Check if already open
     const existing = openFiles.find(f => f.path === node.path)
     if (existing) {
+      console.log('[CodeView] File already open, switching to it')
       setActiveFilePath(node.path)
       return
     }
 
     try {
+      console.log('[CodeView] Requesting file:read')
       const response = await request('file:read', { path: node.path })
+      console.log('[CodeView] file:read response:', response?.ok, response?.error)
       if (response.ok) {
         setOpenFiles(prev => [...prev, {
           path: node.path,
@@ -293,10 +297,17 @@ export default function CodeView({ entityId }) {
         }])
         setActiveFilePath(node.path)
       } else {
-        console.error('Failed to load file:', response.error)
+        console.error('[CodeView] Failed to load file:', response.error)
       }
     } catch (err) {
-      console.error('Failed to load file:', err)
+      console.error('[CodeView] loadFile error:', err)
+      // Retry on WebSocket errors
+      if (retries > 0 && err.message?.includes('WebSocket')) {
+        console.log(`[CodeView] WebSocket not ready, retrying in 200ms... (${retries} left)`)
+        setTimeout(() => loadFile(node, retries - 1), 200)
+        return
+      }
+      console.error('[CodeView] Failed to load file:', err)
     }
   }, [openFiles, request])
 
@@ -312,12 +323,7 @@ export default function CodeView({ entityId }) {
     const name = path.split('/').pop()
 
     // Try to load as file first, fall back to directory if it fails
-    const tryLoadFile = async () => {
-      if (!request) {
-        // If WebSocket not ready, try again shortly
-        setTimeout(tryLoadFile, 100)
-        return
-      }
+    const tryLoadFile = async (retries = 5) => {
       try {
         const response = await request('file:read', { path })
         if (response.ok) {
@@ -332,15 +338,23 @@ export default function CodeView({ entityId }) {
           }
           return
         }
+        // File read returned ok: false - treat as directory
+        loadDirectory(path)
       } catch (err) {
-        // File load failed, try as directory
+        // Retry on WebSocket errors
+        if (retries > 0 && err.message?.includes('WebSocket')) {
+          console.log(`[CodeView] pendingFile: WebSocket not ready, retrying in 200ms... (${retries} left)`)
+          setTimeout(() => tryLoadFile(retries - 1), 200)
+          return
+        }
+        // Other errors - fall back to directory
+        console.error('[CodeView] pendingFile load failed:', err)
+        loadDirectory(path)
       }
-      // Fall back to directory
-      loadDirectory(path)
     }
 
     tryLoadFile()
-  }, [entity?.pendingFile, entity?.pendingLine, loadDirectory, pendingFileHandled])
+  }, [entity?.pendingFile, entity?.pendingLine, loadDirectory, pendingFileHandled, request])
 
   // Listen for file open events (from gods)
   useEffect(() => {

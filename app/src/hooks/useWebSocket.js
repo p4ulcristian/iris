@@ -24,12 +24,27 @@ function notifyConnectionChange(isConnected) {
   connectionListeners.forEach(fn => fn(isConnected))
 }
 
+// Shared message handler - handles pending requests then broadcasts to listeners
+function handleWsMessage(event) {
+  // Check if this is a response to a pending request
+  try {
+    const data = JSON.parse(event.data)
+    if (data.id && pendingRequests.has(data.id)) {
+      const { resolve } = pendingRequests.get(data.id)
+      pendingRequests.delete(data.id)
+      resolve(data)
+      return
+    }
+  } catch (e) {
+    // Not JSON or no id - pass to listeners
+  }
+  messageListeners.forEach(fn => fn(event))
+}
+
 function ensureConnection(url) {
   if (sharedWs && sharedWs.readyState !== WebSocket.CLOSED) {
     // Already connected - re-bind message handler in case of HMR
-    sharedWs.onmessage = (event) => {
-      messageListeners.forEach(fn => fn(event))
-    }
+    sharedWs.onmessage = handleWsMessage
     return
   }
 
@@ -53,22 +68,7 @@ function ensureConnection(url) {
     reportError({ message: 'WebSocket connection error' }, 'websocket', { type: 'connection' })
   }
 
-  // Attach all registered message listeners to new WebSocket
-  ws.onmessage = (event) => {
-    // Check if this is a response to a pending request
-    try {
-      const data = JSON.parse(event.data)
-      if (data.id && pendingRequests.has(data.id)) {
-        const { resolve } = pendingRequests.get(data.id)
-        pendingRequests.delete(data.id)
-        resolve(data)
-        return
-      }
-    } catch (e) {
-      // Not JSON or no id - pass to listeners
-    }
-    messageListeners.forEach(fn => fn(event))
-  }
+  ws.onmessage = handleWsMessage
 
   sharedWs = ws
   window.__irisWs = ws

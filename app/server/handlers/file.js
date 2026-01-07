@@ -109,15 +109,19 @@ export const handlers = {
   'file:read': (ws, data) => {
     const { id } = data
     const filePath = data.path
+    console.log('[file:read] Request:', { id, filePath })
 
     if (!filePath) {
+      console.log('[file:read] Missing path')
       ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: 'Missing path parameter' }))
       return
     }
 
     fs.promises.readFile(filePath, 'utf-8').then(content => {
+      console.log('[file:read] Success, sending response with id:', id)
       ws.send(JSON.stringify({ id, event: 'file:read', ok: true, content }))
     }).catch(err => {
+      console.log('[file:read] Error:', err.message)
       ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: err.message }))
     })
   },

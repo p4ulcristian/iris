@@ -42,6 +42,11 @@ const allHandlers = {
 export function handleMessage(ws, msg, projectRoot) {
   const { event, ...data } = msg
 
+  // Debug: log file:read requests
+  if (event === 'file:read') {
+    console.log('[handleMessage] file:read received, id:', data.id, 'path:', data.path)
+  }
+
   const handler = allHandlers[event]
   if (handler) {
     try {

@@ -21,7 +21,9 @@
     "build": "bunx --bun vite build && electron-builder",
     "build:linux": "bunx --bun vite build && electron-builder --linux --publish never",
     "build:mac": "bunx --bun vite build && electron-builder --mac --publish never",
-    "preview": "bunx --bun vite preview"
+    "preview": "bunx --bun vite preview",
+    "cli:build": "bun build cli/index.ts --compile --outfile dist/iris-cli",
+    "cli:install": "bun run cli:build && sudo cp dist/iris-cli /usr/local/bin/iris"
   },
   "build": {
     "appId": "com.paulcristian.iris",
