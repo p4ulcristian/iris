@@ -258,11 +258,11 @@ export default function App() {
     return []
   }, [])
 
-  // Get stages for active tab with their entities (grouped by stage)
+  // Get stages for any tab with their entities (grouped by stage)
   // Sorted by first entity's order so Ctrl+Up/Down matches visual order
-  const activeStages = useMemo(() => {
-    const activeTab = tabs.find(t => t.id === activeTabId)
-    const stages = activeTab?.stages || []
+  const getStagesForTab = useCallback((tabId) => {
+    const tab = tabs.find(t => t.id === tabId)
+    const stages = tab?.stages || []
     return stages.map(stage => {
       const entityIds = collectEntityIds(stage.layout)
       return {
@@ -276,7 +276,43 @@ export default function App() {
       const bOrder = b.entities[0]?.order ?? Infinity
       return aOrder - bOrder
     })
-  }, [tabs, activeTabId, entities, collectEntityIds])
+  }, [tabs, entities, collectEntityIds])
+
+  // Active tab's stages (for backwards compat with sidebar etc)
+  const activeStages = useMemo(() => {
+    return getStagesForTab(activeTabId)
+  }, [getStagesForTab, activeTabId])
+
+  // Build flat list of ALL stages across ALL tabs for continuous scroll animation
+  const { allStages, globalActiveIdx } = useMemo(() => {
+    const stages = []
+    let activeIdx = 0
+
+    tabs.forEach((tab) => {
+      const tabStages = getStagesForTab(tab.id)
+      const activeStageId = tab.activeStageId
+
+      if (tabStages.length > 0) {
+        tabStages.forEach((stage, stageIdx) => {
+          if (tab.id === activeTabId) {
+            const foundIdx = tabStages.findIndex(s => s.id === activeStageId)
+            const activeStageIdx = foundIdx === -1 ? 0 : foundIdx
+            if (stageIdx === activeStageIdx) {
+              activeIdx = stages.length
+            }
+          }
+          stages.push({ tab, stage, tabId: tab.id, stageId: stage.id })
+        })
+      } else {
+        if (tab.id === activeTabId) {
+          activeIdx = stages.length
+        }
+        stages.push({ tab, stage: null, tabId: tab.id, stageId: null, isEmpty: true })
+      }
+    })
+
+    return { allStages: stages, globalActiveIdx: activeIdx }
+  }, [tabs, activeTabId, getStagesForTab])
 
   // Get focused entity object
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
@@ -693,35 +729,61 @@ export default function App() {
             <div className="flex-[2] min-w-0 relative h-full">
               <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
               {(() => {
-                const activeLayout = getActiveLayout()
-
-                // If we have stages, render all with spring y positions (Apple-style)
-                // Use activeStages (sorted by entity order) for consistent Ctrl+Up/Down navigation
-                const activeTab = tabs.find(t => t.id === activeTabId)
-                const activeStageId = activeTab?.activeStageId
-                const foundIdx = activeStages.findIndex(s => s.id === activeStageId)
-                const activeIdx = foundIdx === -1 ? 0 : foundIdx
-
-                if (activeStages.length > 0) {
+                // Use memoized allStages and globalActiveIdx for continuous scroll
+                if (allStages.length > 0) {
                   return (
                     <div className="relative h-full overflow-hidden">
-                      {activeStages.map((stage, idx) => {
-                        const offset = idx - activeIdx
+                      {/* Render ALL stages from ALL tabs as one continuous stack */}
+                      {allStages.map((item, idx) => {
+                        const offset = idx - globalActiveIdx
+                        const isActive = offset === 0
+
                         return (
                           <motion.div
-                            key={stage.id}
+                            key={item.stageId || `empty-${item.tabId}`}
                             className={`absolute inset-0 stage ${offset !== 0 ? 'stage-offscreen' : ''}`}
                             initial={false}
-                            animate={{ y: `${offset * 100}%`, z: 0 }}
+                            animate={{ y: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                            style={{ pointerEvents: isActive ? 'auto' : 'none' }}
                           >
-                            <Surface
-                              node={stage.layout}
-                              tabId={activeTabId}
-                              entities={entities}
-                              focusedTile={focusedTile}
-                              focusedEntity={focusedEntity}
-                            />
+                            {item.isEmpty ? (
+                              // Empty tab welcome screen
+                              <motion.div
+                                className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: isActive ? 1 : 0, y: isActive ? 0 : 20 }}
+                                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                              >
+                                <div className="text-center">
+                                  <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
+                                  <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
+                                </div>
+                                <div className="flex flex-col gap-3 text-sm">
+                                  <p className="flex items-center gap-3">
+                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+                                    <span>Summon a god</span>
+                                  </p>
+                                  <p className="flex items-center gap-3">
+                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
+                                    <span>Open terminal</span>
+                                  </p>
+                                  <p className="flex items-center gap-3">
+                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
+                                    <span>New realm</span>
+                                  </p>
+                                </div>
+                                <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
+                              </motion.div>
+                            ) : (
+                              <Surface
+                                node={item.stage.layout}
+                                tabId={item.tabId}
+                                entities={entities}
+                                focusedTile={focusedTile}
+                                focusedEntity={focusedEntity}
+                              />
+                            )}
                           </motion.div>
                         )
                       })}
@@ -873,6 +935,8 @@ export default function App() {
 
             {/* Right Sidebar (Entity cards + Spawn buttons) */}
             <RightSidebar
+              allStages={allStages}
+              globalActiveIdx={globalActiveIdx}
               activeStages={activeStages}
               activeEntities={activeEntities}
               tabs={tabs}
@@ -896,10 +960,14 @@ export default function App() {
                 send({ event: 'tab:select', tabId })
               }}
               onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
-              onEntityReorder={handleEntityReorder}
-              onStagesReorder={(newOrder) => {
-                const stageOrder = newOrder.map(s => s.id)
-                send({ event: 'stages:reorder', stageOrder })
+              onReorderInStage={(stageId, entityId, targetIndex) => {
+                send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
+              }}
+              onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
+                send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
+              }}
+              onCreateStageAtPosition={(entityId, sourceStageId, position) => {
+                send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
               }}
               onSpawnEntity={handleSpawnEntity}
               onSpawnTerminal={handleSpawnTerminal}

@@ -1,5 +1,4 @@
-import { Reorder, AnimatePresence, motion } from 'framer-motion'
-import EntityCard from './EntityCard'
+import { AnimatePresence, motion } from 'framer-motion'
 import EntityGroup from './EntityGroup'
 import DraggableTypeButton from './DraggableTypeButton'
 import TileUngroupDropZone from './TileUngroupDropZone'
@@ -15,6 +14,8 @@ const BUTTON_DURATION = 150
 
 export default function RightSidebar({
   // Data
+  allStages,
+  globalActiveIdx,
   activeStages,
   activeEntities,
   tabs,
@@ -39,8 +40,9 @@ export default function RightSidebar({
   onEntitySplit,
   onMoveToTab,
   onMoveToNewTab,
-  onEntityReorder,
-  onStagesReorder,
+  onReorderInStage,
+  onJoinStage,
+  onCreateStageAtPosition,
   onSpawnEntity,
   onSpawnTerminal,
   onOpenSummonModal,
@@ -57,74 +59,85 @@ export default function RightSidebar({
       }}
     >
       {/* Two card sets with choreographed animations */}
-      <TileUngroupDropZone className="flex-1 relative overflow-hidden pb-14">
-        {/* Full task cards - slide up to exit, slide down to enter */}
+      <TileUngroupDropZone className="flex-1 relative pb-14">
+        {/* Full task cards - scroll by TAB (all stages' cards stacked together per tab) */}
         <AnimatePresence>
           {sidebarShowCards && (
             <motion.div
               key="cards"
-              className="absolute inset-0 overflow-y-auto overflow-x-visible pb-16"
+              className="absolute inset-0"
               initial={{ y: '-100%' }}
               animate={{ y: 0 }}
               exit={{ y: '-100%' }}
               transition={{ duration: CARDS_DURATION / 1000, ease: 'easeInOut' }}
             >
-              {activeStages.length > 0 ? (
-                <Reorder.Group
-                  axis="y"
-                  values={activeStages}
-                  onReorder={onStagesReorder}
-                  className="flex flex-col gap-3"
-                >
-                  {activeStages.map((stage, stageIdx) => {
-                    const activeTab = tabs.find(t => t.id === activeTabId)
-                    const isActiveStage = stage.id === activeTab?.activeStageId
-                    // Calculate stagger offset: sum of entities in previous stages
-                    const staggerOffset = activeStages
-                      .slice(0, stageIdx)
-                      .reduce((sum, s) => sum + s.entities.length, 0)
+              {tabs.length > 0 ? (
+                <div className="relative h-full">
+                  {/* Render each TAB as one scrolling unit */}
+                  {tabs.map((tab, tabIdx) => {
+                    const activeTabIdx = tabs.findIndex(t => t.id === activeTabId)
+                    const tabOffset = tabIdx - activeTabIdx
+                    const isActiveTab = tab.id === activeTabId
+
+                    // Get all stages for this tab
+                    const tabStages = allStages
+                      ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
+                      : activeStages.filter(() => tab.id === activeTabId)
+
                     return (
-                      <EntityGroup
-                        key={stage.id}
-                        stage={stage}
-                        entities={stage.entities}
-                        isFocused={isActiveStage}
-                        focusedEntityId={focusedEntity}
-                        onClick={onEntityClick}
-                        onClose={onEntityClose}
-                        onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
-                        tabs={tabs}
-                        activeTabId={activeTabId}
-                        onMoveToTab={onMoveToTab}
-                        onMoveToNewTab={onMoveToNewTab}
-                        staggerOffset={staggerOffset}
-                      />
+                      <motion.div
+                        key={tab.id}
+                        className="absolute inset-0 overflow-y-auto overflow-x-visible"
+                        initial={false}
+                        animate={{ y: `${tabOffset * 100}vh` }}
+                        transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                        style={{
+                          pointerEvents: isActiveTab ? 'auto' : 'none'
+                        }}
+                      >
+                        {tabStages.length > 0 ? (
+                          <div className="flex flex-col gap-3 pb-16">
+                            {tabStages.map((item, stageIdx) => {
+                              const stage = item.stage || item
+                              const activeTab = tabs.find(t => t.id === tab.id)
+                              const isActiveStage = stage.id === activeTab?.activeStageId
+                              const staggerOffset = tabStages
+                                .slice(0, stageIdx)
+                                .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
+
+                              return (
+                                <EntityGroup
+                                  key={stage.id}
+                                  stage={stage}
+                                  entities={stage.entities || []}
+                                  isFocused={isActiveStage}
+                                  focusedEntityId={focusedEntity}
+                                  onClick={onEntityClick}
+                                  onClose={onEntityClose}
+                                  onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
+                                  tabs={tabs}
+                                  activeTabId={tab.id}
+                                  onMoveToTab={onMoveToTab}
+                                  onMoveToNewTab={onMoveToNewTab}
+                                  onReorderInStage={onReorderInStage}
+                                  onJoinStage={onJoinStage}
+                                  onCreateStageAtPosition={onCreateStageAtPosition}
+                                  staggerOffset={staggerOffset}
+                                  stageIndex={stageIdx}
+                                  totalStages={tabStages.length}
+                                />
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-text-secondary text-sm">
+                            <p>Add an entity</p>
+                          </div>
+                        )}
+                      </motion.div>
                     )
                   })}
-                </Reorder.Group>
-              ) : activeEntities.length > 0 ? (
-                /* Fallback: no stages data, render flat entity list */
-                <Reorder.Group
-                  axis="y"
-                  values={activeEntities}
-                  onReorder={onEntityReorder}
-                  className="flex flex-col gap-3"
-                >
-                  {activeEntities.map((entity, idx) => (
-                    <EntityCard
-                      key={entity.id}
-                      entity={entity}
-                      isActive={entity.id === effectiveFocusedEntity}
-                      onClick={() => onEntityClick(entity.id)}
-                      onClose={() => onEntityClose(entity.id)}
-                      tabs={tabs}
-                      activeTabId={activeTabId}
-                      onMoveToTab={onMoveToTab}
-                      onMoveToNewTab={onMoveToNewTab}
-                      staggerIndex={idx}
-                    />
-                  ))}
-                </Reorder.Group>
+                </div>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-text-secondary text-sm">
                   <p>Add an entity</p>

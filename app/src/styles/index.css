@@ -98,6 +98,17 @@ body.alt-held .terminal-content {
   height: 100% !important;
 }
 
+/* Tab container performance optimizations */
+.tab-container {
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.tab-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100vh;
+}
+
 /* Stage performance optimizations */
 .stage {
   will-change: transform;
