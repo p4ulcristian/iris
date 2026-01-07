@@ -1,7 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useLayoutEffect } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { ClipboardAddon } from '@xterm/addon-clipboard'
-import { FitAddon } from '@xterm/addon-fit'
 import { generatePalette, getThemeTerminalSettings } from '../themes'
 import { useStore } from '../store'
 import { WS_URL } from '../config'
@@ -13,11 +12,15 @@ function hexToRgb(hex) {
   return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
 }
 
+// Approximate cell dimensions for initial sizing (before xterm renders)
+const APPROX_CELL_WIDTH = 8.4
+const APPROX_CELL_HEIGHT = 17
+
 export default function TerminalContent({ entity, isFocused, isHidden }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const wsRef = useRef(null)
-  const fitAddonRef = useRef(null)
+  const cellDimsRef = useRef(null)
   const resizeTimeoutRef = useRef(null)
 
   // Track which container the terminal is attached to (for hot reload detection)
@@ -43,6 +46,16 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
   const theme = useStore(s => s.theme)
   const themeTerminalSettings = useMemo(() => getThemeTerminalSettings(theme), [theme])
   const palette = useMemo(() => generatePalette(godColor, themeTerminalSettings), [godColor, themeTerminalSettings])
+
+  // Helper: calculate cols/rows from pixel dimensions
+  const calcDimensions = (width, height) => {
+    const cellWidth = cellDimsRef.current?.width || APPROX_CELL_WIDTH
+    const cellHeight = cellDimsRef.current?.height || APPROX_CELL_HEIGHT
+    return {
+      cols: Math.floor(width / cellWidth) || 80,
+      rows: Math.floor(height / cellHeight) || 24
+    }
+  }
 
   // Update terminal theme when palette changes (theme switch)
   const isGod = !entity.displayName
@@ -71,13 +84,24 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     }
   }, [isFocused])
 
-  // Resize when becoming visible (tab switch) - trigger a refit
+  // Resize when becoming visible (tab switch)
   const wasHiddenRef = useRef(isHidden)
   useEffect(() => {
-    if (wasHiddenRef.current && !isHidden && fitAddonRef.current) {
+    if (wasHiddenRef.current && !isHidden && termRef.current && containerRef.current) {
       const timeout = setTimeout(() => {
         try {
-          fitAddonRef.current?.fit()
+          const { width, height } = containerRef.current.getBoundingClientRect()
+          if (width < 50 || height < 50) return
+
+          const dims = termRef.current?._core?._renderService?.dimensions
+          if (dims?.css?.cell) {
+            cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
+          }
+          const { cols, rows } = calcDimensions(width, height)
+          const term = termRef.current
+          if (term && cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
+            term.resize(cols, rows)
+          }
         } catch {}
       }, 50)
       wasHiddenRef.current = isHidden
@@ -93,6 +117,13 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     // Track current container for hot reload detection
     attachedContainerRef.current = containerRef.current
 
+    // Initial size from actual container measurement
+    const rect = containerRef.current.getBoundingClientRect()
+    const { cols: initialCols, rows: initialRows } = calcDimensions(
+      rect.width || 800,
+      rect.height || 600
+    )
+
     // Gods (no displayName) hide cursor, terminals show it
     const termTheme = isGod
       ? { ...palette, cursor: 'transparent', cursorAccent: 'transparent' }
@@ -102,6 +133,8 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
       cursorBlink: !isGod,
       fontSize: 14,
       fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+      rows: initialRows,
+      cols: initialCols,
       theme: termTheme,
       allowTransparency: true,
       scrollback: 10000
@@ -114,15 +147,14 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
 
-    // Load fit addon for proper sizing
-    const fitAddon = new FitAddon()
-    term.loadAddon(fitAddon)
-    fitAddonRef.current = fitAddon
-
-    // Initial fit after render service is ready
-    requestAnimationFrame(() => {
+    // Capture cell dimensions after first render for accurate sizing
+    const onFirstRender = term.onRender(() => {
+      onFirstRender.dispose()
       try {
-        fitAddon.fit()
+        const dims = term._core?._renderService?.dimensions
+        if (dims?.css?.cell) {
+          cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
+        }
       } catch {}
     })
 
@@ -181,7 +213,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const container = containerRef.current
     container.addEventListener('keydown', handleShortcut, true)
 
-    // ResizeObserver: fit terminal to container
+    // ResizeObserver: measure container and resize terminal
     const resizeObserver = new ResizeObserver((entries) => {
       // Debounce to avoid excessive resize events during animations/drags
       clearTimeout(resizeTimeoutRef.current)
@@ -190,7 +222,16 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
         if (width < 50 || height < 50) return // Too small, skip
 
         try {
-          fitAddon.fit()
+          // Update cell dimensions from xterm if available
+          const dims = term._core?._renderService?.dimensions
+          if (dims?.css?.cell) {
+            cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
+          }
+
+          const { cols, rows } = calcDimensions(width, height)
+          if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
+            term.resize(cols, rows)
+          }
         } catch {}
       }, 50)
     })
@@ -243,10 +284,10 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     term.focus()
 
     return () => {
+      onFirstRender.dispose()
       onResizeDisposable.dispose()
       clearTimeout(resizeTimeoutRef.current)
       resizeObserver.disconnect()
-      fitAddonRef.current = null
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
       }
