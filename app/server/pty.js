@@ -221,6 +221,16 @@ export function sendToPty(godName, data) {
 }
 
 export function resizePty(godName, cols, rows) {
+  // Validate dimensions to prevent invalid resize
+  if (!Number.isInteger(cols) || !Number.isInteger(rows)) {
+    ptyLog(`[pty:resize] ${godName}: invalid non-integer dimensions ${cols}x${rows}`)
+    return
+  }
+  if (cols < 10 || cols > 500 || rows < 5 || rows > 200) {
+    ptyLog(`[pty:resize] ${godName}: dimensions out of bounds ${cols}x${rows}`)
+    return
+  }
+
   const entry = ptyProcesses.get(godName)
   if (entry?.terminal) {
     entry.terminal.resize(cols, rows)
