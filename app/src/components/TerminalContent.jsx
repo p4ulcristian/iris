@@ -147,15 +147,43 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
 
-    // Capture cell dimensions after first render for accurate sizing
-    const onFirstRender = term.onRender(() => {
-      onFirstRender.dispose()
+    // Helper to measure and update cell dimensions
+    const updateCellDimensions = () => {
       try {
         const dims = term._core?._renderService?.dimensions
         if (dims?.css?.cell) {
-          cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
+          const newWidth = dims.css.cell.width
+          const newHeight = dims.css.cell.height
+          const current = cellDimsRef.current
+
+          // Only update if dimensions changed
+          if (!current || current.width !== newWidth || current.height !== newHeight) {
+            cellDimsRef.current = { width: newWidth, height: newHeight }
+            return true // dimensions changed
+          }
         }
       } catch {}
+      return false
+    }
+
+    // Capture cell dimensions after first render
+    const onFirstRender = term.onRender(() => {
+      onFirstRender.dispose()
+      updateCellDimensions()
+    })
+
+    // Re-measure after fonts load for precision
+    document.fonts.ready.then(() => {
+      if (updateCellDimensions()) {
+        // Fonts caused dimension change - refit terminal
+        const rect = container.getBoundingClientRect()
+        if (rect.width > 50 && rect.height > 50) {
+          const { cols, rows } = calcDimensions(rect.width, rect.height)
+          if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
+            term.resize(cols, rows)
+          }
+        }
+      }
     })
 
     const textarea = term.textarea
@@ -222,12 +250,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
         if (width < 50 || height < 50) return // Too small, skip
 
         try {
-          // Update cell dimensions from xterm if available
-          const dims = term._core?._renderService?.dimensions
-          if (dims?.css?.cell) {
-            cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
-          }
-
+          updateCellDimensions()
           const { cols, rows } = calcDimensions(width, height)
           if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
             term.resize(cols, rows)
