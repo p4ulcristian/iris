@@ -1,96 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCodeBranch,
-  faPlus,
-  faFolderOpen,
-  faChevronDown,
-  faChevronRight,
   faFile,
   faCirclePlus,
   faCircleMinus,
   faPencil,
   faTrash,
   faCheck,
-  faXmark,
   faRotate,
   faCodeCompare
 } from '@fortawesome/free-solid-svg-icons'
-
-function ProjectCard({ project, isSelected, onSelect, onRemove, status, onRefresh }) {
-  const [expanded, setExpanded] = useState(true)
-
-  const totalChanges = (status?.staged?.length || 0) +
-    (status?.unstaged?.length || 0) +
-    (status?.untracked?.length || 0)
-
-  return (
-    <div className={`rounded-lg border transition-colors ${
-      isSelected ? 'bg-accent/10 border-accent/30' : 'bg-black/20 border-white/10 hover:border-white/20'
-    }`}>
-      <div
-        className="flex items-center gap-2 px-3 py-2 cursor-pointer"
-        onClick={() => onSelect(project)}
-      >
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setExpanded(!expanded)
-          }}
-          className="text-text-tertiary hover:text-text-primary transition-colors"
-        >
-          <FontAwesomeIcon icon={expanded ? faChevronDown : faChevronRight} className="text-xs" />
-        </button>
-        <FontAwesomeIcon icon={faFolderOpen} className="text-accent text-sm" />
-        <span className="flex-1 text-sm text-text-primary truncate">{project.name}</span>
-        {totalChanges > 0 && (
-          <span className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent">
-            {totalChanges}
-          </span>
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRefresh(project)
-          }}
-          className="text-text-tertiary hover:text-text-primary transition-colors"
-          title="Refresh"
-        >
-          <FontAwesomeIcon icon={faRotate} className="text-xs" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onRemove(project)
-          }}
-          className="text-text-tertiary hover:text-red-400 transition-colors"
-          title="Remove project"
-        >
-          <FontAwesomeIcon icon={faXmark} className="text-xs" />
-        </button>
-      </div>
-
-      {expanded && status && (
-        <div className="px-3 pb-2 text-xs text-text-tertiary">
-          <div className="flex items-center gap-1 mb-1">
-            <FontAwesomeIcon icon={faCodeBranch} className="text-xs" />
-            <span>{status.branch || 'detached'}</span>
-          </div>
-          {status.staged?.length > 0 && (
-            <div className="text-green-400">{status.staged.length} staged</div>
-          )}
-          {status.unstaged?.length > 0 && (
-            <div className="text-yellow-400">{status.unstaged.length} modified</div>
-          )}
-          {status.untracked?.length > 0 && (
-            <div className="text-gray-400">{status.untracked.length} untracked</div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function FileList({ files, type, selectedFile, onSelectFile, onStage, onUnstage, onDiscard }) {
   if (!files || files.length === 0) return null
@@ -213,8 +133,8 @@ function DiffViewer({ diff, file, staged }) {
 }
 
 export default function GitView({ send }) {
-  const gitProjects = useStore(s => s.gitProjects) || []
-
+  const [projects, setProjects] = useState([])
+  const [projectsFetched, setProjectsFetched] = useState(false)
   const [selectedProject, setSelectedProject] = useState(null)
   const [projectStatuses, setProjectStatuses] = useState({})
   const [selectedFile, setSelectedFile] = useState(null)
@@ -222,25 +142,22 @@ export default function GitView({ send }) {
   const [diff, setDiff] = useState(null)
   const [mode, setMode] = useState('working') // 'working' | 'compare'
 
-  // Load project statuses when projects change
+  // Fetch projects on mount
   useEffect(() => {
-    gitProjects.forEach(project => {
-      send({ event: 'git:status', project: project.path })
-    })
-  }, [gitProjects, send])
-
-  // Auto-select first project
-  useEffect(() => {
-    if (gitProjects.length > 0 && !selectedProject) {
-      setSelectedProject(gitProjects[0])
-    }
-  }, [gitProjects, selectedProject])
+    if (!send) return
+    send({ event: 'projects:list' })
+  }, [send])
 
   // Handle WebSocket messages
   useEffect(() => {
     const handleMessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
+
+        if (msg.event === 'projects:list:response') {
+          setProjects(msg.projects || [])
+          setProjectsFetched(true)
+        }
 
         if (msg.event === 'git:status:response') {
           setProjectStatuses(prev => ({
@@ -271,23 +188,34 @@ export default function GitView({ send }) {
     }
   }, [])
 
-  const handleAddProject = useCallback(async () => {
-    const path = await window.iris?.selectFolder()
-    if (path) {
-      send({ event: 'git:projects:add', path })
-    }
-  }, [send])
+  // Load project statuses when projects are fetched
+  useEffect(() => {
+    if (!projectsFetched) return
+    projects.forEach(project => {
+      send({ event: 'git:status', project: project.path })
+    })
+  }, [projects, projectsFetched, send])
 
-  const handleRemoveProject = useCallback((project) => {
-    send({ event: 'git:projects:remove', path: project.path })
-    if (selectedProject?.path === project.path) {
-      setSelectedProject(null)
+  // Auto-select default project
+  useEffect(() => {
+    if (projects.length > 0 && !selectedProject) {
+      const defaultProject = projects.find(p => p.isDefault) || projects[0]
+      setSelectedProject(defaultProject)
     }
-  }, [send, selectedProject])
+  }, [projects, selectedProject])
 
   const handleRefreshProject = useCallback((project) => {
     send({ event: 'git:status', project: project.path })
   }, [send])
+
+  const handleProjectChange = useCallback((path) => {
+    const project = projects.find(p => p.path === path)
+    if (project) {
+      setSelectedProject(project)
+      setSelectedFile(null)
+      setDiff(null)
+    }
+  }, [projects])
 
   const handleSelectFile = useCallback((file, type) => {
     setSelectedFile(file)
@@ -351,39 +279,57 @@ export default function GitView({ send }) {
           </button>
         </div>
         <div className="flex-1" />
-        <button
-          onClick={handleAddProject}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-accent/20 text-accent border border-accent/30 rounded-lg hover:bg-accent/30 transition-colors"
-        >
-          <FontAwesomeIcon icon={faPlus} />
-          Add Project
-        </button>
+        {/* Project selector */}
+        {projects.length > 0 && (
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedProject?.path || ''}
+              onChange={(e) => handleProjectChange(e.target.value)}
+              className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-sm text-white/85 focus:outline-none focus:bg-white/8 focus:border-white/20 transition-all cursor-pointer"
+            >
+              {projects.map(p => (
+                <option key={p.path} value={p.path} className="bg-[#1a1a1a]">
+                  {p.name}{p.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+            {selectedProject && (
+              <button
+                onClick={() => handleRefreshProject(selectedProject)}
+                className="p-1.5 text-text-tertiary hover:text-text-primary transition-colors"
+                title="Refresh"
+              >
+                <FontAwesomeIcon icon={faRotate} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main content */}
       <div className="flex-1 flex gap-4 min-h-0">
-        {/* Left sidebar - projects and files */}
+        {/* Left sidebar - branch info and files */}
         <div className="w-72 flex flex-col gap-4 overflow-y-auto">
-          {/* Projects list */}
-          <div className="flex flex-col gap-2">
-            {gitProjects.length === 0 ? (
-              <div className="text-center py-8 text-text-tertiary text-sm">
-                No projects added yet
+          {/* Branch info */}
+          {selectedProject && currentStatus && (
+            <div className="px-3 py-2 bg-black/20 border border-white/10 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-text-primary">
+                <FontAwesomeIcon icon={faCodeBranch} className="text-accent" />
+                <span>{currentStatus.branch || 'detached'}</span>
               </div>
-            ) : (
-              gitProjects.map(project => (
-                <ProjectCard
-                  key={project.path}
-                  project={project}
-                  isSelected={selectedProject?.path === project.path}
-                  onSelect={setSelectedProject}
-                  onRemove={handleRemoveProject}
-                  onRefresh={handleRefreshProject}
-                  status={projectStatuses[project.path]}
-                />
-              ))
-            )}
-          </div>
+              <div className="flex gap-3 mt-1 text-xs">
+                {currentStatus.staged?.length > 0 && (
+                  <span className="text-green-400">{currentStatus.staged.length} staged</span>
+                )}
+                {currentStatus.unstaged?.length > 0 && (
+                  <span className="text-yellow-400">{currentStatus.unstaged.length} modified</span>
+                )}
+                {currentStatus.untracked?.length > 0 && (
+                  <span className="text-gray-400">{currentStatus.untracked.length} untracked</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* File tree for selected project */}
           {selectedProject && currentStatus && (

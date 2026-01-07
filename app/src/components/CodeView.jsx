@@ -210,47 +210,68 @@ export default function CodeView({ entityId }) {
     }
   }, [codeHighlights])
 
-  // Fetch projects on mount
+  // Fetch projects on mount - use send/listen pattern like PersonalitiesView
   useEffect(() => {
-    if (!request) return
+    if (!send) return
+    send({ event: 'projects:list' })
+  }, [send])
 
-    const fetchProjects = async () => {
+  // Listen for WebSocket responses
+  useEffect(() => {
+    const ws = window.__irisWs
+    if (!ws) return
+
+    const handleMessage = (event) => {
       try {
-        const response = await request('projects:list')
-        setProjects(response.projects || [])
-        setProjectsFetched(true)
-      } catch (err) {
-        console.error('[CodeView] Failed to fetch projects:', err)
-        // Mark as fetched even on error so we don't block forever
-        setProjectsFetched(true)
-      }
-    }
+        const msg = JSON.parse(event.data)
 
-    fetchProjects()
-  }, [request])
-
-  // Load directory tree from server
-  const loadDirectory = useCallback(async (dirPath, hidden = showHidden) => {
-    if (!request) return
-    setLoading(true)
-    try {
-      const response = await request('file:list', { path: dirPath, showHidden: hidden })
-      if (response.ok) {
-        setFileTree(response.tree)
-        setRootPath(dirPath)
-        // Auto-expand first level
-        if (response.tree?.children) {
-          setExpandedFolders(new Set([response.tree.path]))
+        if (msg.event === 'projects:list:response') {
+          console.log('[CodeView] Got projects:', msg.projects)
+          setProjects(msg.projects || [])
+          setProjectsFetched(true)
         }
-      } else {
-        console.error('Failed to load directory:', response.error)
+
+        if (msg.event === 'file:list') {
+          console.log('[CodeView] Got file:list response')
+          setLoading(false)
+          if (msg.ok && msg.tree) {
+            // Show children directly, not the root folder
+            setFileTree(msg.tree.children || [])
+            setRootPath(msg.tree.path)
+            setExpandedFolders(new Set())
+          } else {
+            console.error('Failed to load directory:', msg.error)
+          }
+        }
+
+        if (msg.event === 'file:children') {
+          setLoadingFolders(prev => {
+            const next = new Set(prev)
+            next.delete(msg.path)
+            return next
+          })
+          if (msg.ok) {
+            setFileTree(prev => updateTreeChildren(prev, msg.path, msg.children))
+          } else {
+            console.error('Failed to load folder children:', msg.error)
+          }
+        }
+      } catch (e) {
+        // ignore
       }
-    } catch (err) {
-      console.error('Failed to load directory:', err)
-    } finally {
-      setLoading(false)
     }
-  }, [showHidden, request])
+
+    ws.addEventListener('message', handleMessage)
+    return () => ws.removeEventListener('message', handleMessage)
+  }, [])
+
+  // Load directory tree from server (using send/listen pattern)
+  const loadDirectory = useCallback((dirPath, hidden = showHidden) => {
+    if (!send) return
+    console.log('[CodeView] loadDirectory:', dirPath)
+    setLoading(true)
+    send({ event: 'file:list', path: dirPath, showHidden: hidden })
+  }, [showHidden, send])
 
   // Load file content
   const loadFile = useCallback(async (node) => {
@@ -345,55 +366,39 @@ export default function CodeView({ entityId }) {
     return () => window.removeEventListener('iris:code:open', handleCodeOpen)
   }, [entityId, loadFile])
 
-  // Helper to update children in the tree
+  // Helper to update children in the tree (tree is an array of nodes)
   const updateTreeChildren = useCallback((tree, targetPath, children) => {
-    if (!tree) return tree
-    if (tree.path === targetPath) {
-      return { ...tree, children }
-    }
-    if (tree.children) {
-      return {
-        ...tree,
-        children: tree.children.map(child => updateTreeChildren(child, targetPath, children))
+    if (!tree || !Array.isArray(tree)) return tree
+    return tree.map(node => {
+      if (node.path === targetPath) {
+        return { ...node, children }
       }
-    }
-    return tree
+      if (node.children) {
+        return { ...node, children: updateTreeChildren(node.children, targetPath, children) }
+      }
+      return node
+    })
   }, [])
 
-  // Find node in tree
+  // Find node in tree (tree is an array of nodes)
   const findNode = useCallback((tree, targetPath) => {
-    if (!tree) return null
-    if (tree.path === targetPath) return tree
-    if (tree.children) {
-      for (const child of tree.children) {
-        const found = findNode(child, targetPath)
+    if (!tree || !Array.isArray(tree)) return null
+    for (const node of tree) {
+      if (node.path === targetPath) return node
+      if (node.children) {
+        const found = findNode(node.children, targetPath)
         if (found) return found
       }
     }
     return null
   }, [])
 
-  // Load folder children on-demand
-  const loadFolderChildren = useCallback(async (folderPath) => {
-    if (!request) return
+  // Load folder children on-demand (using send/listen pattern)
+  const loadFolderChildren = useCallback((folderPath) => {
+    if (!send) return
     setLoadingFolders(prev => new Set([...prev, folderPath]))
-    try {
-      const response = await request('file:children', { path: folderPath, showHidden })
-      if (response.ok) {
-        setFileTree(prev => updateTreeChildren(prev, folderPath, response.children))
-      } else {
-        console.error('Failed to load folder children:', response.error)
-      }
-    } catch (err) {
-      console.error('Failed to load folder children:', err)
-    } finally {
-      setLoadingFolders(prev => {
-        const next = new Set(prev)
-        next.delete(folderPath)
-        return next
-      })
-    }
-  }, [showHidden, updateTreeChildren, request])
+    send({ event: 'file:children', path: folderPath, showHidden })
+  }, [showHidden, send])
 
   // Toggle folder expansion
   const toggleFolder = useCallback((path) => {
@@ -564,12 +569,18 @@ export default function CodeView({ entityId }) {
   // Get active file
   const activeFile = openFiles.find(f => f.path === activeFilePath)
 
+  // Track if we've done initial load
+  const initialLoadRef = useRef(false)
+
   // Default: load project directory (only if no pending file)
   useEffect(() => {
     // Skip if there's a pending file - that effect will handle loading
     if (entity?.pendingFile) return
     // Wait for projects to be fetched
     if (!projectsFetched) return
+    // Only load once
+    if (initialLoadRef.current) return
+    initialLoadRef.current = true
 
     // Determine which project path to use
     let projectPath = null
@@ -600,6 +611,7 @@ export default function CodeView({ entityId }) {
       projectPath = '/home'
     }
 
+    console.log('[CodeView] Initial load:', projectPath)
     loadDirectory(projectPath)
   }, [loadDirectory, entity?.pendingFile, entity?.project, projects, projectsFetched])
 
@@ -649,6 +661,30 @@ export default function CodeView({ entityId }) {
           </div>
         </div>
 
+        {/* Project selector - hidden when collapsed */}
+        {!sidebarCollapsed && (
+          <div className="px-2 py-2 border-b border-white/8">
+            {projects.length === 0 ? (
+              <div className="text-xs text-white/40">Loading projects... ({projectsFetched ? 'fetched but empty' : 'fetching'})</div>
+            ) : (
+            <select
+              value={rootPath || ''}
+              onChange={(e) => {
+                console.log('[CodeView] Project selected:', e.target.value)
+                loadDirectory(e.target.value)
+              }}
+              className="w-full pl-2 pr-6 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/85 focus:outline-none focus:bg-white/8 focus:border-white/20 transition-all cursor-pointer"
+            >
+              {projects.map(p => (
+                <option key={p.name} value={p.path} className="bg-[#1a1a1a]">
+                  {p.name}{p.isDefault ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+            )}
+          </div>
+        )}
+
         {/* Path input with folder picker - hidden when collapsed */}
         {!sidebarCollapsed && (
           <div className="px-2 py-2 border-b border-white/8">
@@ -682,15 +718,16 @@ export default function CodeView({ entityId }) {
                 <div className="animate-pulse">Loading...</div>
               </div>
             )}
-            {!loading && fileTree && (
+            {!loading && fileTree && fileTree.map(node => (
               <TreeNode
-                node={fileTree}
+                key={node.path}
+                node={node}
                 onFileClick={loadFile}
                 expandedFolders={expandedFolders}
                 toggleFolder={toggleFolder}
                 loadingFolders={loadingFolders}
               />
-            )}
+            ))}
           </div>
         )}
 

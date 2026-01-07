@@ -21,8 +21,6 @@ import CalendarView from '../components/CalendarView'
 import CodeView from '../components/CodeView'
 import OracleView from '../components/OracleView'
 import YouTubeMusicView from '../components/YouTubeMusicView'
-import MessengerView from '../components/MessengerView'
-import DiscordView from '../components/DiscordView'
 import PersonalitiesView from '../components/PersonalitiesView'
 import RSVPView from '../components/RSVPView'
 import MarkdownView from '../components/MarkdownView'
@@ -85,14 +83,6 @@ export const ENTITY_VIEWS = {
   'youtube-music': {
     component: YouTubeMusicView,
     props: (entity) => ({ entityId: entity.id })
-  },
-  messenger: {
-    component: MessengerView,
-    props: () => ({})
-  },
-  discord: {
-    component: DiscordView,
-    props: () => ({})
   },
   personalities: {
     component: PersonalitiesView,

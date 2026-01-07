@@ -34,6 +34,7 @@ ASSIGNMENTS = {
     "aphrodite": ("F", 1988),   # Ransom
     "demeter": ("F", 2035),     # Sharon Bautista
     "hera": ("F", 2078),        # Kathy Caver
+    "nocturna": ("F", 403),     # LibriTTS speaker 403
 }
 
 def get_speaker_wavs(speaker_id: int, min_duration: float = 20.0) -> list:

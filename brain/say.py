@@ -41,6 +41,7 @@ VOICE_ALIASES = {
     "aphrodite": "aphrodite",  # Sofia Vergara
     "dionysus": "dionysus",  # Jack Black
     "demeter": "demeter",  # Meryl Streep
+    "nocturna": "nocturna",  # LibriTTS speaker 403
     # Legacy aliases (all map to default for now)
     "woman": "default",
     "emma": "default",

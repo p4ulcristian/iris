@@ -156,7 +156,7 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 ### Gods don't persist after restart
 
-Gods are stored as socket files in `/tmp/iris/`. The abduco binary is bundled with the app.
+Gods use Zellij sessions which persist across app restarts. Check `zellij list-sessions | grep iris-` to see active sessions.
 
 ---
 

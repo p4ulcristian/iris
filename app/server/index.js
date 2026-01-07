@@ -10,6 +10,7 @@ import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getSt
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers.js'
+import { setupApi } from './api.js'
 import * as calendar from './calendar.js'
 
 import os from 'os'
@@ -111,11 +112,18 @@ wss.on('connection', (ws) => {
 
 console.log(`WebSocket server on :${WS_PORT}`)
 
-// HTTP server for OAuth callback
+// Setup API handler
+const apiHandler = setupApi()
+
+// HTTP server for API and OAuth callback
 const oauthServer = http.createServer(async (req, res) => {
+  // Try API routes first
+  const handled = await apiHandler(req, res)
+  if (handled) return
+
   const url = new URL(req.url, `http://localhost:${OAUTH_PORT}`)
 
-  // CORS headers for API
+  // CORS headers for other routes
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -125,8 +133,6 @@ const oauthServer = http.createServer(async (req, res) => {
     res.end()
     return
   }
-
-  // File operations now handled via WebSocket (see handlers.js)
 
   if (url.pathname === '/oauth/google/callback') {
     const code = url.searchParams.get('code')

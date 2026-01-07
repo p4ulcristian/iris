@@ -7,8 +7,6 @@ import terminalIcon from '../assets/icons/terminal.svg'
 import browserIcon from '../assets/icons/chrome.svg'
 import vscodeIcon from '../assets/icons/vscode.svg'
 import youtubeMusicIcon from '../assets/icons/youtube-music.svg'
-import messengerIcon from '../assets/icons/messenger.svg'
-import discordIcon from '../assets/icons/discord.svg'
 
 export const ENTITY_TYPES = {
   god:      { label: 'God',      description: 'Divine worker',         icon: claudeIcon,  color: null },
@@ -24,8 +22,6 @@ export const ENTITY_TYPES = {
   oracle:   { label: 'Oracle',   description: 'Oracle assistant',     faIcon: 'faRobot', color: '#F59E0B' },
   personalities: { label: 'Personalities', description: 'Manage Claude personalities', faIcon: 'faDna', color: '#AA44FF' },
   'youtube-music': { label: 'YouTube Music', description: 'YouTube Music', icon: youtubeMusicIcon, color: '#FF0033' },
-  messenger: { label: 'Messenger', description: 'Facebook Messenger', icon: messengerIcon, color: '#0099FF' },
-  discord: { label: 'Discord', description: 'Discord', icon: discordIcon, color: '#5865F2' },
   rsvp: { label: 'RSVP', description: 'Speed reader', faIcon: 'faBook', color: '#10B981' },
   markdown: { label: 'Markdown', description: 'Markdown viewer', faIcon: 'faFileLines', color: '#89b4fa' },
   draw: { label: 'Draw', description: 'StarVector SVG generator', faIcon: 'faPaintBrush', color: '#9333EA' },

@@ -81,11 +81,6 @@ iris/
 │   │   ├── server.py      # Flask HTTP server
 │   │   └── bubble.py      # GTK4 overlay
 │   │
-│   ├── skills/            # Utility commands
-│   │   ├── focus/         # Entity title updates
-│   │   ├── glow/          # Markdown viewer
-│   │   └── nvim/          # Neovim integration
-│   │
 │   └── say.py             # Quick TTS utility
 │
 ├── prompts/               # God instructions

@@ -237,16 +237,6 @@ export default function RightSidebar({
                   onClick={() => onSpawnEntity('youtube-music')}
                 />
                 <DraggableTypeButton
-                  entityType="messenger"
-                  title="Messenger - drag to split"
-                  onClick={() => onSpawnEntity('messenger')}
-                />
-                <DraggableTypeButton
-                  entityType="discord"
-                  title="Discord - drag to split"
-                  onClick={() => onSpawnEntity('discord')}
-                />
-                <DraggableTypeButton
                   entityType="rsvp"
                   title="RSVP Speed Reader - drag to split"
                   onClick={() => onSpawnEntity('rsvp')}

@@ -185,7 +185,7 @@ After migration, these become obsolete:
 - Hardcoded switch in `Tile.jsx` - replaced with dynamic component loading
 - Hardcoded `DraggableTypeButton` instances in `App.jsx` - data-driven loop
 - Hardcoded `PICKER_ENTITY_TYPES` in `EntityPickerModal.jsx` - reads from registry
-- `ENTITY_TYPES` object in `server/handlers.js` - loaded from entity folders
+- `ENTITY_TYPES` object in `server/handlers/` - loaded from entity folders
 
 ## Files to Create/Modify
 
@@ -197,7 +197,7 @@ After migration, these become obsolete:
 
 ### Modified Files
 
-1. **`app/server/handlers.js`** - Use entity loader instead of hardcoded ENTITY_TYPES
+1. **`app/server/handlers/`** - Use entity loader instead of hardcoded ENTITY_TYPES
 2. **`app/server/state.js`** - Add registry to appState, broadcast on connect
 3. **`app/src/store/index.js`** - Add entityRegistry to store
 4. **`app/src/App.jsx`** - Data-driven sidebar from registry
