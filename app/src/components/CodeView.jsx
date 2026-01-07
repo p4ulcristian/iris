@@ -198,7 +198,7 @@ export default function CodeView({ entityId }) {
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
 
-  const { send, request, lastMessage } = useWebSocket(WS_URL)
+  const { send, request } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
   const entities = useStore(s => s.entities)
   const entity = entities[entityId]
@@ -212,18 +212,22 @@ export default function CodeView({ entityId }) {
 
   // Fetch projects on mount
   useEffect(() => {
-    if (send) {
-      send({ event: 'projects:list' })
-    }
-  }, [send])
+    if (!request) return
 
-  // Handle projects list response
-  useEffect(() => {
-    if (lastMessage?.event === 'projects:list:response') {
-      setProjects(lastMessage.projects || [])
-      setProjectsFetched(true)
+    const fetchProjects = async () => {
+      try {
+        const response = await request('projects:list')
+        setProjects(response.projects || [])
+        setProjectsFetched(true)
+      } catch (err) {
+        console.error('[CodeView] Failed to fetch projects:', err)
+        // Mark as fetched even on error so we don't block forever
+        setProjectsFetched(true)
+      }
     }
-  }, [lastMessage])
+
+    fetchProjects()
+  }, [request])
 
   // Load directory tree from server
   const loadDirectory = useCallback(async (dirPath, hidden = showHidden) => {

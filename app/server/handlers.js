@@ -2573,6 +2573,7 @@ export function handleMessage(ws, msg, projectRoot) {
     case 'projects:list': {
       const allProjects = projects.listProjects()
       ws.send(JSON.stringify({
+        id: data.id,  // Echo request ID for request/response pattern
         event: 'projects:list:response',
         projects: allProjects
       }))

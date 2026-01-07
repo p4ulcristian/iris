@@ -21,7 +21,12 @@
     "build": "bunx --bun vite build && electron-builder",
     "build:linux": "bunx --bun vite build && electron-builder --linux --publish never",
     "build:mac": "bunx --bun vite build && electron-builder --mac --publish never",
-    "preview": "bunx --bun vite preview"
+    "preview": "bunx --bun vite preview",
+    "cli": "bun run ./cli/index.ts",
+    "cli:build": "bun build --compile --outfile dist-cli/iris ./cli/index.ts",
+    "cli:build:linux": "bun build --compile --target=bun-linux-x64 --outfile dist-cli/iris-linux ./cli/index.ts",
+    "cli:build:mac": "bun build --compile --target=bun-darwin-arm64 --outfile dist-cli/iris-mac ./cli/index.ts",
+    "cli:install": "bun run cli:build && cp dist-cli/iris ~/.local/bin/iris && chmod +x ~/.local/bin/iris"
   },
   "build": {
     "appId": "com.paulcristian.iris",

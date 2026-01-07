@@ -73,3 +73,4 @@ brain/speak/voices/pre_libritts_backup/
 # Test folders
 test_chatterbox/
 brain/draw/star-vector/
+dist-cli/

@@ -182,6 +182,32 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
 
+    // Intercept keys before xterm processes them (prevents PTY from receiving scroll keys)
+    term.attachCustomKeyEventHandler((e) => {
+      // Shift+Arrow to scroll terminal
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.type === 'keydown') {
+        console.log('[TerminalContent] Shift+Arrow detected:', e.key)
+        if (e.key === 'ArrowUp') {
+          console.log('[TerminalContent] Scrolling up')
+          term.scrollLines(-1)
+          return false // prevent xterm from handling
+        }
+        if (e.key === 'ArrowDown') {
+          term.scrollLines(1)
+          return false
+        }
+        if (e.key === 'PageUp') {
+          term.scrollLines(-term.rows)
+          return false
+        }
+        if (e.key === 'PageDown') {
+          term.scrollLines(term.rows)
+          return false
+        }
+      }
+      return true // let xterm handle all other keys
+    })
+
     // Helper to measure and update cell dimensions
     const updateCellDimensions = () => {
       try {
