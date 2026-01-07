@@ -12,6 +12,8 @@
  */
 
 import { appState, saveState, broadcastState } from './state.js'
+import { getOutputBuffer } from './pty.js'
+import { allHandlers as handlers } from './handlers/index.js'
 
 // Parse JSON body from request
 function parseJson(req) {
@@ -210,6 +212,71 @@ export function setupApi() {
     if (req.method === 'GET' && url.pathname === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true, timestamp: Date.now() }))
+      return true
+    }
+
+    // POST /api/entities - List all entities
+    if (req.method === 'POST' && url.pathname === '/api/entities') {
+      const entities = Object.values(appState.entities).map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        readyState: e.readyState,
+        title: e.title,
+        status: e.status
+      }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ entities }))
+      return true
+    }
+
+    // POST /api/peek - Get god's terminal output
+    if (req.method === 'POST' && url.pathname === '/api/peek') {
+      const { god, lines = 50 } = await parseJson(req)
+      if (!god) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Missing god name' }))
+        return true
+      }
+
+      try {
+        const output = getOutputBuffer(god, lines)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ output: output || '' }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+      return true
+    }
+
+    // POST /api/spawn - Spawn a new god (delegates to handler)
+    if (req.method === 'POST' && url.pathname === '/api/spawn') {
+      const data = await parseJson(req)
+
+      // Create a mock WebSocket that captures the response
+      let response = null
+      const mockWs = {
+        send: (msg) => {
+          try {
+            response = JSON.parse(msg)
+          } catch {}
+        }
+      }
+
+      try {
+        // Call the god:spawn handler
+        handlers['god:spawn'](mockWs, data, process.cwd())
+
+        // Wait a moment for async spawn
+        await new Promise(r => setTimeout(r, 100))
+
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify(response || { ok: true, name: data.name }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
       return true
     }
 

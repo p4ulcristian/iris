@@ -185,28 +185,6 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
 
-    // Shift+Arrow/PageUp/PageDown to scroll terminal (intercepted before PTY)
-    term.attachCustomKeyEventHandler((e) => {
-      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        if (e.key === 'ArrowUp') {
-          term.scrollLines(-5)
-          return false
-        }
-        if (e.key === 'ArrowDown') {
-          term.scrollLines(5)
-          return false
-        }
-        if (e.key === 'PageUp') {
-          term.scrollLines(-term.rows)
-          return false
-        }
-        if (e.key === 'PageDown') {
-          term.scrollLines(term.rows)
-          return false
-        }
-      }
-      return true
-    })
 
     // Helper to measure and update cell dimensions
     const updateCellDimensions = () => {
@@ -273,6 +251,34 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
           }
         }).catch(err => console.error('Paste failed:', err))
         return
+      }
+
+      // Shift+Arrow/PageUp/PageDown to scroll terminal
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          e.stopPropagation()
+          term.scrollLines(-5)
+          return
+        }
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          e.stopPropagation()
+          term.scrollLines(5)
+          return
+        }
+        if (e.key === 'PageUp') {
+          e.preventDefault()
+          e.stopPropagation()
+          term.scrollLines(-term.rows)
+          return
+        }
+        if (e.key === 'PageDown') {
+          e.preventDefault()
+          e.stopPropagation()
+          term.scrollLines(term.rows)
+          return
+        }
       }
 
       const isCtrlShortcut = e.ctrlKey && !e.shiftKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)

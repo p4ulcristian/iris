@@ -173,7 +173,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   const godKey = name.toLowerCase()
   const sessionName = getSessionName(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, personality = 'gods' } = options
+  const { resumeSessionId, startPrompt, personality = 'god' } = options
 
   // Check if session already exists
   if (sessionExists(godKey)) {

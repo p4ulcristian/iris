@@ -134,9 +134,10 @@ export function composeMcpConfig(serverNames, irisRoot = null) {
         args: config.args || []
       }
 
-      // Handle relative paths (for iris MCP server)
+      // Handle relative paths - set cwd for the MCP server
+      // Don't modify command (it's usually a system binary like uv, node)
       if (config.relative && irisRoot) {
-        serverConfig.command = path.join(irisRoot, config.command)
+        serverConfig.cwd = irisRoot
       }
 
       // Add env if present

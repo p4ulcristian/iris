@@ -13,7 +13,8 @@ import {
   faFolderTree,
   faEye,
   faEyeSlash,
-  faBars
+  faBars,
+  faTrash
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '../store'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -85,16 +86,23 @@ function getFileIcon(filename) {
 }
 
 // File tree node component
-function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders }) {
+function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu }) {
   if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
   const isLoading = loadingFolders?.has(node.path)
 
+  const handleContextMenu = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onContextMenu?.(e, node)
+  }
+
   return (
     <div>
       <div
         onClick={() => isFolder ? toggleFolder(node.path) : onFileClick(node)}
+        onContextMenu={handleContextMenu}
         className={`
           flex items-center gap-2 py-1.5 cursor-pointer rounded-lg mx-1
           hover:bg-white/8 active:bg-white/12 transition-all duration-150
@@ -137,6 +145,7 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
               loadingFolders={loadingFolders}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -194,9 +203,11 @@ export default function CodeView({ entityId }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [projects, setProjects] = useState([])
   const [projectsFetched, setProjectsFetched] = useState(false)
+  const [contextMenu, setContextMenu] = useState(null) // {x, y, node}
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
+  const contextMenuRef = useRef(null)
 
   const { send, request } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
@@ -440,6 +451,35 @@ export default function CodeView({ entityId }) {
     }
   }, [activeFilePath, openFiles])
 
+  // Handle context menu open
+  const handleContextMenu = useCallback((e, node) => {
+    console.log('[CodeView] Context menu:', node.path, e.clientX, e.clientY)
+    setContextMenu({ x: e.clientX, y: e.clientY, node })
+  }, [])
+
+  // Delete file or folder
+  const deleteFile = useCallback(async (path) => {
+    if (!request) return
+
+    try {
+      const response = await request('file:delete', { path })
+      if (response.ok) {
+        console.log('Deleted:', path)
+        // Close the file if it was open
+        closeFile(path)
+        // Refresh the parent folder
+        if (rootPath) {
+          loadDirectory(rootPath)
+        }
+      } else {
+        console.error('Failed to delete:', response.error)
+      }
+    } catch (err) {
+      console.error('Delete error:', err)
+    }
+    setContextMenu(null)
+  }, [request, closeFile, rootPath, loadDirectory])
+
   // Save file to disk
   const saveFile = useCallback(async (filePath) => {
     if (!request) return
@@ -468,10 +508,26 @@ export default function CodeView({ entityId }) {
         e.preventDefault()
         if (activeFilePath) saveFile(activeFilePath)
       }
+      // Close context menu on Escape
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+      }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [activeFilePath, saveFile])
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!contextMenu) return
+    const handleClickOutside = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [contextMenu])
 
   // Restore persisted open files on mount
   useEffect(() => {
@@ -740,6 +796,7 @@ export default function CodeView({ entityId }) {
                 expandedFolders={expandedFolders}
                 toggleFolder={toggleFolder}
                 loadingFolders={loadingFolders}
+                onContextMenu={handleContextMenu}
               />
             ))}
           </div>
@@ -828,6 +885,26 @@ export default function CodeView({ entityId }) {
           )}
         </div>
       </div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[9999] min-w-[140px] bg-[#1a1a1a]/95 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl py-1 overflow-hidden"
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y
+          }}
+        >
+          <button
+            onClick={() => deleteFile(contextMenu.node.path)}
+            className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/20 transition-colors"
+          >
+            <FontAwesomeIcon icon={faTrash} className="w-3 h-3" />
+            <span>Delete</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
