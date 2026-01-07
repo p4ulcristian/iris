@@ -75,7 +75,7 @@ body.alt-held .terminal-content {
   -ms-overflow-style: none; /* IE/Edge */
 }
 
-/* xterm overrides - fill container height + transparency */
+/* xterm overrides - fill container + transparency */
 .xterm {
   padding: 4px;
   height: 100% !important;
@@ -83,19 +83,11 @@ body.alt-held .terminal-content {
 }
 
 .xterm-screen {
-  width: 100% !important;
-  height: 100% !important;
   background: transparent !important;
 }
 
 .xterm-viewport {
-  overflow-y: auto !important;
-  height: 100% !important;
   background: transparent !important;
-}
-
-.xterm-rows {
-  height: 100% !important;
 }
 
 /* Tab container performance optimizations */
