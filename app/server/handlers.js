@@ -132,11 +132,17 @@ export function handleMessage(ws, msg, projectRoot) {
 
       // STEP 2: Create the zellij session
       clearOutputBuffer(godName)
-      const god = createGodSession(godName, data.task, workingDir, {
-        startPrompt: appState.settings?.startPrompt,
-        userName: appState.settings?.userName,
-        personality: data.personality
-      })
+      console.log('[god:spawn] Calling createGodSession with:', { godName, task: data.task, workingDir, personality: data.personality })
+      let god
+      try {
+        god = createGodSession(godName, data.task, workingDir, {
+          startPrompt: appState.settings?.startPrompt,
+          userName: appState.settings?.userName,
+          personality: data.personality
+        })
+      } catch (err) {
+        console.error('[god:spawn] createGodSession threw:', err)
+      }
       console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
 
       // STEP 3: Update state based on result
@@ -2125,6 +2131,148 @@ export function handleMessage(ws, msg, projectRoot) {
       tab.stages.push(newStage)
 
       // Switch to the new stage and focus the entity
+      tab.activeStageId = newStageId
+      appState.focusedTile = tileNode.id
+      appState.focusedEntity = entityId
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Reorder an entity within its stage (change position in layout)
+    case 'stage:reorder-entity': {
+      const { stageId, entityId, targetIndex } = data
+      if (!stageId || !entityId || targetIndex === undefined) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab) break
+
+      const stage = tab.stages.find(s => s.id === stageId)
+      if (!stage?.layout) break
+
+      // Get all entity IDs in this stage's layout
+      const entityIds = layout.getAllEntityIds(stage.layout)
+      const currentIndex = entityIds.indexOf(entityId)
+      if (currentIndex === -1) break
+
+      // Remove from current position and insert at target
+      entityIds.splice(currentIndex, 1)
+      const insertAt = targetIndex > currentIndex ? targetIndex - 1 : targetIndex
+      entityIds.splice(insertAt, 0, entityId)
+
+      // Rebuild the layout with new order
+      // For now, just update entity order values to reflect new positions
+      entityIds.forEach((id, idx) => {
+        if (appState.entities[id]) {
+          appState.entities[id].order = idx
+        }
+      })
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Move entity from one stage to another at a specific position
+    case 'stage:join': {
+      const { entityId, sourceStageId, targetStageId, targetIndex } = data
+      if (!entityId || !sourceStageId || !targetStageId) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab) break
+
+      const sourceStage = tab.stages.find(s => s.id === sourceStageId)
+      const targetStage = tab.stages.find(s => s.id === targetStageId)
+      if (!sourceStage?.layout || !targetStage?.layout) break
+
+      // Remove entity from source stage
+      sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+
+      // If source stage is now empty, remove it
+      if (!sourceStage.layout) {
+        tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+      }
+
+      // Add entity to target stage's layout
+      // For now, add to the first tile and update order
+      const targetEntityIds = layout.getAllEntityIds(targetStage.layout)
+      const insertAt = Math.min(targetIndex ?? targetEntityIds.length, targetEntityIds.length)
+
+      // Update order values for the target stage entities
+      targetEntityIds.forEach((id, idx) => {
+        if (appState.entities[id]) {
+          // Shift orders to make room for the new entity
+          if (idx >= insertAt) {
+            appState.entities[id].order = idx + 1
+          } else {
+            appState.entities[id].order = idx
+          }
+        }
+      })
+
+      // Set the joining entity's order
+      if (appState.entities[entityId]) {
+        appState.entities[entityId].order = insertAt
+      }
+
+      // Add entity to target stage layout (to the first tile for now)
+      const firstTile = layout.getFirstTile(targetStage.layout)
+      if (firstTile) {
+        targetStage.layout = layout.addEntityToTile(targetStage.layout, firstTile.id, entityId)
+      }
+
+      // Switch to target stage
+      tab.activeStageId = targetStageId
+      appState.focusedEntity = entityId
+
+      saveState()
+      broadcastState()
+      break
+    }
+
+    // Create a new solo stage at a specific position (for reordering via drag)
+    case 'stage:create-at-position': {
+      const { entityId, sourceStageId, position } = data
+      if (!entityId || position === undefined) break
+
+      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
+      if (!tab) break
+
+      // Find and remove entity from source stage
+      const sourceStage = sourceStageId
+        ? tab.stages.find(s => s.id === sourceStageId)
+        : findStageByEntity(tab, entityId)
+
+      if (sourceStage?.layout) {
+        sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
+
+        // If source stage is now empty, remove it
+        if (!sourceStage.layout) {
+          tab.stages = tab.stages.filter(s => s.id !== sourceStage.id)
+        }
+      }
+
+      // Create a new stage for this entity
+      const newStageId = generateStageId()
+      const tileNode = layout.createTile(entityId)
+      const newStage = { id: newStageId, layout: tileNode }
+
+      // Insert at the specified position
+      const insertPosition = Math.min(position, tab.stages.length)
+      tab.stages.splice(insertPosition, 0, newStage)
+
+      // Update entity order to match stage position
+      tab.stages.forEach((stage, idx) => {
+        const stageEntityIds = layout.getAllEntityIds(stage.layout)
+        stageEntityIds.forEach((id) => {
+          if (appState.entities[id]) {
+            appState.entities[id].order = idx
+          }
+        })
+      })
+
+      // Switch to the new stage
       tab.activeStageId = newStageId
       appState.focusedTile = tileNode.id
       appState.focusedEntity = entityId

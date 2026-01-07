@@ -23,7 +23,7 @@ function formatElapsed(ms) {
 }
 
 
-export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false }) {
+export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false, stageId = null, entityIndex = 0 }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
@@ -33,7 +33,7 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   const [elapsed, setElapsed] = useState(null)
   const [showMoveMenu, setShowMoveMenu] = useState(false)
-  const [isSummoning, setIsSummoning] = useState(true)
+  const [isSummoning, setIsSummoning] = useState(!disableAnimation)
   const [isTileDragging, setIsTileDragging] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const moveMenuRef = useRef(null)
@@ -43,9 +43,20 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   // Clear summon glow after animation completes
   useEffect(() => {
+    if (disableAnimation) return
     const timer = setTimeout(() => setIsSummoning(false), 500)
     return () => clearTimeout(timer)
-  }, [])
+  }, [disableAnimation])
+
+  // Scroll into view when this card becomes active
+  useEffect(() => {
+    if (isActive && cardRef.current) {
+      cardRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      })
+    }
+  }, [isActive])
 
   // Setup pragmatic drag for entire card (tile-level drag)
   useEffect(() => {
@@ -57,14 +68,16 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       getInitialData: () => ({
         source: 'move',
         entityId: id,
-        entityType: type
+        entityType: type,
+        stageId,
+        entityIndex
       }),
       onDragStart: () => setIsTileDragging(true),
       onDrop: () => setIsTileDragging(false)
     })
 
     return () => cleanup()
-  }, [id, type])
+  }, [id, type, stageId, entityIndex])
 
   // Get other tabs (tabs we can move to)
   const otherTabs = tabs?.filter(t => t.id !== activeTabId) || []
@@ -174,14 +187,17 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
         filter: 'blur(12px)',
         transition: { duration: 0.15, ease: 'easeIn' }
       }}
-      transition={disableAnimation ? { duration: 0.2 } : {
+      transition={disableAnimation ? {
+        duration: 0.2,
+        layout: { type: 'tween', duration: 0.2, ease: 'easeOut' }
+      } : {
         type: 'spring',
         stiffness: 400,
         damping: 25,
         mass: 0.8,
         delay: staggerDelay,
       }}
-      layout={disableAnimation ? false : "position"}
+      layout
     >
       {/* Draggable card wrapper for tile splitting */}
       <div

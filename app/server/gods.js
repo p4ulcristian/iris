@@ -266,16 +266,33 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
     // Create session with layout in background using shell subshell
     // This runs zellij detached from the parent process, creating session + command atomically
-    const bgCmd = `("${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > /dev/null 2>&1 &)`
+    // Capture errors to temp file for debugging
+    const errorLogFile = path.join(os.tmpdir(), `iris-zellij-${godKey}-${Date.now()}.log`)
+    // Use nohup + setsid (Linux) or just nohup (macOS) to fully detach zellij from the parent shell
+    // This prevents the process from being killed when execSync's shell exits
+    const detachPrefix = os.platform() === 'linux' ? 'setsid nohup' : 'nohup'
+    const bgCmd = `${detachPrefix} "${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > "${errorLogFile}" 2>&1 &`
     console.log(`[gods] Creating session ${sessionName}...`)
     console.log(`[gods] Layout file: ${layoutFile}`)
+    console.log(`[gods] Error log: ${errorLogFile}`)
+    console.log(`[gods] Working dir: ${projectRoot}`)
+    console.log(`[gods] Working dir exists: ${fs.existsSync(projectRoot)}`)
+    console.log(`[gods] Layout content:\n${layoutContent}`)
     console.log(`[gods] Command: ${bgCmd}`)
-    execSync(bgCmd, {
-      cwd: projectRoot,
-      env: zellijEnv,
-      shell: true
-    })
-    console.log(`[gods] execSync completed, polling for session...`)
+    try {
+      execSync(bgCmd, {
+        cwd: projectRoot,
+        env: zellijEnv,
+        shell: true
+      })
+      console.log(`[gods] execSync completed successfully`)
+    } catch (execErr) {
+      console.error(`[gods] execSync FAILED:`, execErr.message)
+      console.error(`[gods] execSync stderr:`, execErr.stderr?.toString())
+      console.error(`[gods] execSync stdout:`, execErr.stdout?.toString())
+      throw execErr
+    }
+    console.log(`[gods] Polling for session...`)
 
     // Wait for session to actually exist (poll with timeout)
     // This is the correct fix - don't assume, verify
@@ -297,16 +314,31 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Verify session actually started
     if (!sessionExists(godKey)) {
       console.error(`[gods] Session ${sessionName} failed to start within ${maxWaitMs}ms`)
+      // Read error log to see what went wrong
+      try {
+        const errorOutput = fs.readFileSync(errorLogFile, 'utf-8')
+        if (errorOutput.trim()) {
+          console.error(`[gods] Zellij error output:\n${errorOutput}`)
+        } else {
+          console.error(`[gods] Zellij produced no output`)
+        }
+      } catch (e) {
+        console.error(`[gods] Could not read error log: ${e.message}`)
+      }
       // Log session list for debugging
       try {
         const sessions = execSync(`"${ZELLIJ_BIN}" list-sessions 2>&1 || true`, { encoding: 'utf-8' })
         console.error(`[gods] Current sessions: ${sessions}`)
       } catch {}
+      // Cleanup
+      try { fs.unlinkSync(errorLogFile) } catch {}
       if (personalityTempFile) {
         try { fs.unlinkSync(personalityTempFile) } catch {}
       }
       return null
     }
+    // Cleanup error log on success
+    try { fs.unlinkSync(errorLogFile) } catch {}
 
     // Delayed cleanup of personality temp file
     // The $(cat ...) runs inside zellij pane asynchronously, so we wait

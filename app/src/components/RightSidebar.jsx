@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import EntityGroup from './EntityGroup'
 import DraggableTypeButton from './DraggableTypeButton'
 import TileUngroupDropZone from './TileUngroupDropZone'
@@ -96,6 +96,7 @@ export default function RightSidebar({
                         }}
                       >
                         {tabStages.length > 0 ? (
+                          <LayoutGroup>
                           <div className="flex flex-col gap-3 pb-16">
                             {tabStages.map((item, stageIdx) => {
                               const stage = item.stage || item
@@ -129,6 +130,7 @@ export default function RightSidebar({
                               )
                             })}
                           </div>
+                          </LayoutGroup>
                         ) : (
                           <div className="h-full flex flex-col items-center justify-center text-text-secondary text-sm">
                             <p>Add an entity</p>
