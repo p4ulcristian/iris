@@ -71,7 +71,9 @@ export function handleMessage(ws, msg, projectRoot) {
   switch (event) {
     // God lifecycle
     case 'god:spawn': {
-      console.log('[god:spawn] Received:', data)
+      const spawnStart = Date.now()
+      const T = () => `T+${Date.now() - spawnStart}ms`
+      console.log(`[god:spawn] ${T()} Received:`, data)
       // If no name provided, pick a random available god from pantheon
       let godName = data.name
       if (!godName) {
@@ -127,12 +129,12 @@ export function handleMessage(ws, msg, projectRoot) {
       }
       appState.focusedEntity = godName
       saveState()
-      console.log('[god:spawn] Added spawning entity, broadcasting...')
+      console.log(`[god:spawn] ${T()} Added spawning entity, broadcasting...`)
       broadcastState()
 
       // STEP 2: Create the zellij session
       clearOutputBuffer(godName)
-      console.log('[god:spawn] Calling createGodSession with:', { godName, task: data.task, workingDir, personality: data.personality })
+      console.log(`[god:spawn] ${T()} Calling createGodSession`)
       let god
       try {
         god = createGodSession(godName, data.task, workingDir, {
@@ -141,9 +143,9 @@ export function handleMessage(ws, msg, projectRoot) {
           personality: data.personality
         })
       } catch (err) {
-        console.error('[god:spawn] createGodSession threw:', err)
+        console.error(`[god:spawn] ${T()} createGodSession threw:`, err)
       }
-      console.log('[god:spawn] createGodSession returned:', god ? { name: god.name, exists: god.exists } : null)
+      console.log(`[god:spawn] ${T()} createGodSession returned:`, god ? 'success' : 'null')
 
       // STEP 3: Update state based on result
       if (!god) {

@@ -74,8 +74,10 @@ export function clearOutputBuffer(godName) {
 }
 
 export function attachPty(godName, ws, cols, rows) {
+  const attachStart = Date.now()
+  const T = () => `T+${Date.now() - attachStart}ms`
   const sessionName = getSessionName(godName)
-  ptyLog(`[pty:attach] START ${godName} (session: ${sessionName})`)
+  ptyLog(`[pty:attach] ${T()} START ${godName} (session: ${sessionName})`)
 
   // Wait for zellij session to exist (it may still be starting)
   // Poll up to 3 seconds for session to appear
@@ -86,7 +88,7 @@ export function attachPty(godName, ws, cols, rows) {
   const waitForSession = () => {
     attempts++
     if (sessionExists(godName)) {
-      ptyLog(`[pty:attach] ${godName}: session found after ${attempts * pollInterval}ms`)
+      ptyLog(`[pty:attach] ${T()} Session found after ${attempts} attempts`)
       doAttach()
       return
     }
@@ -100,13 +102,14 @@ export function attachPty(godName, ws, cols, rows) {
 
   const doAttach = () => {
     // Session exists, proceed with attach
-    attachPtyInternal(godName, ws, cols, rows, sessionName)
+    attachPtyInternal(godName, ws, cols, rows, sessionName, T)
   }
 
   waitForSession()
 }
 
-function attachPtyInternal(godName, ws, cols, rows, sessionName) {
+function attachPtyInternal(godName, ws, cols, rows, sessionName, T) {
+  ptyLog(`[pty:attach] ${T()} attachPtyInternal START`)
 
   // If PTY already exists for this god, just add client and send buffered content
   if (ptyProcesses.has(godName)) {
@@ -172,6 +175,8 @@ function attachPtyInternal(godName, ws, cols, rows, sessionName) {
     ws.send(JSON.stringify({ event: 'error', message: `PTY spawn failed: ${e.message}` }))
     return
   }
+
+  ptyLog(`[pty:attach] ${T()} Bun.spawn completed`)
 
   if (!proc.terminal) {
     ptyLog(`[pty:attach] ${godName}: proc.terminal is undefined after spawn`)

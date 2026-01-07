@@ -4,6 +4,14 @@ import os from 'os'
 import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
+
+// Timing log file
+const TIMING_LOG = path.join(os.homedir(), '.local/share/iris/logs/spawn-timing.log')
+function logTiming(msg) {
+  const line = `[${new Date().toISOString()}] ${msg}\n`
+  console.log(msg)
+  try { fs.appendFileSync(TIMING_LOG, line) } catch {}
+}
 import { getComposedPrompt, getPersonalityMcpConfig } from './personalities.js'
 import { getProjectsContext } from './projects.js'
 
@@ -35,6 +43,21 @@ function getExtendedPath() {
     if (fs.existsSync(nvmDir)) {
       const versions = fs.readdirSync(nvmDir)
       versions.forEach(v => paths.push(`${nvmDir}/${v}/bin`))
+    }
+  } catch {}
+
+  // Add mise paths (check for existing installs)
+  const miseDir = `${HOME}/.local/share/mise/installs`
+  try {
+    if (fs.existsSync(miseDir)) {
+      const tools = fs.readdirSync(miseDir)
+      tools.forEach(tool => {
+        const toolDir = `${miseDir}/${tool}`
+        try {
+          const versions = fs.readdirSync(toolDir)
+          versions.forEach(v => paths.push(`${toolDir}/${v}/bin`))
+        } catch {}
+      })
     }
   } catch {}
 
@@ -143,6 +166,10 @@ export function listGodSockets() {
 }
 
 export function createGodSession(name, task = '', projectRoot, options = {}) {
+  const startTime = Date.now()
+  const T = () => `T+${Date.now() - startTime}ms`
+  logTiming(`[gods] ${T()} createGodSession START for ${name}`)
+
   const godKey = name.toLowerCase()
   const sessionName = getSessionName(godKey)
   const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
@@ -177,6 +204,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   // Load and apply personality (if not resuming)
   // getComposedPrompt handles both legacy (MD) and trait-based (JSON) personalities
+  logTiming(`[gods] ${T()} Loading personality...`)
   if (!resumeSessionId && personality && personality !== 'none') {
     const personalityContent = getComposedPrompt(personality)
     const projectsContent = getProjectsContext()
@@ -204,62 +232,44 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     }
   }
 
-  if (resumeSessionId) {
-    // Resume existing session
-    claudeArgs.push('--resume', resumeSessionId)
-  } else {
-    // New session - use our pre-generated session ID
-    claudeArgs.push('--session-id', sessionId)
-
-    // Build init prompt (task only - personality handled by --append-system-prompt)
-    let initPrompt = ''
+  // Build init prompt
+  let initPrompt = ''
+  if (!resumeSessionId) {
     if (startPrompt) {
       initPrompt += startPrompt + '\n\n'
     }
     if (task) {
       initPrompt += task
     }
-
-    if (initPrompt.trim()) {
-      claudeArgs.push(initPrompt)
-    }
   }
 
   try {
-    // Create zellij session with claude command
-    let claudeCmd = `claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
-
-    // Build extra flags for personality and MCP config
-    let extraFlags = ''
-    if (personalityTempFile) {
-      extraFlags += ` --append-system-prompt "$(cat '${personalityTempFile}')"`
-    }
-    if (mcpConfigJson) {
-      // Escape single quotes in JSON for shell
-      const escapedJson = mcpConfigJson.replace(/'/g, "'\\''")
-      extraFlags += ` --mcp-config '${escapedJson}'`
-    }
-
-    // Add extra flags to command
-    if (extraFlags) {
-      claudeCmd = `claude --dangerously-skip-permissions${extraFlags} ${claudeArgs.slice(1).map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')}`
-    }
-
+    logTiming(`[gods] ${T()} Personality loaded, building env...`)
+    // Pass everything via environment variables - no shell escaping needed
     const zellijEnv = {
       ...process.env,
       PATH: getExtendedPath(),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       GOD_NAME: name,
-      IRIS_HOME: IRIS_ROOT  // For brain module access: python -m brain.say
+      IRIS_HOME: IRIS_ROOT,
+      // Pass content via env vars - avoids all escaping issues
+      IRIS_SESSION_ID: resumeSessionId || sessionId,
+      IRIS_RESUME: resumeSessionId ? '1' : '',
+      IRIS_TASK: initPrompt || '',
+      IRIS_PERSONALITY: personalityTempFile ? fs.readFileSync(personalityTempFile, 'utf-8') : '',
+      IRIS_MCP_CONFIG: mcpConfigJson || ''
     }
 
-    // Create temp layout file that runs Claude command directly
-    // This creates session + runs command in ONE atomic operation (no polling needed)
+    // Use permanent launcher script - no escaping issues
+    const launcherPath = path.join(__dirname, 'claude-launcher.cjs')
+
+    // Create layout that runs the launcher
     const layoutFile = path.join(os.tmpdir(), `iris-layout-${godKey}-${Date.now()}.kdl`)
     const layoutContent = `layout {
-    pane command="bash" {
-        args "-c" "cd '${projectRoot.replace(/'/g, "'\\''")}' && ${claudeCmd.replace(/"/g, '\\"')}"
+    pane command="node" {
+        args "${launcherPath}"
+        cwd "${projectRoot}"
     }
 }`
     fs.writeFileSync(layoutFile, layoutContent)
@@ -272,73 +282,26 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // This prevents the process from being killed when execSync's shell exits
     const detachPrefix = os.platform() === 'linux' ? 'setsid nohup' : 'nohup'
     const bgCmd = `${detachPrefix} "${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > "${errorLogFile}" 2>&1 &`
-    console.log(`[gods] Creating session ${sessionName}...`)
-    console.log(`[gods] Layout file: ${layoutFile}`)
-    console.log(`[gods] Error log: ${errorLogFile}`)
-    console.log(`[gods] Working dir: ${projectRoot}`)
-    console.log(`[gods] Working dir exists: ${fs.existsSync(projectRoot)}`)
-    console.log(`[gods] Layout content:\n${layoutContent}`)
-    console.log(`[gods] Command: ${bgCmd}`)
+    logTiming(`[gods] ${T()} Spawning zellij: ${sessionName}`)
     try {
       execSync(bgCmd, {
         cwd: projectRoot,
         env: zellijEnv,
         shell: true
       })
-      console.log(`[gods] execSync completed successfully`)
+      logTiming(`[gods] ${T()} execSync completed`)
     } catch (execErr) {
       console.error(`[gods] execSync FAILED:`, execErr.message)
       console.error(`[gods] execSync stderr:`, execErr.stderr?.toString())
       console.error(`[gods] execSync stdout:`, execErr.stdout?.toString())
       throw execErr
     }
-    console.log(`[gods] Polling for session...`)
-
-    // Wait for session to actually exist (poll with timeout)
-    // This is the correct fix - don't assume, verify
-    const maxWaitMs = 5000
-    const pollIntervalMs = 100
-    let waited = 0
-    while (waited < maxWaitMs) {
-      if (sessionExists(godKey)) {
-        console.log(`[gods] Session ${sessionName} found after ${waited}ms`)
-        break
-      }
-      sleepSync(pollIntervalMs)
-      waited += pollIntervalMs
-    }
-
-    // Clean up layout file only after session confirmed (or timeout)
-    try { fs.unlinkSync(layoutFile) } catch {}
-
-    // Verify session actually started
-    if (!sessionExists(godKey)) {
-      console.error(`[gods] Session ${sessionName} failed to start within ${maxWaitMs}ms`)
-      // Read error log to see what went wrong
-      try {
-        const errorOutput = fs.readFileSync(errorLogFile, 'utf-8')
-        if (errorOutput.trim()) {
-          console.error(`[gods] Zellij error output:\n${errorOutput}`)
-        } else {
-          console.error(`[gods] Zellij produced no output`)
-        }
-      } catch (e) {
-        console.error(`[gods] Could not read error log: ${e.message}`)
-      }
-      // Log session list for debugging
-      try {
-        const sessions = execSync(`"${ZELLIJ_BIN}" list-sessions 2>&1 || true`, { encoding: 'utf-8' })
-        console.error(`[gods] Current sessions: ${sessions}`)
-      } catch {}
-      // Cleanup
+    // Don't block waiting for session - attachPty() has async polling
+    // Clean up layout file after a short delay (zellij reads it async)
+    setTimeout(() => {
+      try { fs.unlinkSync(layoutFile) } catch {}
       try { fs.unlinkSync(errorLogFile) } catch {}
-      if (personalityTempFile) {
-        try { fs.unlinkSync(personalityTempFile) } catch {}
-      }
-      return null
-    }
-    // Cleanup error log on success
-    try { fs.unlinkSync(errorLogFile) } catch {}
+    }, 2000)
 
     // Delayed cleanup of personality temp file
     // The $(cat ...) runs inside zellij pane asynchronously, so we wait
@@ -348,6 +311,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       }, 5000)
     }
 
+    logTiming(`[gods] ${T()} createGodSession DONE for ${name}`)
     return {
       name,
       sessionName,
