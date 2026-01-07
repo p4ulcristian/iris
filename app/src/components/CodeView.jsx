@@ -192,11 +192,13 @@ export default function CodeView({ entityId }) {
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [projects, setProjects] = useState([])
+  const [projectsFetched, setProjectsFetched] = useState(false)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
 
-  const { send, request } = useWebSocket(WS_URL)
+  const { send, request, lastMessage } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
   const entities = useStore(s => s.entities)
   const entity = entities[entityId]
@@ -207,6 +209,21 @@ export default function CodeView({ entityId }) {
       setHighlights(codeHighlights)
     }
   }, [codeHighlights])
+
+  // Fetch projects on mount
+  useEffect(() => {
+    if (send) {
+      send({ event: 'projects:list' })
+    }
+  }, [send])
+
+  // Handle projects list response
+  useEffect(() => {
+    if (lastMessage?.event === 'projects:list:response') {
+      setProjects(lastMessage.projects || [])
+      setProjectsFetched(true)
+    }
+  }, [lastMessage])
 
   // Load directory tree from server
   const loadDirectory = useCallback(async (dirPath, hidden = showHidden) => {
@@ -543,13 +560,44 @@ export default function CodeView({ entityId }) {
   // Get active file
   const activeFile = openFiles.find(f => f.path === activeFilePath)
 
-  // Default: load iris project directory (only if no pending file)
+  // Default: load project directory (only if no pending file)
   useEffect(() => {
     // Skip if there's a pending file - that effect will handle loading
     if (entity?.pendingFile) return
-    // Start with iris project by default
-    loadDirectory('/home/p4ulcristian/Work/iris')
-  }, [loadDirectory, entity?.pendingFile])
+    // Wait for projects to be fetched
+    if (!projectsFetched) return
+
+    // Determine which project path to use
+    let projectPath = null
+
+    // 1. If entity has a project set, use that
+    if (entity?.project) {
+      const entityProject = projects.find(p => p.name === entity.project)
+      if (entityProject?.path) {
+        projectPath = entityProject.path
+      }
+    }
+
+    // 2. Otherwise use default project
+    if (!projectPath) {
+      const defaultProject = projects.find(p => p.isDefault)
+      if (defaultProject?.path) {
+        projectPath = defaultProject.path
+      }
+    }
+
+    // 3. Fall back to first project if no default
+    if (!projectPath && projects[0]?.path) {
+      projectPath = projects[0].path
+    }
+
+    // 4. Last resort: home directory
+    if (!projectPath) {
+      projectPath = '/home'
+    }
+
+    loadDirectory(projectPath)
+  }, [loadDirectory, entity?.pendingFile, entity?.project, projects, projectsFetched])
 
   return (
     <div className="absolute inset-0 flex overflow-hidden">

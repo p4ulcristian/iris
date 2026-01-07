@@ -52,20 +52,19 @@
 
 ## Skills
 
-Python modules that gods invoke to interact with Iris UI and system. Located in `brain/skills/`.
+Python commands for Iris interaction. Located in `brain/skills/`.
 
 | Term | Meaning |
 |------|---------|
-| **focus** | Update god's title/goal in UI |
+| **title** | Set god's title/goal in UI |
 | **ready** | Update visual state (working/done/stuck/question) |
-| **spawn** | Summon another god with a task |
-| **peek** | View another god's scrollback |
+| **peek** | View another god's terminal output |
 | **browse** | Open URL in Iris browser |
-| **code** | Open file in code viewer |
-| **nvim** | Open file in Neovim |
-| **glow** | View markdown formatted |
-| **run** | Execute command and capture output |
-| **push** | Git commit and push |
+| **code** | Open file in code viewer with highlights |
+| **md** | Open markdown in rendered viewer |
+| **spawn** | Summon another god with a task |
+| **run** | Run command in new visible terminal |
+| **push** | Git commit and push staged changes |
 
 ## Tools
 

@@ -747,6 +747,10 @@ export default function App() {
                             animate={{ y: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                             style={{ pointerEvents: isActive ? 'auto' : 'none' }}
+                            onAnimationComplete={() => {
+                              // Notify terminals to recalculate after animation
+                              window.dispatchEvent(new CustomEvent('iris:animation-complete'))
+                            }}
                           >
                             {item.isEmpty ? (
                               // Empty tab welcome screen
@@ -862,6 +866,9 @@ export default function App() {
                           style={{
                             pointerEvents: style.pointerEvents,
                             transformOrigin: 'center center',
+                          }}
+                          onAnimationComplete={() => {
+                            window.dispatchEvent(new CustomEvent('iris:animation-complete'))
                           }}
                         >
                           <TileCard

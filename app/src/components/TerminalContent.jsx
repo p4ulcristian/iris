@@ -38,6 +38,9 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
   const { name, displayName, color } = entity
   const godName = name
 
+  // Capture initial color for loading message (don't want color changes to recreate terminal)
+  const initialColorRef = useRef(color)
+
   // Get god color from server - use custom color for terminals, theme color for gods
   const godColors = useStore(s => s.godColors)
   const godColor = displayName ? color : (godColors[name.toLowerCase()] || color)
@@ -109,6 +112,38 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     }
     wasHiddenRef.current = isHidden
   }, [isHidden])
+
+  // Resize after animations complete (transforms can desync xterm's scroll state)
+  useEffect(() => {
+    const handleAnimationComplete = () => {
+      if (!termRef.current || !containerRef.current) return
+
+      // Small delay to ensure transforms have settled
+      setTimeout(() => {
+        try {
+          const term = termRef.current
+          if (!term) return
+
+          // Force xterm to recalculate scroll state by:
+          // 1. Refresh the display
+          term.refresh(0, term.rows - 1)
+
+          // 2. Trigger viewport scroll recalculation via scrollLines(0)
+          term.scrollLines(0)
+
+          // 3. Access viewport and force reflow if needed
+          const viewport = containerRef.current?.querySelector('.xterm-viewport')
+          if (viewport) {
+            // Reading scrollHeight forces browser to recalculate layout
+            void viewport.scrollHeight
+          }
+        } catch {}
+      }, 16) // One frame delay
+    }
+
+    window.addEventListener('iris:animation-complete', handleAnimationComplete)
+    return () => window.removeEventListener('iris:animation-complete', handleAnimationComplete)
+  }, [])
 
   // Main terminal setup
   useEffect(() => {
@@ -302,7 +337,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     }
 
     // Show loading state immediately
-    term.write(`\x1b[38;2;${hexToRgb(color)}m⟡ ${entity.displayName ? 'Starting' : 'Summoning'} ${entity.displayName || name}...\x1b[0m\r\n\r\n`)
+    term.write(`\x1b[38;2;${hexToRgb(initialColorRef.current)}m⟡ ${entity.displayName ? 'Starting' : 'Summoning'} ${entity.displayName || name}...\x1b[0m\r\n\r\n`)
 
     term.focus()
 
@@ -318,7 +353,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
       term.dispose()
       ws.close()
     }
-  }, [godName, color, remountKey])
+  }, [godName, remountKey])
 
   return (
     <div

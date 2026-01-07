@@ -88,6 +88,7 @@ body.alt-held .terminal-content {
 
 .xterm-viewport {
   background: transparent !important;
+  overflow-y: scroll !important;
 }
 
 /* Tab container performance optimizations */
