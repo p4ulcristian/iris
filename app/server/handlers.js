@@ -83,12 +83,14 @@ export function handleMessage(ws, msg, projectRoot) {
           : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
       }
 
-      // Check if god already exists
-      if (appState.entities[godName]) {
+      // Check if god already exists and is working
+      const existingEntity = appState.entities[godName]
+      if (existingEntity && existingEntity.readyState !== 'failed') {
         console.log('[god:spawn] God already exists:', godName)
         ws.send(JSON.stringify({ event: 'god:spawned', name: godName, exists: true }))
         break
       }
+      // If entity exists but failed, we'll respawn it (entity will be overwritten below)
 
       // Determine working directory - use selected project path if provided
       let workingDir = projectRoot

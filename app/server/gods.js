@@ -267,11 +267,15 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Create session with layout in background using shell subshell
     // This runs zellij detached from the parent process, creating session + command atomically
     const bgCmd = `("${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > /dev/null 2>&1 &)`
+    console.log(`[gods] Creating session ${sessionName}...`)
+    console.log(`[gods] Layout file: ${layoutFile}`)
+    console.log(`[gods] Command: ${bgCmd}`)
     execSync(bgCmd, {
       cwd: projectRoot,
       env: zellijEnv,
       shell: true
     })
+    console.log(`[gods] execSync completed, polling for session...`)
 
     // Wait for session to actually exist (poll with timeout)
     // This is the correct fix - don't assume, verify
@@ -280,6 +284,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     let waited = 0
     while (waited < maxWaitMs) {
       if (sessionExists(godKey)) {
+        console.log(`[gods] Session ${sessionName} found after ${waited}ms`)
         break
       }
       sleepSync(pollIntervalMs)
@@ -292,6 +297,11 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
     // Verify session actually started
     if (!sessionExists(godKey)) {
       console.error(`[gods] Session ${sessionName} failed to start within ${maxWaitMs}ms`)
+      // Log session list for debugging
+      try {
+        const sessions = execSync(`"${ZELLIJ_BIN}" list-sessions 2>&1 || true`, { encoding: 'utf-8' })
+        console.error(`[gods] Current sessions: ${sessions}`)
+      } catch {}
       if (personalityTempFile) {
         try { fs.unlinkSync(personalityTempFile) } catch {}
       }
