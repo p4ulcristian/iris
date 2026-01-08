@@ -44,7 +44,6 @@ export const useStore = create(
       loadStage: 0,  // 0=loading, 1=shell, 2=structure, 3=surface, 4=entities, 5=ready
       isAltHeld: false,
       layoutMode: 'auto',
-      devPanelOpen: false,
       gitBranches: {},  // { [projectPath]: branchName } - fetched per entity
       servicesLoading: { speak: false, hear: false, chronicle: false },
       serviceTargets: {},  // Target state when toggling
@@ -119,10 +118,6 @@ export const useStore = create(
         const layouts = ['auto', '1x1', '2x1', '2x2', '3x2', '3x3']
         const idx = layouts.indexOf(state.layoutMode)
         state.layoutMode = layouts[(idx + 1) % layouts.length]
-      }),
-
-      toggleDevPanel: () => set((state) => {
-        state.devPanelOpen = !state.devPanelOpen
       }),
 
       setServiceLoading: (service, loading, targetState) => set((state) => {

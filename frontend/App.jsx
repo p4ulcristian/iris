@@ -7,7 +7,6 @@ import RightSidebar from './components/RightSidebar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
-import DevPanel from './components/DevPanel'
 import HistoryView from '@entities/history/frontend/View'
 import BrowserView from '@entities/browser/frontend/View'
 import GitView from '@entities/git/frontend/View'
@@ -46,7 +45,6 @@ export default function App() {
   // Actions
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
-  const toggleDevPanel = useStore(s => s.toggleDevPanel)
   const getActiveEntities = useStore(s => s.getActiveEntities)
   const getActiveGods = useStore(s => s.getActiveGods)
   const getEntitiesForTab = useStore(s => s.getEntitiesForTab)
@@ -432,7 +430,7 @@ export default function App() {
 
       // Check if this is one of our app shortcuts (Cmd-based on Mac, Alt on others)
       const appShortcutCodes = [
-        'KeyN', 'KeyT', 'KeyW', 'KeyK', 'KeyR', 'KeyB', 'KeyD', 'KeyF',
+        'KeyN', 'KeyT', 'KeyW', 'KeyK', 'KeyR', 'KeyB', 'KeyF',
         'Comma', 'Period', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
         'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'
       ]
@@ -503,14 +501,6 @@ export default function App() {
         e.preventDefault()
         e.stopPropagation()
         handleSpawnTerminal()
-        return
-      }
-
-      // Cmd+D (Mac) / Alt+D: Toggle dev panel
-      if (isModifierPressed(e) && code === 'KeyD') {
-        e.preventDefault()
-        e.stopPropagation()
-        toggleDevPanel()
         return
       }
 
@@ -610,7 +600,7 @@ export default function App() {
   }, [
     handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab,
     focusedEntity, activeEntities,
-    toggleDevPanel, handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
+    handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
   ])
 
   // Modifier key hold for shortcuts popup (Cmd on Mac, Alt on others)
@@ -1024,9 +1014,6 @@ export default function App() {
 
       {/* Shortcuts popup (shown while Alt is held) */}
       <ShortcutsPopup isOpen={showShortcuts} />
-
-      {/* Dev panel */}
-      <DevPanel />
     </div>
     </DragProvider>
   )
