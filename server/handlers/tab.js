@@ -2,52 +2,10 @@
  * Tab management handlers.
  */
 
-import { REALMS } from '../config.js'
 import { appState, saveState, broadcastState, normalizeTabOrder } from '../state.js'
 import { killGodSession } from '../gods.js'
 import { killPty, clearOutputBuffer } from '../pty.js'
-
-function getRandomRealmName() {
-  const usedNames = new Set(appState.tabs.map(t => t.name))
-  const available = REALMS.filter(r => !usedNames.has(r))
-
-  if (available.length > 0) {
-    return available[Math.floor(Math.random() * available.length)]
-  }
-
-  // All realms used, add numeral
-  let counter = 2
-  while (true) {
-    const candidate = `${REALMS[Math.floor(Math.random() * REALMS.length)]} ${counter}`
-    if (!usedNames.has(candidate)) return candidate
-    counter++
-  }
-}
-
-// Add a god to the cemetery before banishing
-function addToCemetery(entity) {
-  if (entity.type !== 'god') return
-  if (!entity.sessionId) return
-
-  const { PANTHEON } = require('../config.js')
-  const godKey = entity.id.toLowerCase()
-  const pantheonGod = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const tab = appState.tabs.find(t => t.id === entity.tabId)
-
-  const fallen = {
-    id: entity.id,
-    name: entity.name || entity.id,
-    color: entity.color || pantheonGod.color,
-    voice: pantheonGod.voice,
-    mission: entity.mission || null,
-    title: entity.title || null,
-    banishedAt: Date.now(),
-    tabName: tab?.name || 'Unknown',
-    sessionId: entity.sessionId
-  }
-
-  appState.cemetery.unshift(fallen)
-}
+import { addToCemetery, getRandomRealmName } from '../../entities/_shared/index.js'
 
 export const handlers = {
   'tab:add': (ws, data) => {

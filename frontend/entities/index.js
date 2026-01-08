@@ -1,2 +1,2 @@
-export { ENTITY_TYPES, ENTITY_TYPE_LIST, getEntityColor } from './config'
+export { EntityRenderer, renderEntityView } from './EntityRenderer'
 export { default as EntityIcon } from './EntityIcon'

@@ -4,10 +4,15 @@
 
 import {
   appState, saveState, broadcastState,
-  generateEntityId, getNextEntityNumber, generateStageId, getNextOrder,
+  generateEntityId, getNextEntityNumber,
   getEntityRegistry
 } from '../state.js'
-import * as layout from '../layout.js'
+import {
+  createEntityBase,
+  addEntity,
+  createStageForEntity,
+  finalizeSpawn
+} from '../../entities/_shared/index.js'
 
 // Helper to get entity type info from registry (with fallback)
 function getEntityType(type) {
@@ -28,33 +33,17 @@ export const handlers = {
     const entityId = generateEntityId(type)
     const num = getNextEntityNumber(type)
 
-    appState.entities[entityId] = {
-      id: entityId,
-      type,
+    const entity = createEntityBase(entityId, type, {
       name: data.name || `${entityTypeInfo.label}-${num}`,
-      tabId: appState.activeTabId,
-      order: getNextOrder(appState.activeTabId),
-      spawnedAt: Date.now(),
-      // Type-specific data
-      url: data.url || null,
-      project: data.project || null,
-      data: data.data || null  // Custom data for entity
-    }
-
-    // Create a new stage for this entity
-    const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-    if (tab) {
-      const stageId = generateStageId()
-      const tileNode = layout.createTile([entityId], entityId)
-      const newStage = { id: stageId, layout: tileNode }
-      tab.stages.push(newStage)
-      tab.activeStageId = stageId
-      appState.focusedTile = tileNode.id
-    }
-
-    appState.focusedEntity = entityId
-    saveState()
-    broadcastState()
+      extra: {
+        url: data.url || null,
+        project: data.project || null,
+        data: data.data || null
+      }
+    })
+    addEntity(entityId, entity)
+    createStageForEntity(entityId)
+    finalizeSpawn(entityId)
   },
 
   // Update browser entity URL

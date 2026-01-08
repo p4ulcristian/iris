@@ -8,6 +8,7 @@ import {
   faForwardStep,
   faBackwardStep
 } from '@fortawesome/free-solid-svg-icons'
+import { IconButton } from '../../_ui'
 
 // Calculate ORP (Optimal Recognition Point) index for a word
 const getORPIndex = (word) => {
@@ -226,22 +227,18 @@ export default function RSVPView({ entity }) {
         <div className="flex items-center gap-4">
           {/* Playback buttons */}
           <div className="flex items-center gap-2">
-            <button
+            <IconButton
+              icon={faRotateLeft}
               onClick={reset}
               disabled={words.length === 0}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
               title="Reset (Home)"
-            >
-              <FontAwesomeIcon icon={faRotateLeft} className="text-text-tertiary" />
-            </button>
-            <button
+            />
+            <IconButton
+              icon={faBackwardStep}
               onClick={stepBackward}
               disabled={words.length === 0 || currentIndex === 0}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
               title="Previous word (Left arrow)"
-            >
-              <FontAwesomeIcon icon={faBackwardStep} className="text-text-tertiary" />
-            </button>
+            />
             <button
               onClick={togglePlay}
               disabled={words.length === 0}
@@ -253,14 +250,12 @@ export default function RSVPView({ entity }) {
                 className="text-[#10B981] w-4"
               />
             </button>
-            <button
+            <IconButton
+              icon={faForwardStep}
               onClick={stepForward}
               disabled={words.length === 0 || currentIndex >= words.length - 1}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30"
               title="Next word (Right arrow)"
-            >
-              <FontAwesomeIcon icon={faForwardStep} className="text-text-tertiary" />
-            </button>
+            />
           </div>
 
           {/* Progress */}

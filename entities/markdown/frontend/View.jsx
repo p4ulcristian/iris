@@ -4,6 +4,7 @@ import { faRefresh } from '@fortawesome/free-solid-svg-icons'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
 import MarkdownRenderer from '@/utils/MarkdownRenderer'
+import { ActionButton } from '../../_ui'
 
 export default function MarkdownView({ entity }) {
   const [content, setContent] = useState('')
@@ -70,13 +71,9 @@ export default function MarkdownView({ entity }) {
     return (
       <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1e1e1e] text-red-400 gap-4">
         <p>{error}</p>
-        <button
-          onClick={() => loadFile(filePath)}
-          className="flex items-center gap-2 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded transition-colors text-sm text-white/70"
-        >
-          <FontAwesomeIcon icon={faRefresh} />
+        <ActionButton variant="ghost" icon={faRefresh} onClick={() => loadFile(filePath)}>
           Retry
-        </button>
+        </ActionButton>
       </div>
     )
   }

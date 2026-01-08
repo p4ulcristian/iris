@@ -6,6 +6,7 @@ import {
   faCheck,
   faCircle
 } from '@fortawesome/free-solid-svg-icons'
+import { Input, IconButton } from '../../_ui'
 
 const DEFAULT_STATE = {
   items: [],
@@ -78,12 +79,12 @@ export default function TodoView({ entity, send }) {
       {/* Header */}
       <div className="p-4 border-b border-white/10">
         <form onSubmit={handleAdd} className="flex gap-2">
-          <input
+          <Input
             type="text"
             value={newTodo}
             onChange={(e) => setNewTodo(e.target.value)}
             placeholder="What needs to be done?"
-            className="flex-1 px-4 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-text-primary placeholder-text-tertiary focus:outline-none focus:border-accent/50"
+            className="flex-1"
           />
           <button
             type="submit"

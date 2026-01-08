@@ -87,7 +87,7 @@ function validateManifest(manifest, entityDir) {
  */
 async function loadEntity(entityDir) {
   const manifestPath = path.join(entityDir, 'manifest.json')
-  const serverPath = path.join(entityDir, 'server.js')
+  const serverPath = path.join(entityDir, 'backend/server.js')
   const folderName = path.basename(entityDir)
 
   // Check manifest exists

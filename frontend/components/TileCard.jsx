@@ -1,6 +1,5 @@
 import { forwardRef } from 'react'
 import { useStore } from '../store'
-import { getEntityColor } from '../entities'
 import { hexToRgbCss } from '../utils/colors'
 
 const TileCard = forwardRef(function TileCard({
@@ -13,11 +12,12 @@ const TileCard = forwardRef(function TileCard({
 }, ref) {
   const { type, name, color } = entity
   const godColors = useStore(s => s.godColors)
+  const entityRegistry = useStore(s => s.entityRegistry)
 
-  // Use god color for gods, entity color for others, fall back to type default
+  // Use god color for gods, entity color for others, fall back to type default from registry
   const entityColor = type === 'god'
     ? (godColors[name?.toLowerCase()] || color || '#888')
-    : (color || getEntityColor(type))
+    : (color || entityRegistry[type]?.color || '#888888')
 
   const focusClass = isFocused ? 'tile-focused' : 'tile-unfocused'
 

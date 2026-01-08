@@ -11,11 +11,31 @@ import {
 import * as layout from '../layout.js'
 import { createGodSession, createTerminalSession } from '../gods.js'
 import { clearOutputBuffer } from '../pty.js'
+import {
+  createEntityBase,
+  addEntity,
+  createStageForEntity,
+  finalizeSpawn
+} from '../../entities/_shared/index.js'
 
 // Helper to get entity type info from registry (with fallback)
 function getEntityType(type) {
   const registry = getEntityRegistry()
   return registry[type] || { label: type, icon: null, color: '#888888' }
+}
+
+// Helper to create generic entity (used in layout handlers)
+function createGenericEntity(entityType, tabId) {
+  const entityId = generateEntityId(entityType)
+  const num = getNextEntityNumber(entityType)
+  const typeInfo = getEntityType(entityType)
+
+  const entity = createEntityBase(entityId, entityType, {
+    name: `${typeInfo.label || entityType}-${num}`,
+    tabId
+  })
+  addEntity(entityId, entity)
+  return entityId
 }
 
 export const handlers = {
@@ -24,11 +44,10 @@ export const handlers = {
     const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
     if (!tab) return
 
-    // Create or get the entity
     let targetEntityId = entityId
     if (entityType && !entityId) {
-      // Spawn new entity of this type
       if (entityType === 'god') {
+        // Pick random available god
         const godColors = Object.keys(GOD_COLORS)
         const usedNames = Object.values(appState.entities).filter(e => e.type === 'god').map(e => e.name?.toLowerCase())
         const availableGods = godColors.filter(g => !usedNames.includes(g))
@@ -36,99 +55,55 @@ export const handlers = {
         const randomGod = godPool[Math.floor(Math.random() * godPool.length)] || 'zeus'
         const godName = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
 
-        // Inline god spawn logic
         clearOutputBuffer(godName)
         const god = createGodSession(godName, '', projectRoot, {
           startPrompt: appState.settings?.startPrompt,
           userName: appState.settings?.userName
         })
         if (god && !god.exists) {
-          appState.entities[godName] = {
-            id: godName,
-            type: 'god',
+          const entity = createEntityBase(godName, 'god', {
             name: godName,
-            tabId: appState.activeTabId,
-            order: getNextOrder(appState.activeTabId),
-            mission: null,
-            spawnedAt: Date.now(),
-            sessionId: god.sessionId || null,
-            project: projectRoot,
-            readyState: 'working'
-          }
-          const stageId = generateStageId()
-          const tileNode = layout.createTile([godName], godName)
-          const newStage = { id: stageId, layout: tileNode }
-          tab.stages.push(newStage)
-          tab.activeStageId = stageId
-          appState.focusedTile = tileNode.id
-          appState.focusedEntity = godName
+            extra: {
+              mission: null,
+              sessionId: god.sessionId || null,
+              project: projectRoot,
+              readyState: 'working'
+            }
+          })
+          addEntity(godName, entity)
+          createStageForEntity(godName)
+          finalizeSpawn(godName)
         }
-        saveState()
-        broadcastState()
         return
       } else if (entityType === 'terminal') {
         const terminal = createTerminalSession({}, projectRoot)
         if (terminal && !terminal.exists) {
-          appState.entities[terminal.name] = {
-            id: terminal.name,
-            type: 'terminal',
+          const entity = createEntityBase(terminal.name, 'terminal', {
             name: terminal.displayName || terminal.name,
-            tabId: appState.activeTabId,
-            order: getNextOrder(appState.activeTabId),
-            spawnedAt: Date.now(),
-            color: terminal.color
-          }
-          const stageId = generateStageId()
-          const tileNode = layout.createTile([terminal.name], terminal.name)
-          const newStage = { id: stageId, layout: tileNode }
-          tab.stages.push(newStage)
-          tab.activeStageId = stageId
-          appState.focusedTile = tileNode.id
-          appState.focusedEntity = terminal.name
+            extra: { color: terminal.color }
+          })
+          addEntity(terminal.name, entity)
+          createStageForEntity(terminal.name)
+          finalizeSpawn(terminal.name)
         }
-        saveState()
-        broadcastState()
         return
       } else {
-        // Generic entity spawn
-        const newId = generateEntityId(entityType)
-        const num = getNextEntityNumber(entityType)
-        const typeInfo = getEntityType(entityType)
-
-        appState.entities[newId] = {
-          id: newId,
-          type: entityType,
-          name: `${typeInfo.label || entityType}-${num}`,
-          tabId: appState.activeTabId,
-          order: getNextOrder(appState.activeTabId),
-          spawnedAt: Date.now()
-        }
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([newId], newId)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-        appState.focusedEntity = newId
-        saveState()
-        broadcastState()
+        // Generic entity
+        targetEntityId = createGenericEntity(entityType, appState.activeTabId)
+        createStageForEntity(targetEntityId)
+        finalizeSpawn(targetEntityId)
         return
       }
     }
 
     // If moving existing entity, create a new stage for it
     if (targetEntityId) {
-      const stageId = generateStageId()
-      const tileNode = layout.createTile([targetEntityId], targetEntityId)
-      const newStage = { id: stageId, layout: tileNode }
-      tab.stages.push(newStage)
-      tab.activeStageId = stageId
-      appState.focusedTile = tileNode.id
-      appState.focusedEntity = targetEntityId
+      createStageForEntity(targetEntityId, tab.id)
+      finalizeSpawn(targetEntityId)
+    } else {
+      saveState()
+      broadcastState()
     }
-
-    saveState()
-    broadcastState()
   },
 
   'layout:split': (ws, data) => {
@@ -151,19 +126,7 @@ export const handlers = {
     // Create or get the entity to place in new tile
     let targetEntityId = entityId
     if (entityType && !entityId) {
-      const newId = generateEntityId(entityType)
-      const num = getNextEntityNumber(entityType)
-      const typeInfo = getEntityType(entityType)
-
-      appState.entities[newId] = {
-        id: newId,
-        type: entityType,
-        name: `${typeInfo.label || entityType}-${num}`,
-        tabId: tab.id,
-        order: getNextOrder(tab.id),
-        spawnedAt: Date.now()
-      }
-      targetEntityId = newId
+      targetEntityId = createGenericEntity(entityType, tab.id)
     }
 
     // If moving an existing entity, remove it from its current stage first
@@ -349,19 +312,7 @@ export const handlers = {
     // Create entity if type provided
     let targetEntityId = entityId
     if (entityType && !entityId) {
-      const newId = generateEntityId(entityType)
-      const num = getNextEntityNumber(entityType)
-      const typeInfo = getEntityType(entityType)
-
-      appState.entities[newId] = {
-        id: newId,
-        type: entityType,
-        name: `${typeInfo.label || entityType}-${num}`,
-        tabId: tab.id,
-        order: getNextOrder(tab.id),
-        spawnedAt: Date.now()
-      }
-      targetEntityId = newId
+      targetEntityId = createGenericEntity(entityType, tab.id)
     } else if (entityId) {
       // Moving existing entity - remove from its source stage first
       const sourceStage = findStageByEntity(tab, entityId)

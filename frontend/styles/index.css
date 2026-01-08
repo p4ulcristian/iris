@@ -898,8 +898,7 @@ body.alt-held .terminal-content {
 
 /* Unfocused tile - recedes */
 .tile-unfocused {
-  transform: scale(0.98);
   opacity: 0.7;
   filter: saturate(0.8);
-  transition: transform 150ms ease, box-shadow 150ms ease, opacity 150ms ease, filter 150ms ease;
+  transition: box-shadow 150ms ease, opacity 150ms ease, filter 150ms ease;
 }

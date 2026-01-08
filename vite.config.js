@@ -14,7 +14,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'frontend')
+      '@': path.resolve(__dirname, 'frontend'),
+      '@entities': path.resolve(__dirname, 'entities')
     }
   },
   server: {

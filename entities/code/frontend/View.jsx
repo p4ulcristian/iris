@@ -19,6 +19,7 @@ import {
 import { useStore } from '@/store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
+import { IconButton, Input } from '../../_ui'
 
 // File icons by extension
 const FILE_ICONS = {
@@ -721,33 +722,28 @@ export default function CodeView({ entity }) {
             <span className="text-xs font-medium text-white/50 uppercase tracking-wider">Explorer</span>
           )}
           <div className={`flex ${sidebarCollapsed ? 'flex-col gap-1' : 'gap-0.5'}`}>
-            <button
+            <IconButton
+              icon={sidebarCollapsed ? faChevronRight : faChevronLeft}
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <FontAwesomeIcon icon={sidebarCollapsed ? faChevronRight : faChevronLeft} className="w-3 h-3" />
-            </button>
+            />
             {!sidebarCollapsed && (
               <>
-                <button
+                <IconButton
+                  icon={showHidden ? faEye : faEyeSlash}
                   onClick={() => {
                     const newVal = !showHidden
                     setShowHidden(newVal)
                     if (rootPath) loadDirectory(rootPath, newVal)
                   }}
-                  className={`p-1.5 rounded-lg transition-all duration-150 ${showHidden ? 'bg-white/10 text-accent' : 'hover:bg-white/8 text-white/40'}`}
                   title={showHidden ? "Hide hidden files" : "Show hidden files"}
-                >
-                  <FontAwesomeIcon icon={showHidden ? faEye : faEyeSlash} className="w-3 h-3" />
-                </button>
-                <button
+                  className={showHidden ? 'bg-white/10 text-accent' : ''}
+                />
+                <IconButton
+                  icon={faRefresh}
                   onClick={() => rootPath && loadDirectory(rootPath)}
-                  className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
                   title="Refresh"
-                >
-                  <FontAwesomeIcon icon={faRefresh} className="w-3 h-3" />
-                </button>
+                />
               </>
             )}
           </div>
@@ -781,23 +777,20 @@ export default function CodeView({ entity }) {
         {!sidebarCollapsed && (
           <div className="px-2 py-2 border-b border-white/8">
             <div className="flex gap-1">
-              <input
-                type="text"
+              <Input
                 value={rootPath || ''}
                 onChange={(e) => loadDirectory(e.target.value)}
                 placeholder="Path..."
-                className="flex-1 min-w-0 px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/85 placeholder:text-white/30 focus:outline-none focus:bg-white/8 focus:border-white/20 transition-all"
+                className="flex-1 min-w-0 text-xs"
               />
-              <button
+              <IconButton
+                icon={faFolderTree}
                 onClick={async () => {
                   const selectedPath = await window.iris?.selectFolder()
                   if (selectedPath) loadDirectory(selectedPath)
                 }}
-                className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white/8 border border-white/10 rounded-lg text-white/60 hover:bg-white/12 hover:text-white/80 transition-all"
                 title="Browse folder"
-              >
-                <FontAwesomeIcon icon={faFolderTree} className="w-3.5 h-3.5" />
-              </button>
+              />
             </div>
           </div>
         )}
@@ -827,7 +820,8 @@ export default function CodeView({ entity }) {
         {/* Collapsed state - show folder icon to expand */}
         {sidebarCollapsed && (
           <div className="flex-1 flex flex-col items-center pt-2 gap-1">
-            <button
+            <IconButton
+              icon={faFolderTree}
               onClick={async () => {
                 const selectedPath = await window.iris?.selectFolder()
                 if (selectedPath) {
@@ -835,18 +829,13 @@ export default function CodeView({ entity }) {
                   setSidebarCollapsed(false)
                 }
               }}
-              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
               title="Browse folder"
-            >
-              <FontAwesomeIcon icon={faFolderTree} className="w-3.5 h-3.5" />
-            </button>
-            <button
+            />
+            <IconButton
+              icon={faRefresh}
               onClick={() => rootPath && loadDirectory(rootPath)}
-              className="p-1.5 hover:bg-white/8 rounded-lg transition-all duration-150 text-white/40 hover:text-white/60"
               title="Refresh"
-            >
-              <FontAwesomeIcon icon={faRefresh} className="w-3 h-3" />
-            </button>
+            />
           </div>
         )}
       </div>

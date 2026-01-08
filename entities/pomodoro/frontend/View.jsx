@@ -11,6 +11,7 @@ import {
   faVolumeHigh,
   faVolumeXmark
 } from '@fortawesome/free-solid-svg-icons'
+import { ActionButton, IconButton, Input, Card } from '../../_ui'
 
 // Web Audio API sound generator
 const createAudioContext = () => {
@@ -298,13 +299,12 @@ export default function PomodoroView({ entity, send }) {
 
       {/* Controls */}
       <div className="flex items-center gap-3">
-        <button
+        <IconButton
+          icon={faRotateLeft}
           onClick={handleReset}
-          className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
           title="Reset"
-        >
-          <FontAwesomeIcon icon={faRotateLeft} className="w-5 h-5" />
-        </button>
+          className="p-3"
+        />
 
         <button
           onClick={handlePlayPause}
@@ -320,13 +320,12 @@ export default function PomodoroView({ entity, send }) {
           />
         </button>
 
-        <button
+        <IconButton
+          icon={faForward}
           onClick={handleSkip}
-          className="p-3 rounded-full bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
           title="Skip to next"
-        >
-          <FontAwesomeIcon icon={faForward} className="w-5 h-5" />
-        </button>
+          className="p-3"
+        />
       </div>
 
       {/* Completed count */}
@@ -347,48 +346,48 @@ export default function PomodoroView({ entity, send }) {
         >
           <FontAwesomeIcon icon={data.soundEnabled ? faVolumeHigh : faVolumeXmark} />
         </button>
-        <button
+        <IconButton
+          icon={faGear}
           onClick={() => setShowSettings(!showSettings)}
-          className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary hover:text-text-primary transition-colors"
-        >
-          <FontAwesomeIcon icon={faGear} />
-        </button>
+          title="Settings"
+        />
       </div>
 
       {/* Settings panel */}
       {showSettings && (
-        <div className="bg-black/40 border border-white/10 rounded-xl p-4 w-64">
+        <Card className="w-64">
           <div className="space-y-4">
             <div>
               <label className="text-xs text-text-secondary block mb-1">Work (minutes)</label>
-              <input
+              <Input
                 type="number"
                 min="1"
                 max="120"
                 value={workMin}
                 onChange={(e) => setWorkMin(parseInt(e.target.value) || 25)}
-                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-text-primary"
+                className="w-full"
               />
             </div>
             <div>
               <label className="text-xs text-text-secondary block mb-1">Break (minutes)</label>
-              <input
+              <Input
                 type="number"
                 min="1"
                 max="60"
                 value={breakMin}
                 onChange={(e) => setBreakMin(parseInt(e.target.value) || 5)}
-                className="w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-sm text-text-primary"
+                className="w-full"
               />
             </div>
-            <button
+            <ActionButton
+              variant="accent"
               onClick={handleSaveSettings}
-              className="w-full py-2 bg-accent/20 hover:bg-accent/30 border border-accent/50 rounded-lg text-sm text-text-primary transition-colors"
+              className="w-full"
             >
               Save & Reset Timer
-            </button>
+            </ActionButton>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   )

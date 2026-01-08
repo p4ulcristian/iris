@@ -282,7 +282,7 @@ app.whenReady().then(() => {
   // Show splash immediately
   createSplash()
 
-  // Start server and main window
+  // Start server
   startServer()
   createWindow()
 

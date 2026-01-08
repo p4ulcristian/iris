@@ -5,38 +5,23 @@
 import { PANTHEON } from '../config.js'
 import {
   appState, saveState, broadcastState,
-  generateStageId, getNextOrder, normalizeTabOrder,
-  findStageByEntity, deleteTabIfEmpty
+  getNextOrder, normalizeTabOrder
 } from '../state.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from '../gods.js'
 import { killPty, getOutputBuffer, clearOutputBuffer } from '../pty.js'
 import { listSessions } from '../history.js'
-import * as layout from '../layout.js'
 import * as projects from '../projects.js'
-
-// Add a god to the cemetery before banishing
-function addToCemetery(entity) {
-  if (entity.type !== 'god') return
-  if (!entity.sessionId) return  // Can't resurrect without session ID
-
-  const godKey = entity.id.toLowerCase()
-  const pantheonGod = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
-  const tab = appState.tabs.find(t => t.id === entity.tabId)
-
-  const fallen = {
-    id: entity.id,
-    name: entity.name || entity.id,
-    color: entity.color || pantheonGod.color,
-    voice: pantheonGod.voice,
-    mission: entity.mission || null,
-    title: entity.title || null,
-    banishedAt: Date.now(),
-    tabName: tab?.name || 'Unknown',
-    sessionId: entity.sessionId
-  }
-
-  appState.cemetery.unshift(fallen)
-}
+import {
+  createEntityBase,
+  addEntity,
+  createStageForEntity,
+  finalizeSpawn,
+  removeEntity,
+  moveToTab,
+  moveToNewTab,
+  addToCemetery,
+  getRandomRealmName
+} from '../../entities/_shared/index.js'
 
 export const handlers = {
   'god:spawn': (ws, data, projectRoot) => {
@@ -87,15 +72,7 @@ export const handlers = {
     }
 
     // Create stage for this entity
-    const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-    if (tab) {
-      const stageId = generateStageId()
-      const tileId = layout.createTile([godName], godName)
-      const newStage = { id: stageId, layout: tileId }
-      tab.stages.push(newStage)
-      tab.activeStageId = stageId
-      appState.focusedTile = tileId.id
-    }
+    createStageForEntity(godName)
     appState.focusedEntity = godName
     saveState()
     console.log(`[god:spawn] ${T()} Added spawning entity, broadcasting...`)
@@ -135,7 +112,6 @@ export const handlers = {
   },
 
   'terminal:spawn': (ws, data, projectRoot) => {
-    // Clear any orphaned buffer from a previous incarnation
     if (data.name) {
       clearOutputBuffer(data.name)
     }
@@ -147,30 +123,13 @@ export const handlers = {
     }, projectRoot)
 
     if (terminal && !terminal.exists) {
-      appState.entities[terminal.name] = {
-        id: terminal.name,
-        type: 'terminal',
+      const entity = createEntityBase(terminal.name, 'terminal', {
         name: terminal.displayName || terminal.name,
-        tabId: appState.activeTabId,
-        order: getNextOrder(appState.activeTabId),
-        spawnedAt: Date.now(),
-        color: terminal.color
-      }
-
-      // Create a new stage for this entity
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab) {
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([terminal.name], terminal.name)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-      }
-
-      appState.focusedEntity = terminal.name
-      saveState()
-      broadcastState()
+        extra: { color: terminal.color }
+      })
+      addEntity(terminal.name, entity)
+      createStageForEntity(terminal.name)
+      finalizeSpawn(terminal.name)
     } else if (terminal?.exists) {
       ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
     }
@@ -183,7 +142,6 @@ export const handlers = {
   'entity:kill': (ws, data) => {
     const entityId = data.entityId || data.godName || data.name
     const entity = appState.entities[entityId]
-    const entityTabId = entity?.tabId
 
     // Add god to cemetery before banishing
     if (entity?.type === 'god') {
@@ -197,56 +155,8 @@ export const handlers = {
       clearOutputBuffer(entityId)
     }
 
-    delete appState.entities[entityId]
-
-    // Remove from stage's layout (and remove stage if empty)
-    if (entityTabId) {
-      const tab = appState.tabs.find(t => t.id === entityTabId)
-      if (tab) {
-        const stage = findStageByEntity(tab, entityId)
-        if (stage) {
-          stage.layout = layout.removeEntityFromLayout(stage.layout, entityId)
-          if (!stage.layout) {
-            tab.stages = tab.stages.filter(s => s.id !== stage.id)
-            if (tab.activeStageId === stage.id) {
-              tab.activeStageId = tab.stages[0]?.id || null
-            }
-          }
-        }
-        normalizeTabOrder(entityTabId)
-        deleteTabIfEmpty(entityTabId)
-      }
-    }
-
-    if (appState.focusedEntity === entityId) {
-      const killedOrder = entity?.order || 0
-      const remaining = Object.entries(appState.entities)
-        .filter(([_, e]) => e.tabId === entityTabId)
-        .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
-
-      let newFocused = null
-      for (let i = remaining.length - 1; i >= 0; i--) {
-        if ((remaining[i][1].order || 0) < killedOrder) {
-          newFocused = remaining[i][0]
-          break
-        }
-      }
-      if (!newFocused && remaining.length > 0) {
-        newFocused = remaining[0][0]
-      }
-
-      appState.focusedEntity = newFocused
-
-      if (appState.focusedEntity && entityTabId === appState.activeTabId) {
-        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-        if (tab) {
-          const stage = findStageByEntity(tab, appState.focusedEntity)
-          if (stage) {
-            tab.activeStageId = stage.id
-          }
-        }
-      }
-    }
+    // Remove entity (handles layout, focus, cleanup)
+    removeEntity(entityId)
     saveState()
     broadcastState()
   },
@@ -320,50 +230,8 @@ export const handlers = {
 
   'entity:move': (ws, data) => {
     const entityId = data.entityId || data.godName
-    const entity = appState.entities[entityId]
-    if (!entity) return
-
-    const sourceTabId = entity.tabId
-    const destTabId = data.tabId
-
-    // Remove from source tab's stage layout
-    const sourceTab = appState.tabs.find(t => t.id === sourceTabId)
-    if (sourceTab) {
-      const sourceStage = findStageByEntity(sourceTab, entityId)
-      if (sourceStage) {
-        sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
-        if (!sourceStage.layout) {
-          sourceTab.stages = sourceTab.stages.filter(s => s.id !== sourceStage.id)
-          if (sourceTab.activeStageId === sourceStage.id) {
-            sourceTab.activeStageId = sourceTab.stages[0]?.id || null
-          }
-        }
-      }
-    }
-
-    // Move to destination tab with next order
-    entity.tabId = destTabId
-    entity.order = getNextOrder(destTabId)
-
-    // Create a new stage for this entity in the destination tab
-    const destTab = appState.tabs.find(t => t.id === destTabId)
-    if (destTab) {
-      const stageId = generateStageId()
-      const tileNode = layout.createTile([entityId], entityId)
-      const newStage = { id: stageId, layout: tileNode }
-      destTab.stages = destTab.stages || []
-      destTab.stages.push(newStage)
-      destTab.activeStageId = stageId
-      appState.focusedTile = tileNode.id
-    }
-
-    normalizeTabOrder(sourceTabId)
-    normalizeTabOrder(destTabId)
-    deleteTabIfEmpty(sourceTabId)
-
-    appState.focusedEntity = entityId
-    saveState()
-    broadcastState()
+    if (!appState.entities[entityId]) return
+    moveToTab(entityId, data.tabId)
   },
 
   'god:move-to-new-tab': (ws, data) => {
@@ -371,68 +239,9 @@ export const handlers = {
   },
 
   'entity:move-to-new-tab': (ws, data) => {
-    const { REALMS } = require('../config.js')
-
-    function getRandomRealmName() {
-      const usedNames = new Set(appState.tabs.map(t => t.name))
-      const available = REALMS.filter(r => !usedNames.has(r))
-      if (available.length > 0) {
-        return available[Math.floor(Math.random() * available.length)]
-      }
-      let counter = 2
-      while (true) {
-        const candidate = `${REALMS[Math.floor(Math.random() * REALMS.length)]} ${counter}`
-        if (!usedNames.has(candidate)) return candidate
-        counter++
-      }
-    }
-
     const entityId = data.entityId || data.godName
-    const entity = appState.entities[entityId]
-    const sourceTabId = entity?.tabId
-
-    // Remove from source tab's stage layout first
-    if (sourceTabId) {
-      const sourceTab = appState.tabs.find(t => t.id === sourceTabId)
-      if (sourceTab) {
-        const sourceStage = findStageByEntity(sourceTab, entityId)
-        if (sourceStage) {
-          sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
-          if (!sourceStage.layout) {
-            sourceTab.stages = sourceTab.stages.filter(s => s.id !== sourceStage.id)
-            if (sourceTab.activeStageId === sourceStage.id) {
-              sourceTab.activeStageId = sourceTab.stages[0]?.id || null
-            }
-          }
-        }
-      }
-    }
-
-    appState.tabCounter++
-    const stageId = generateStageId()
-    const tileNode = layout.createTile([entityId], entityId)
-    const newTab = {
-      id: appState.tabCounter,
-      name: getRandomRealmName(),
-      stages: [{ id: stageId, layout: tileNode }],
-      activeStageId: stageId
-    }
-    appState.tabs.push(newTab)
-    appState.activeTabId = newTab.id
-    appState.focusedTile = tileNode.id
-
-    if (entity) {
-      entity.tabId = newTab.id
-      entity.order = 0
-
-      if (sourceTabId) {
-        normalizeTabOrder(sourceTabId)
-        deleteTabIfEmpty(sourceTabId)
-      }
-    }
-    appState.focusedEntity = entityId
-    saveState()
-    broadcastState()
+    if (!appState.entities[entityId]) return
+    moveToNewTab(entityId, getRandomRealmName)
   },
 
   // History management
@@ -448,30 +257,13 @@ export const handlers = {
   'history:resume': (ws, data, projectRoot) => {
     const god = createGodSession(data.name, '', projectRoot, { resumeSessionId: data.sessionId })
     if (god && !god.exists) {
-      appState.entities[god.name] = {
-        id: god.name,
-        type: 'god',
+      const entity = createEntityBase(god.name, 'god', {
         name: god.name,
-        tabId: appState.activeTabId,
-        order: getNextOrder(appState.activeTabId),
-        mission: data.summary || null,
-        spawnedAt: Date.now(),
-        project: projectRoot
-      }
-
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab) {
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([god.name], god.name)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-      }
-
-      appState.focusedEntity = god.name
-      saveState()
-      broadcastState()
+        extra: { mission: data.summary || null, project: projectRoot }
+      })
+      addEntity(god.name, entity)
+      createStageForEntity(god.name)
+      finalizeSpawn(god.name)
     } else if (god?.exists) {
       ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
     }
@@ -487,51 +279,32 @@ export const handlers = {
 
     // If there's an existing entity with this name, clean it up first
     const existingEntity = appState.entities[godName]
-    const existingTabId = existingEntity?.tabId
     if (existingEntity) {
       if (existingEntity.type === 'god') {
         addToCemetery(existingEntity)
       }
       killPty(godName)
       clearOutputBuffer(godName)
-      delete appState.entities[godName]
-
-      if (existingTabId) {
-        normalizeTabOrder(existingTabId)
-      }
+      removeEntity(godName)
     }
 
     // Resume the session with the god's name
     const god = createGodSession(godName, '', projectRoot, { resumeSessionId: sessionId })
     if (god && !god.exists) {
-      appState.entities[god.name] = {
-        id: god.name,
-        type: 'god',
+      const entity = createEntityBase(god.name, 'god', {
         name: god.name,
-        tabId: appState.activeTabId,
-        order: getNextOrder(appState.activeTabId),
-        spawnedAt: Date.now(),
-        mission: mission || null,
-        title: title || null,
-        sessionId: sessionId,
-        project: projectRoot
-      }
+        extra: {
+          mission: mission || null,
+          title: title || null,
+          sessionId: sessionId,
+          project: projectRoot
+        }
+      })
+      addEntity(god.name, entity)
+      createStageForEntity(god.name)
 
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab) {
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([god.name], god.name)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-      }
-
-      appState.focusedEntity = god.name
       appState.cemetery = appState.cemetery.filter(f => f.sessionId !== sessionId)
-
-      saveState()
-      broadcastState()
+      finalizeSpawn(god.name)
     } else if (god?.exists) {
       ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
     }

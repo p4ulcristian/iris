@@ -10,6 +10,7 @@ import {
   faHome
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '@/store'
+import { IconButton } from '../../_ui'
 
 function BrowserTab({ tab, isActive, onClick, onClose }) {
   return (
@@ -277,36 +278,10 @@ export default function BrowserView({ entity }) {
       <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-black/40 border-b border-white/10">
         {/* Nav buttons */}
         <div className="flex items-center gap-1">
-          <button
-            onClick={goBack}
-            disabled={!activeTab?.canGoBack}
-            className="p-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="Back"
-          >
-            <FontAwesomeIcon icon={faArrowLeft} className="w-4 h-4 text-text-secondary" />
-          </button>
-          <button
-            onClick={goForward}
-            disabled={!activeTab?.canGoForward}
-            className="p-2 rounded-lg hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="Forward"
-          >
-            <FontAwesomeIcon icon={faArrowRight} className="w-4 h-4 text-text-secondary" />
-          </button>
-          <button
-            onClick={refresh}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${isLoading ? 'animate-spin' : ''}`}
-            title="Refresh"
-          >
-            <FontAwesomeIcon icon={faRotateRight} className="w-4 h-4 text-text-secondary" />
-          </button>
-          <button
-            onClick={goHome}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-            title="Home"
-          >
-            <FontAwesomeIcon icon={faHome} className="w-4 h-4 text-text-secondary" />
-          </button>
+          <IconButton icon={faArrowLeft} onClick={goBack} disabled={!activeTab?.canGoBack} title="Back" />
+          <IconButton icon={faArrowRight} onClick={goForward} disabled={!activeTab?.canGoForward} title="Forward" />
+          <IconButton icon={faRotateRight} onClick={refresh} spinning={isLoading} title="Refresh" />
+          <IconButton icon={faHome} onClick={goHome} title="Home" />
         </div>
 
         {/* URL bar */}
