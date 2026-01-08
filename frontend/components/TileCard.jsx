@@ -1,6 +1,6 @@
 import { forwardRef } from 'react'
 import { useStore } from '../store'
-import { hexToRgbCss } from '../utils/colors'
+import { hexToRgbCss } from '../../entities/_shared/colors'
 
 const TileCard = forwardRef(function TileCard({
   entity,

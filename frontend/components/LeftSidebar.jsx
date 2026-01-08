@@ -421,8 +421,9 @@ export default function LeftSidebar({
   const handleServiceToggle = (service, isActive) => {
     if (!send) return
 
-    // Set loading state - cleared when services:status broadcast arrives
-    setServiceLoading(service, true)
+    // Target state is the opposite of current (start -> true, stop -> false)
+    const targetState = !isActive
+    setServiceLoading(service, true, targetState)
 
     send({
       event: isActive ? 'service:stop' : 'service:start',

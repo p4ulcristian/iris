@@ -26,3 +26,5 @@ export {
 export { addToCemetery } from './cemetery.js'
 
 export { getRandomRealmName } from './tabs.js'
+
+export { hexToRgbCss } from './colors.js'

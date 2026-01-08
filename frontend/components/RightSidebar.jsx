@@ -4,7 +4,7 @@ import DraggableTypeButton from './DraggableTypeButton'
 import TileUngroupDropZone from './TileUngroupDropZone'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye } from '@fortawesome/free-solid-svg-icons'
-import { EntityIcon } from '../entities'
+import EntityIcon from './EntityIcon'
 
 // Animation timing (in ms)
 const CARDS_DURATION = 200

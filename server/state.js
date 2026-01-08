@@ -12,9 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf-8'))
 const APP_VERSION = pkg.version
 
-// Entity registry (loaded from app/entities/)
+// Entity registry (loaded from entities/)
 let entityRegistry = {}
-let entityHandlers = {}
 
 // Broadcast function - set by index.js
 let broadcastFn = null
@@ -27,22 +26,15 @@ export function broadcast(event, data = {}) {
   if (broadcastFn) broadcastFn(event, data)
 }
 
-// Load entity registry from app/entities/
+// Load entity registry from entities/
 export async function loadEntityRegistry() {
-  const { registry, handlers } = await loadEntities()
-  entityRegistry = registry
-  entityHandlers = handlers
-  return { registry, handlers }
+  entityRegistry = await loadEntities()
+  return entityRegistry
 }
 
 // Get the entity registry
 export function getEntityRegistry() {
   return entityRegistry
-}
-
-// Get entity handlers
-export function getEntityHandlers() {
-  return entityHandlers
 }
 
 // Get client-safe registry (for sending to frontend)

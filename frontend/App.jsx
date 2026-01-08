@@ -44,10 +44,8 @@ export default function App() {
   const getActiveLayout = useStore(s => s.getActiveLayout)
 
   // Actions
-  const updateEntityStatus = useStore(s => s.updateEntityStatus)
   const setConnected = useStore(s => s.setConnected)
   const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
-  const setServices = useStore(s => s.setServices)
   const toggleDevPanel = useStore(s => s.toggleDevPanel)
   const getActiveEntities = useStore(s => s.getActiveEntities)
   const getActiveGods = useStore(s => s.getActiveGods)
@@ -172,32 +170,25 @@ export default function App() {
 
     switch (event) {
       case 'state:sync': {
-        const doSync = () => {
-          const isFirstLoad = !initialLoadDone
-          syncState(data)
-          if (data.services) {
-            setServices(data.services)
-          }
-          setInitialLoadDone(true)
-          // Trigger staged reveal animation on first load
-          if (isFirstLoad) {
-            triggerStagedReveal()
-          }
+        const isFirstLoad = !initialLoadDone
+        syncState(data)
+        setInitialLoadDone(true)
+        // Trigger staged reveal animation on first load
+        if (isFirstLoad) {
+          triggerStagedReveal()
         }
-
-        doSync()
         break
       }
 
       case 'services:status':
-        if (data.services) {
-          setServices(data.services)
-        }
+        // Services status is just a partial sync
+        syncState({ services: data.services })
         break
 
+      // Entity status updates come through state:sync now
       case 'entity:set-status':
       case 'god:set-status':
-        updateEntityStatus(data.entityId || data.godName || data.name, data.status)
+        // Ignored - server broadcasts state:sync for these
         break
 
       case 'code:file:open':
@@ -227,7 +218,7 @@ export default function App() {
         console.warn(`⚠️ ${data.message}`, data.hint ? `\n   ${data.hint}` : '')
         break
     }
-  }, [lastMessage, syncState, updateEntityStatus, setInitialLoadDone, setServices, focusedEntity, initialLoadDone, triggerStagedReveal])
+  }, [lastMessage, syncState, setInitialLoadDone, focusedEntity, initialLoadDone, triggerStagedReveal])
 
   // Get entities for active tab - memoized to prevent drag reset
   const activeEntities = useMemo(() => {

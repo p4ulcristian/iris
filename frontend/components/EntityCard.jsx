@@ -4,8 +4,8 @@ import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
-import { EntityIcon } from '../entities'
-import { hexToRgbCss } from '../utils/colors'
+import EntityIcon from './EntityIcon'
+import { hexToRgbCss } from '../../entities/_shared/colors'
 
 function formatElapsed(ms) {
   if (!ms || ms < 0) return null

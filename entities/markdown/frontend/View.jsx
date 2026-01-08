@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faRefresh } from '@fortawesome/free-solid-svg-icons'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
-import MarkdownRenderer from '@/utils/MarkdownRenderer'
+import { MarkdownRenderer } from '../../_ui'
 import { ActionButton } from '../../_ui'
 
 export default function MarkdownView({ entity }) {

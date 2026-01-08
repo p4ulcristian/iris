@@ -1,13 +1,12 @@
 /**
  * Entity Loader
  *
- * Scans app/entities/ for entity folders, loads manifests and server modules,
+ * Scans entities/ for entity folders, loads manifests,
  * and builds a unified entity registry.
  *
  * Each entity folder should contain:
  *   - manifest.json: Entity metadata (type, label, icon, color, category, etc.)
- *   - server.js: Optional server-side handlers (onSpawn, onEvent, onDestroy)
- *   - View.jsx: Frontend component (bundled separately)
+ *   - frontend/View.jsx: Frontend component (bundled separately)
  */
 
 import fs from 'fs'
@@ -83,11 +82,10 @@ function validateManifest(manifest, entityDir) {
 /**
  * Loads a single entity from its folder
  * @param {string} entityDir - Path to entity folder
- * @returns {Promise<{ manifest: object, handlers: object } | null>}
+ * @returns {Promise<{ manifest: object } | null>}
  */
 async function loadEntity(entityDir) {
   const manifestPath = path.join(entityDir, 'manifest.json')
-  const serverPath = path.join(entityDir, 'backend/server.js')
   const folderName = path.basename(entityDir)
 
   // Check manifest exists
@@ -121,43 +119,21 @@ async function loadEntity(entityDir) {
     manifest.iconPathAbsolute = path.resolve(entityDir, manifest.iconPath)
   }
 
-  // Load server handlers if present
-  let handlers = {}
-  if (fs.existsSync(serverPath)) {
-    try {
-      // Dynamic import for ES modules
-      const serverModule = await import(`file://${serverPath}`)
-      handlers = {
-        type: serverModule.type || manifest.type,
-        onSpawn: serverModule.onSpawn || null,
-        onEvent: serverModule.onEvent || null,
-        onDestroy: serverModule.onDestroy || null
-      }
-    } catch (err) {
-      console.error(`[EntityLoader] Failed to load server.js in ${folderName}:`, err.message)
-      // Continue without handlers - not fatal
-    }
-  }
-
-  return {
-    manifest,
-    handlers
-  }
+  return { manifest }
 }
 
 /**
  * Scans the entities directory and loads all entity definitions
- * @returns {Promise<{ registry: object, handlers: object }>}
+ * @returns {Promise<object>} - Entity registry keyed by type
  */
 export async function loadEntities() {
   const registry = {}
-  const handlers = {}
 
   // Check if entities directory exists
   if (!fs.existsSync(ENTITIES_DIR)) {
     console.log('[EntityLoader] No entities directory found, creating it')
     fs.mkdirSync(ENTITIES_DIR, { recursive: true })
-    return { registry, handlers }
+    return registry
   }
 
   // Get all subdirectories
@@ -174,15 +150,12 @@ export async function loadEntities() {
     if (entity) {
       const type = entity.manifest.type
       registry[type] = entity.manifest
-      if (entity.handlers.onSpawn || entity.handlers.onEvent || entity.handlers.onDestroy) {
-        handlers[type] = entity.handlers
-      }
       console.log(`[EntityLoader] Loaded entity: ${type}`)
     }
   }
 
   console.log(`[EntityLoader] Loaded ${Object.keys(registry).length} entities`)
-  return { registry, handlers }
+  return registry
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
-import { EntityIcon } from '../entities'
+import EntityIcon from './EntityIcon'
 
 /**
  * DraggableTypeButton - A button that can be dragged to spawn entities

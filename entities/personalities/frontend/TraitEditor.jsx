@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSave, faPuzzlePiece, faPenToSquare, faEye, faArrowLeft } from '@fortawesome/free-solid-svg-icons'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
-import MarkdownRenderer from '@/utils/MarkdownRenderer'
+import { MarkdownRenderer } from '../../_ui'
 
 export default function TraitEditor({
   entity,           // Standalone mode (from entity spawn)
