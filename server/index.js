@@ -24,7 +24,7 @@ clearLog()
 
 // In dev: use iris project root. In production: use home directory
 const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
-const projectRoot = isDev ? path.join(__dirname, '../..') : os.homedir()
+const projectRoot = isDev ? path.join(__dirname, '..') : os.homedir()
 
 // Check for zellij
 let zellijMissing = false

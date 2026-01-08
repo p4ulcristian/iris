@@ -18,16 +18,21 @@ import * as layout from '../layout.js'
 export const handlers = {
   'service:start': (ws, data, projectRoot) => {
     const service = data.service
+    console.log('[service:start] Received:', { service, projectRoot, hasService: !!SERVICES[service] })
     if (service === 'chronicle') {
       // Chronicle is a mode within hear, not a separate service
       startChronicle()
     } else if (service && SERVICES[service]) {
+      console.log('[service:start] Starting service:', service)
       startService(service, projectRoot)
+    } else {
+      console.log('[service:start] Unknown service or missing config:', service)
     }
   },
 
   'service:stop': (ws, data) => {
     const service = data.service
+    console.log('[service:stop] Received:', { service })
     if (service === 'chronicle') {
       stopChronicle()
     } else if (service && SERVICES[service]) {

@@ -125,25 +125,33 @@ export function stopHealthChecks() {
 }
 
 export function startService(name, projectRoot) {
+  log.log(`startService called: ${name}, projectRoot: ${projectRoot}`)
+
   // Check if we think it's running, but verify PID is still alive
   if (serviceProcesses[name]) {
     try {
       process.kill(serviceProcesses[name], 0)  // Signal 0 = check if alive
+      log.log(`Service ${name} already running with PID ${serviceProcesses[name]}`)
       return
     } catch {
       // Process is dead, clean up and continue
+      log.log(`Service ${name} PID ${serviceProcesses[name]} is dead, cleaning up`)
       delete serviceProcesses[name]
     }
   }
 
   const script = SERVICES[name]?.script
-  if (!script) return
+  if (!script) {
+    log.error(`No script configured for service: ${name}`)
+    return
+  }
 
   let proc
 
   try {
     const scriptPath = `${projectRoot}/${script}`
     const uvPath = process.env.HOME + '/.local/bin/uv'
+    log.log(`Starting ${name}: uv run --script ${scriptPath}`)
 
     proc = spawn('setsid', [uvPath, 'run', '--script', scriptPath], {
       cwd: projectRoot,
@@ -189,7 +197,7 @@ export async function stopService(name) {
         req.on('timeout', () => { req.destroy(); resolve(false) })
         req.end()
       })
-      log.info(`Sent shutdown to ${name}`)
+      log.log(`Sent shutdown to ${name}`)
       // Give it a moment to cleanup
       await new Promise(r => setTimeout(r, 1000))
     } catch (e) {
