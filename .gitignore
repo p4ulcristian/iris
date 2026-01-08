@@ -1,18 +1,15 @@
 # Dependencies
 node_modules/
+bun.lock
 
-# Build output
+# Build
 dist/
 dist-vite/
-bun.lock
 
 # Logs
 logs/
 
-# Secrets and personal data
-secrets/
-shadows/
-memory/
+# Secrets
 .env
 .env.*
 
@@ -32,56 +29,6 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Wake word training
-brain/wake/train/samples/
-brain/wake/train/models/
-brain/wake/train/hey_iris_model/
-brain/wake/train/hey_iris_model_comprehensive/
-brain/wake/train/background_clips/
-brain/wake/train/background_audio/
-brain/wake/train/mit_rirs/
-brain/wake/train/openwakeword/
-brain/wake/train/piper-sample-generator/
-brain/wake/train/room_impulse_responses/
-brain/wake/train/LibriSpeech/
-brain/wake/train/fma_extracted/
-brain/wake/train/rirs_extracted/
-brain/wake/train/*.npy
-brain/wake/train/*.yaml
-brain/wake/train/*.yml
-brain/wake/train/*.zip
-brain/wake/train/*.tar.gz
-brain/wake/train/*.log
-
-# Obsidian
-.obsidian/
-
-# Test files at root
-qwen_*.py
-test_*.py
-
-# Local builds
-brain/local_brain/target/
-
-# Benchmarks
-benchmark_*.py
-
-# Bin symlinks
-bin/
-!app/resources/*/bin/
-
-# Vendored binaries (downloaded, not committed)
-vendor/bin/*
-!vendor/bin/.gitkeep
-
-# Playwright
+# Local data
+memory/
 .playwright-mcp/
-
-# Voice backups
-brain/speak/voices/originals_backup/
-brain/speak/voices/pre_libritts_backup/
-
-# Test folders
-test_chatterbox/
-brain/draw/star-vector/
-dist-cli/
