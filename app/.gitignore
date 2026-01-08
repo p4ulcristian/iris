@@ -1,5 +1,0 @@
-node_modules/
-dist/
-dist-vite/
-bun.lock
-*.log

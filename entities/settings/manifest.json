@@ -1,0 +1,10 @@
+{
+  "type": "settings",
+  "label": "Settings",
+  "description": "App settings",
+  "faIcon": "faGear",
+  "color": "#6B7280",
+  "category": "system",
+  "showInPicker": true,
+  "showInSidebar": true
+}

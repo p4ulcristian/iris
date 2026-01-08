@@ -1,0 +1,10 @@
+{
+  "type": "calendar",
+  "label": "Calendar",
+  "description": "Calendar view",
+  "icon": "./icon.svg",
+  "color": "#4285F4",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

@@ -1,0 +1,10 @@
+{
+  "type": "personalities",
+  "label": "Personalities",
+  "description": "Manage Claude personalities",
+  "faIcon": "faDna",
+  "color": "#AA44FF",
+  "category": "system",
+  "showInPicker": true,
+  "showInSidebar": true
+}

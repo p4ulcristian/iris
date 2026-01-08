@@ -20,15 +20,14 @@ claude login
 ### Setup
 
 ```bash
-git clone https://github.com/yourusername/iris.git ~/Work/iris
-cd ~/Work/iris/app
-bun install
+git clone https://github.com/p4ulcristian/iris.git ~/Work/iris
+cd ~/Work/iris
+bun run install:app
 ```
 
 ### Run
 
 ```bash
-cd app
 bun run dev
 ```
 
@@ -97,7 +96,6 @@ python -c "import sounddevice; print(sounddevice.query_devices())"
 ### First Run
 
 ```bash
-cd app
 bun run dev
 ```
 

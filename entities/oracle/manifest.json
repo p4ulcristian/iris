@@ -1,0 +1,10 @@
+{
+  "type": "oracle",
+  "label": "Oracle",
+  "description": "Oracle assistant",
+  "faIcon": "faRobot",
+  "color": "#F59E0B",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

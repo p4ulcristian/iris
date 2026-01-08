@@ -1,7 +1,0 @@
-{
-  "name": "iris",
-  "description": "Control Iris - spawn gods, run terminals, manage entities",
-  "command": "uv",
-  "args": ["run", "--script", "brain/mcp/__init__.py"],
-  "relative": true
-}

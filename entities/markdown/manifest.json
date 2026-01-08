@@ -1,0 +1,10 @@
+{
+  "type": "markdown",
+  "label": "Markdown",
+  "description": "Markdown viewer",
+  "faIcon": "faFileLines",
+  "color": "#89b4fa",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

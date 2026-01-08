@@ -1,0 +1,10 @@
+{
+  "type": "todo",
+  "label": "Todo",
+  "description": "Task list",
+  "faIcon": "faListCheck",
+  "color": "#22C55E",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

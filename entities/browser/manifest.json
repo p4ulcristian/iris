@@ -1,0 +1,10 @@
+{
+  "type": "browser",
+  "label": "Browser",
+  "description": "Web browser",
+  "icon": "./icon.svg",
+  "color": "#4285F4",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

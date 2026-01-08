@@ -1,0 +1,10 @@
+{
+  "type": "nvim",
+  "label": "Neovim",
+  "description": "Neovim editor",
+  "icon": "./icon.png",
+  "color": "#57A143",
+  "category": "tools",
+  "showInPicker": false,
+  "showInSidebar": false
+}

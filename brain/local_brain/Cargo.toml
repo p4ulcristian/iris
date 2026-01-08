@@ -1,9 +1,0 @@
-[package]
-name = "chat_tui"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ratatui = "0.28"
-crossterm = "0.28"
-copypasta = "0.10"

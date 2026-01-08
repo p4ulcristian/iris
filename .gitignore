@@ -1,3 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-vite/
+bun.lock
+
+# Logs
+logs/
+
 # Secrets and personal data
 secrets/
 shadows/

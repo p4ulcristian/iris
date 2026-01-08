@@ -1,6 +1,0 @@
-{
-  "name": "context7",
-  "description": "Fresh library documentation on demand - always up-to-date",
-  "command": "bun",
-  "args": ["x", "-y", "@upstash/context7-mcp"]
-}

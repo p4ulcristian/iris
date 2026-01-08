@@ -1,0 +1,10 @@
+{
+  "type": "linear",
+  "label": "Linear",
+  "description": "Linear issues",
+  "icon": "./icon.png",
+  "color": "#5E6AD2",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

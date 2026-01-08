@@ -1,6 +1,0 @@
-{
-  "name": "railway",
-  "description": "Deploy and manage Railway services",
-  "command": "bun",
-  "args": ["x", "-y", "@railway/mcp-server"]
-}

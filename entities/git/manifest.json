@@ -1,0 +1,10 @@
+{
+  "type": "git",
+  "label": "Git",
+  "description": "Git repository view",
+  "icon": "./icon.svg",
+  "color": "#F05032",
+  "category": "tools",
+  "showInPicker": true,
+  "showInSidebar": true
+}

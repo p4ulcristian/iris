@@ -1,0 +1,10 @@
+{
+  "type": "god",
+  "label": "God",
+  "description": "Divine worker",
+  "icon": "./icon.svg",
+  "color": null,
+  "category": "process",
+  "showInPicker": true,
+  "showInSidebar": true
+}
