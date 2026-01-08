@@ -21,8 +21,6 @@ const wsProtocol = getWsProtocol()
 export const WS_URL = `${wsProtocol}//${host}:9999`
 export const API_URL = `http://${host}:9998` // Keep for OAuth callback only
 export const CHRONICLE_URL = 'http://127.0.0.1:8766'
-export const DRAW_URL = 'http://127.0.0.1:8768'
-export const OLLAMA_URL = 'http://localhost:11434'
 
 // WebSocket Events
 export const EVENTS = {

@@ -910,9 +910,6 @@ export default function App() {
                               {entity.type === 'code' && (
                                 <CodeView entityId={entity.id} />
                               )}
-                              {entity.type === 'oracle' && (
-                                <OracleView entityId={entity.id} />
-                              )}
                               {entity.type === 'personalities' && (
                                 <PersonalitiesView
                                   onOpenEditor={(personality) => handleSpawnEntity('personality-editor', {

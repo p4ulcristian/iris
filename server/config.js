@@ -143,14 +143,16 @@ try {
 } catch (e) {
   // Fallback for packaged app where prompts/ might not exist
   pantheonYaml = {
-    zeus: { voice: 'zeus', color: '#FFCC00' },
-    ares: { voice: 'ares', color: '#FF2222' },
-    artemis: { voice: 'artemis', color: '#00FF88' },
-    poseidon: { voice: 'poseidon', color: '#0055FF' },
-    hermes: { voice: 'hermes', color: '#00FFCC' },
+    // Female
+    nyx: { voice: 'nyx', color: '#AA00FF' },
+    selene: { voice: 'selene', color: '#00FFCC' },
     hera: { voice: 'hera', color: '#FF00AA' },
-    hephaestus: { voice: 'hephaestus', color: '#FF6600' },
-    dionysus: { voice: 'dionysus', color: '#AA00FF' },
+    athena: { voice: 'athena', color: '#00FF88' },
+    // Male
+    prometheus: { voice: 'prometheus', color: '#FF6600' },
+    morpheus: { voice: 'morpheus', color: '#FF2222' },
+    poseidon: { voice: 'poseidon', color: '#0055FF' },
+    zeus: { voice: 'zeus', color: '#FFCC00' },
     realms: {
       Olympus: '#FFCC00',
       Tartarus: '#FF3366',

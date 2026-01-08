@@ -2,14 +2,16 @@
 
 // God colors from pantheon
 export const GOD_COLORS = {
-  zeus: '#FFCC00',
-  ares: '#FF3366',
-  artemis: '#00FF88',
-  poseidon: '#0088FF',
-  hermes: '#00DDFF',
-  hera: '#FF44AA',
-  hephaestus: '#FF6622',
-  dionysus: '#AA44FF'
+  // Female
+  nyx: '#AA00FF',
+  selene: '#00FFCC',
+  hera: '#FF00AA',
+  athena: '#00FF88',
+  // Male
+  prometheus: '#FF6600',
+  morpheus: '#FF2222',
+  poseidon: '#0055FF',
+  zeus: '#FFCC00'
 }
 
 // Realms with colors (matching god colors)
