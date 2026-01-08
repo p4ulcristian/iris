@@ -279,11 +279,13 @@ export const useStore = create(
       },
 
       setServices: (services) => set((state) => {
-        state.services = { ...state.services, ...services }
-        // Clear loading state when service status changes
+        // Only clear loading when service status CHANGES
         Object.keys(services).forEach(key => {
-          state.servicesLoading[key] = false
+          if (state.services[key] !== services[key]) {
+            state.servicesLoading[key] = false
+          }
         })
+        state.services = { ...state.services, ...services }
       }),
 
       setServiceLoading: (service, loading) => set((state) => {
