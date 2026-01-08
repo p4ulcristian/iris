@@ -182,28 +182,36 @@ export function setupApi() {
         const payload = { text }
         if (voice) payload.voice = voice
 
+        // Always wait for connection to verify speak server is available
+        const response = await fetch('http://127.0.0.1:8765/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+
+        if (!response.ok) {
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: false, error: 'Speak server returned error' }))
+          return true
+        }
+
+        // For background mode, don't wait for response body
         if (background) {
-          // Fire and forget for background mode
-          fetch('http://127.0.0.1:8765/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }).catch(() => {})
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ ok: true }))
         } else {
-          // Wait for TTS to complete
-          const response = await fetch('http://127.0.0.1:8765/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          })
-          res.writeHead(response.ok ? 200 : 500, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ ok: response.ok }))
+          // Wait for TTS to complete by consuming response
+          await response.text()
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ ok: true }))
         }
       } catch (e) {
+        const isConnectionError = e.cause?.code === 'ECONNREFUSED' || e.message?.includes('ECONNREFUSED')
+        const errorMsg = isConnectionError
+          ? 'Speak server not available (is brain/speak running?)'
+          : e.message
         res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ ok: false, error: e.message }))
+        res.end(JSON.stringify({ ok: false, error: errorMsg }))
       }
       return true
     }
