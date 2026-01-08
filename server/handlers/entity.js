@@ -36,6 +36,7 @@ export const handlers = {
     const entity = createEntityBase(entityId, type, {
       name: data.name || `${entityTypeInfo.label}-${num}`,
       extra: {
+        color: entityTypeInfo.color,
         url: data.url || null,
         project: data.project || null,
         data: data.data || null

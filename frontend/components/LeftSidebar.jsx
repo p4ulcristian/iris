@@ -455,13 +455,12 @@ export default function LeftSidebar({
               <motion.button
                 key={tab.id}
                 onClick={() => onTabSelect(tab.id)}
-                className={`
-                  group relative btn btn-icon btn-icon-md
-                  ${isActive
-                    ? 'btn-glass'
-                    : 'btn-ghost'
-                  }
-                `}
+                className="group relative btn btn-icon btn-icon-md btn-glass"
+                style={isActive ? {
+                  background: `linear-gradient(135deg, ${realmColor}33 0%, ${realmColor}1a 100%)`,
+                  borderColor: `${realmColor}40`,
+                  boxShadow: `0 0 12px ${realmColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
+                } : undefined}
                 title={`${tab.name} (Alt+${idx + 1})`}
                 initial={{ opacity: 0, x: -20, scale: 0.8 }}
                 animate={{
@@ -480,7 +479,7 @@ export default function LeftSidebar({
                 <FontAwesomeIcon
                   icon={faCircle}
                   style={{ color: realmColor }}
-                  className={`text-[10px] ${isActive ? '' : 'opacity-50'}`}
+                  className="text-[10px]"
                 />
                 {tabs.length > 1 && (
                   <span

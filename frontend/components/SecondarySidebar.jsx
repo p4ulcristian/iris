@@ -71,7 +71,7 @@ export default function SecondarySidebar({
                     // Get all stages for this tab
                     const tabStages = allStages
                       ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
-                      : activeStages.filter(() => tab.id === activeTabId)
+                      : []
 
                     return (
                       <motion.div
@@ -135,7 +135,7 @@ export default function SecondarySidebar({
           {sidebarShowIcons && (
             <motion.div
               key="icons"
-              className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5 pt-1"
+              className="absolute inset-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-1.5 py-3"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
@@ -145,15 +145,17 @@ export default function SecondarySidebar({
                 const entityColor = entity.type === 'god'
                   ? (godColors[entity.name?.toLowerCase()] || entity.color || '#888')
                   : (entity.color || '#888')
+                const isFocused = entity.id === effectiveFocusedEntity
                 return (
                   <motion.button
                     key={entity.id}
                     onClick={() => onEntityClick(entity.id)}
-                    className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-all hover:bg-white/10"
-                    style={{
-                      backgroundColor: entity.id === effectiveFocusedEntity ? `${entityColor}33` : 'transparent',
-                      border: `2px solid ${entity.id === effectiveFocusedEntity ? entityColor : 'transparent'}`
-                    }}
+                    className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-lg cursor-pointer transition-all btn-glass"
+                    style={isFocused ? {
+                      background: `linear-gradient(135deg, ${entityColor}33 0%, ${entityColor}1a 100%)`,
+                      borderColor: `${entityColor}40`,
+                      boxShadow: `0 0 12px ${entityColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
+                    } : undefined}
                     title={entity.displayName || entity.name}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
