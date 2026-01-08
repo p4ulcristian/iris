@@ -761,10 +761,10 @@ export default function CodeView({ entity }) {
                 console.log('[CodeView] Project selected:', e.target.value)
                 loadDirectory(e.target.value)
               }}
-              className="w-full pl-2 pr-6 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs text-white/85 focus:outline-none focus:bg-white/8 focus:border-white/20 transition-all cursor-pointer"
+              className="w-full pl-2 pr-6 py-1.5 liquid-glass-select text-xs"
             >
               {projects.map(p => (
-                <option key={p.name} value={p.path} className="bg-[#1a1a1a]">
+                <option key={p.name} value={p.path}>
                   {p.name}{p.isDefault ? ' (default)' : ''}
                 </option>
               ))}

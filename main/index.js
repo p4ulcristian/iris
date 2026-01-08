@@ -103,8 +103,22 @@ function startServer() {
 
 function stopServer() {
   if (serverProcess) {
-    serverProcess.kill('SIGTERM')
+    const proc = serverProcess
     serverProcess = null
+
+    // Give server time to cleanup gracefully
+    proc.kill('SIGTERM')
+
+    // Force kill if still alive after 2s
+    setTimeout(() => {
+      try {
+        process.kill(proc.pid, 0) // Check if still running
+        console.log('Server still alive, force killing...')
+        proc.kill('SIGKILL')
+      } catch (e) {
+        // Process already dead, good
+      }
+    }, 2000)
   }
 }
 

@@ -233,7 +233,20 @@ function cleanup() {
   log.log('Shutting down server...')
   stopHealthChecks()
   killAllPty()
-  wss.close()
-  oauthServer.close()
-  process.exit(0)
+
+  // Close WebSocket server and wait for connections to drain
+  wss.close(() => {
+    log.log('WebSocket server closed')
+  })
+
+  // Close OAuth server
+  oauthServer.close(() => {
+    log.log('OAuth server closed')
+  })
+
+  // Give sockets time to close cleanly before exiting
+  setTimeout(() => {
+    log.log('Cleanup complete, exiting')
+    process.exit(0)
+  }, 500)
 }
