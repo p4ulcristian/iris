@@ -1,7 +1,6 @@
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
-import yaml from 'js-yaml'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -135,50 +134,33 @@ export const SERVICES = {
   hear: { port: 8766, name: 'Hear', icon: '👂', script: 'powers/hear/server.py' }
 }
 
-// Load pantheon from YAML (single source of truth)
-const pantheonPath = path.join(__dirname, '../prompts/pantheon.yaml')
-let pantheonYaml = {}
-try {
-  pantheonYaml = yaml.load(fs.readFileSync(pantheonPath, 'utf-8'))
-} catch (e) {
-  // Fallback for packaged app where prompts/ might not exist
-  pantheonYaml = {
-    // Female
-    nyx: { voice: 'nyx', color: '#AA00FF' },
-    selene: { voice: 'selene', color: '#00FFCC' },
-    hera: { voice: 'hera', color: '#FF00AA' },
-    athena: { voice: 'athena', color: '#00FF88' },
-    // Male
-    prometheus: { voice: 'prometheus', color: '#FF6600' },
-    morpheus: { voice: 'morpheus', color: '#FF2222' },
-    poseidon: { voice: 'poseidon', color: '#0055FF' },
-    zeus: { voice: 'zeus', color: '#FFCC00' },
-    realms: {
-      Olympus: '#FFCC00',
-      Tartarus: '#FF3366',
-      Grove: '#00FF88',
-      Styx: '#0088FF',
-      Agora: '#00DDFF',
-      Temple: '#FF44AA',
-      Forge: '#FF6622',
-      Elysium: '#AA44FF'
-    }
-  }
+// Pantheon configuration
+export const PANTHEON = {
+  // Female
+  nyx: { voice: 'nyx', color: '#AA00FF' },
+  selene: { voice: 'selene', color: '#00FFCC' },
+  hera: { voice: 'hera', color: '#FF00AA' },
+  athena: { voice: 'athena', color: '#00FF88' },
+  // Male
+  prometheus: { voice: 'prometheus', color: '#FF6600' },
+  morpheus: { voice: 'morpheus', color: '#FF2222' },
+  poseidon: { voice: 'poseidon', color: '#0055FF' },
+  zeus: { voice: 'zeus', color: '#FFCC00' }
 }
 
-// Build PANTHEON object from YAML (exclude 'realms' key)
-export const PANTHEON = Object.fromEntries(
-  Object.entries(pantheonYaml)
-    .filter(([key]) => key !== 'realms')
-    .map(([name, data]) => [name, { color: data.color, voice: data.voice }])
-)
+export const REALM_COLORS = {
+  Olympus: '#FFCC00',
+  Tartarus: '#FF3366',
+  Grove: '#00FF88',
+  Styx: '#0088FF',
+  Agora: '#00DDFF',
+  Temple: '#FF44AA',
+  Forge: '#FF6622',
+  Elysium: '#AA44FF'
+}
 
-// Build REALMS array and REALM_COLORS from YAML
-const realmsData = pantheonYaml.realms || {}
-export const REALMS = Object.keys(realmsData)
-export const REALM_COLORS = realmsData
+export const REALMS = Object.keys(REALM_COLORS)
 
-// Build GOD_COLORS from PANTHEON (for client broadcast)
 export const GOD_COLORS = Object.fromEntries(
   Object.entries(PANTHEON).map(([name, data]) => [name, data.color])
 )
