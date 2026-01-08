@@ -20,7 +20,7 @@ import { getProjectsContext } from './projects.js'
 
 // Get Iris root directory for relative MCP paths
 const __dirname = path.dirname(new URL(import.meta.url).pathname)
-const IRIS_ROOT = path.resolve(__dirname, '../..')
+const IRIS_ROOT = path.resolve(__dirname, '..')
 
 const SESSION_PREFIX = 'iris-'
 const HOME = os.homedir()
