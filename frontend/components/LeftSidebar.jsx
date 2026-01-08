@@ -419,28 +419,15 @@ export default function LeftSidebar({
   const version = useStore(s => s.version)
 
   const handleServiceToggle = (service, isActive) => {
-    console.log('handleServiceToggle called:', { service, isActive, hasSend: !!send })
-    if (!send) {
-      console.error('send function is not available!')
-      return
-    }
+    if (!send) return
 
-    if (!isActive) {
-      // Starting a service - set loading state
-      setServiceLoading(service, true)
+    // Set loading state - cleared when services:status broadcast arrives
+    setServiceLoading(service, true)
 
-      // Timeout after 15 seconds if service doesn't start
-      setTimeout(() => {
-        setServiceLoading(service, false)
-      }, 15000)
-    }
-
-    const msg = {
+    send({
       event: isActive ? 'service:stop' : 'service:start',
       service
-    }
-    console.log('Sending:', msg)
-    send(msg)
+    })
   }
 
   return (
