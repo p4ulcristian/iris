@@ -8,9 +8,11 @@ import {
   faVolumeHigh,
   faXmark,
   faPlus,
-  faScroll
+  faScroll,
+  faEye
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
+import DraggableTypeButton from './DraggableTypeButton'
 import { REALM_COLORS } from '../themes'
 import { CHRONICLE_URL } from '../config'
 
@@ -408,7 +410,14 @@ export default function LeftSidebar({
   onTabSelect,
   onTabClose,
   onTabNew,
-  getEntitiesForTab
+  getEntitiesForTab,
+  // Eye menu props
+  sidebarCollapsed,
+  sidebarButtonsExpanded,
+  setSidebarButtonsExpanded,
+  onSidebarToggle,
+  onSpawnEntity,
+  onOpenSummonModal,
 }) {
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
@@ -432,7 +441,7 @@ export default function LeftSidebar({
   }
 
   return (
-    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3">
+    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3 py-3">
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
         <AnimatePresence>
@@ -514,14 +523,10 @@ export default function LeftSidebar({
       </div>
 
       {/* IRIS branding */}
-      <div className="flex-1 flex flex-col items-center justify-center">
-        {'IRIS'.split('').map((letter, i) => (
-          <span key={i} className="text-white/50 text-lg font-mono font-bold leading-tight">{letter}</span>
-        ))}
-        {version && (
-          <span className="text-white/30 text-[10px] font-mono mt-2">{version}</span>
-        )}
-        <SystemTime />
+      <div className="flex-1 flex items-center justify-center">
+        <span className="text-white/50 text-sm font-mono font-bold tracking-wider" style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', whiteSpace: 'nowrap' }}>
+          IRIS {version && `- ${version}`}
+        </span>
       </div>
 
       {/* Chronicle preview button - above Powers */}
@@ -566,6 +571,156 @@ export default function LeftSidebar({
           />
         </motion.div>
       )}
+
+      {/* Eye button + Spawn menu */}
+      <motion.div
+        className="relative flex flex-col items-center"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{
+          opacity: loadStage >= 5 ? 1 : 0,
+          scale: loadStage >= 5 ? 1 : 0.8
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 400,
+          damping: 25,
+          delay: (!initialLoadDone || loadStage < 5) ? 0.2 : 0
+        }}
+        onMouseEnter={() => setSidebarButtonsExpanded(true)}
+        onMouseLeave={() => setSidebarButtonsExpanded(false)}
+      >
+        {/* Spawn menu - positioned to the right of eye */}
+        <AnimatePresence>
+          {sidebarButtonsExpanded && (
+            <motion.div
+              className="absolute left-full bottom-0 ml-2 flex flex-col gap-3 items-center p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 z-50"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -20, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+            >
+              {/* System */}
+              <div className="flex gap-1.5">
+                <DraggableTypeButton
+                  entityType="settings"
+                  title="Settings - drag to split"
+                  onClick={() => onSpawnEntity('settings')}
+                />
+                <DraggableTypeButton
+                  entityType="cemetery"
+                  title="Cemetery - drag to split"
+                  onClick={() => onSpawnEntity('cemetery')}
+                />
+              </div>
+
+              {/* Social & Media */}
+              <div className="flex gap-1.5">
+                <DraggableTypeButton
+                  entityType="youtube-music"
+                  title="YouTube Music - drag to split"
+                  onClick={() => onSpawnEntity('youtube-music')}
+                />
+                <DraggableTypeButton
+                  entityType="rsvp"
+                  title="RSVP Speed Reader - drag to split"
+                  onClick={() => onSpawnEntity('rsvp')}
+                />
+              </div>
+
+              {/* Productivity */}
+              <div className="flex gap-1.5">
+                <DraggableTypeButton
+                  entityType="linear"
+                  title="Linear - drag to split"
+                  onClick={() => onSpawnEntity('linear')}
+                />
+                <DraggableTypeButton
+                  entityType="calendar"
+                  title="Calendar - drag to split"
+                  onClick={() => onSpawnEntity('calendar')}
+                />
+                <DraggableTypeButton
+                  entityType="history"
+                  title="History - drag to split"
+                  onClick={() => onSpawnEntity('history')}
+                />
+                <DraggableTypeButton
+                  entityType="oracle"
+                  title="Oracle - drag to split"
+                  onClick={() => onSpawnEntity('oracle')}
+                />
+                <DraggableTypeButton
+                  entityType="pomodoro"
+                  title="Pomodoro - drag to split"
+                  onClick={() => onSpawnEntity('pomodoro')}
+                />
+                <DraggableTypeButton
+                  entityType="todo"
+                  title="Todo - drag to split"
+                  onClick={() => onSpawnEntity('todo')}
+                />
+              </div>
+
+              {/* Dev Tools */}
+              <div className="flex gap-1.5">
+                <DraggableTypeButton
+                  entityType="terminal"
+                  title="Terminal (Alt+R) - drag to split"
+                  onClick={() => onSpawnEntity('terminal')}
+                />
+                <DraggableTypeButton
+                  entityType="code"
+                  title="Code Viewer - drag to split"
+                  onClick={() => onSpawnEntity('code')}
+                />
+                <DraggableTypeButton
+                  entityType="git"
+                  title="Git - drag to split"
+                  onClick={() => onSpawnEntity('git')}
+                />
+                <DraggableTypeButton
+                  entityType="browser"
+                  title="Browser - drag to split"
+                  onClick={() => onSpawnEntity('browser')}
+                />
+                <DraggableTypeButton
+                  entityType="draw"
+                  title="Draw (SVG generator) - drag to split"
+                  onClick={() => onSpawnEntity('draw')}
+                />
+              </div>
+
+              {/* Divider */}
+              <div className="w-full h-px bg-white/10" />
+
+              {/* Primary: God & Personalities (large) */}
+              <div className="flex gap-2">
+                <DraggableTypeButton
+                  entityType="god"
+                  title="New god (Alt+N) - drag to split"
+                  onClick={onOpenSummonModal}
+                  size="large"
+                />
+                <DraggableTypeButton
+                  entityType="personalities"
+                  title="Personalities - drag to split"
+                  onClick={() => onSpawnEntity('personalities')}
+                  size="large"
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Eye button */}
+        <IconButton
+          icon={faEye}
+          size="md"
+          variant="glass"
+          onClick={() => onSidebarToggle()}
+          title={sidebarCollapsed ? 'Expand sidebar (Alt+B)' : 'Collapse sidebar (Alt+B)'}
+        />
+      </motion.div>
     </aside>
   )
 }

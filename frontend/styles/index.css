@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "@xterm/xterm/css/xterm.css";
-@import "../themes/colors.css";
 @import "../themes/themes.css";
 
 /* Frosted glass noise texture - enhanced for liquid glass */

@@ -304,7 +304,24 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
       clearTimeout(resizeTimeoutRef.current)
       resizeTimeoutRef.current = setTimeout(() => {
         const { width, height } = entries[0].contentRect
-        if (width < 50 || height < 50) return // Too small, skip
+
+        // During layout transitions, dimensions may briefly report as 0/small
+        // before CSS settles. Retry after a frame instead of giving up.
+        if (width < 50 || height < 50) {
+          requestAnimationFrame(() => {
+            const rect = container.getBoundingClientRect()
+            if (rect.width >= 50 && rect.height >= 50) {
+              try {
+                updateCellDimensions()
+                const { cols, rows } = calcDimensions(rect.width, rect.height)
+                if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
+                  term.resize(cols, rows)
+                }
+              } catch {}
+            }
+          })
+          return
+        }
 
         try {
           updateCellDimensions()

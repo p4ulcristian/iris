@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
 import LeftSidebar from './components/LeftSidebar'
-import RightSidebar from './components/RightSidebar'
+import SecondarySidebar from './components/SecondarySidebar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
@@ -702,8 +702,8 @@ export default function App() {
       </div>
 
       {/* Main layout: sidebar + content */}
-      <div ref={mainContainerRef} className="flex flex-1 min-h-0 p-3">
-        {/* Left Sidebar (Tabs + Services) */}
+      <div ref={mainContainerRef} className="flex flex-1 min-h-0 px-3">
+        {/* Left Sidebar (Tabs + Services + Eye menu) */}
         <LeftSidebar
           connected={connected}
           send={send}
@@ -713,15 +713,51 @@ export default function App() {
           onTabClose={handleKillTab}
           onTabNew={() => send({ event: 'tab:add' })}
           getEntitiesForTab={getEntitiesForTab}
+          sidebarCollapsed={sidebarCollapsed}
+          sidebarButtonsExpanded={sidebarButtonsExpanded}
+          setSidebarButtonsExpanded={setSidebarButtonsExpanded}
+          onSidebarToggle={handleSidebarToggle}
+          onSpawnEntity={handleSpawnEntity}
+          onOpenSummonModal={() => setSummonModalOpen(true)}
+        />
+
+        {/* Secondary Sidebar (Entity cards) */}
+        <SecondarySidebar
+          allStages={allStages}
+          globalActiveIdx={globalActiveIdx}
+          activeEntities={activeEntities}
+          tabs={tabs}
+          activeTabId={activeTabId}
+          focusedEntity={focusedEntity}
+          effectiveFocusedEntity={effectiveFocusedEntity}
+          godColors={godColors}
+          loadStage={loadStage}
+          initialLoadDone={initialLoadDone}
+          sidebarCollapsed={sidebarCollapsed}
+          sidebarShowCards={sidebarShowCards}
+          sidebarShowIcons={sidebarShowIcons}
+          onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
+          onEntityClose={handleKillEntity}
+          onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
+          onMoveToTab={(entityId, tabId) => {
+            send({ event: 'entity:move', entityId, tabId })
+            send({ event: 'tab:select', tabId })
+          }}
+          onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
+          onReorderInStage={(stageId, entityId, targetIndex) => {
+            send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
+          }}
+          onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
+            send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
+          }}
+          onCreateStageAtPosition={(entityId, sourceStageId, position) => {
+            send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
+          }}
         />
 
         {/* Main content area */}
-        <main className="flex-1 min-h-0 overflow-visible">
-          {/* Main layout: focused entity + sidebar */}
-          <div className="flex h-full">
-            {/* Main focused entity area */}
-            <div className="flex-[2] min-w-0 relative h-full">
-              <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
+        <main className="flex-1 min-h-0 overflow-visible relative">
+          <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
               {(() => {
                 // Use memoized allStages and globalActiveIdx for continuous scroll
                 if (allStages.length > 0) {
@@ -735,7 +771,7 @@ export default function App() {
                         return (
                           <motion.div
                             key={item.stageId || `empty-${item.tabId}`}
-                            className={`absolute inset-0 stage ${offset !== 0 ? 'stage-offscreen' : ''}`}
+                            className={`absolute inset-0 stage py-3 ${offset !== 0 ? 'stage-offscreen' : ''}`}
                             initial={false}
                             animate={{ y: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 350, damping: 32 }}
@@ -928,51 +964,8 @@ export default function App() {
                   </AnimatePresence>
                 )
               })()}
-              </RootDropZone>
-            </div>
-
-            {/* Right Sidebar (Entity cards + Spawn buttons) */}
-            <RightSidebar
-              allStages={allStages}
-              globalActiveIdx={globalActiveIdx}
-              activeStages={activeStages}
-              activeEntities={activeEntities}
-              tabs={tabs}
-              activeTabId={activeTabId}
-              focusedEntity={focusedEntity}
-              effectiveFocusedEntity={effectiveFocusedEntity}
-              godColors={godColors}
-              loadStage={loadStage}
-              initialLoadDone={initialLoadDone}
-              sidebarCollapsed={sidebarCollapsed}
-              sidebarShowCards={sidebarShowCards}
-              sidebarShowIcons={sidebarShowIcons}
-              sidebarButtonsExpanded={sidebarButtonsExpanded}
-              setSidebarButtonsExpanded={setSidebarButtonsExpanded}
-              onSidebarToggle={handleSidebarToggle}
-              onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
-              onEntityClose={handleKillEntity}
-              onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
-              onMoveToTab={(entityId, tabId) => {
-                send({ event: 'entity:move', entityId, tabId })
-                send({ event: 'tab:select', tabId })
-              }}
-              onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
-              onReorderInStage={(stageId, entityId, targetIndex) => {
-                send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
-              }}
-              onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
-                send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
-              }}
-              onCreateStageAtPosition={(entityId, sourceStageId, position) => {
-                send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
-              }}
-              onSpawnEntity={handleSpawnEntity}
-              onSpawnTerminal={handleSpawnTerminal}
-              onOpenSummonModal={() => setSummonModalOpen(true)}
-            />
-          </div>
-      </main>
+          </RootDropZone>
+        </main>
       </div>
 
       {/* Hidden gods container - keeps terminals alive when on other tabs */}
