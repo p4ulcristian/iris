@@ -53,6 +53,31 @@ body {
   height: 100vh;
 }
 
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 15px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 99999;
+  pointer-events: none;
+}
+
+body::before {
+  top: 0;
+  mask-image: linear-gradient(to bottom, black, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent);
+}
+
+body::after {
+  bottom: 0;
+  mask-image: linear-gradient(to top, black, transparent);
+  -webkit-mask-image: linear-gradient(to top, black, transparent);
+}
+
 /* Alt+drag mode: disable terminal pointer events so drag works on tiles */
 body.alt-held .terminal-content {
   pointer-events: none;
