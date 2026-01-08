@@ -423,11 +423,8 @@ export function setupApi() {
       const mockWs = { send: () => {} }
 
       try {
-        handlers['entity:spawn'](mockWs, {
-          type: 'markdown',
-          name: filePath.split('/').pop(),
-          data: { path: filePath }
-        }, process.cwd())
+        // Use md:open handler which properly sets pendingFile
+        handlers['md:open'](mockWs, { filePath }, process.cwd())
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, path: filePath }))
