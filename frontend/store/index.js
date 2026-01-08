@@ -33,7 +33,8 @@ export const useStore = create(
       browserUrl: null,
       tiles: {},
       version: null,
-      services: { speak: false, hear: false, chronicle: false },
+      services: { speak: false, hear: false, chronicle: false, mcp: false },
+      chronicleDetails: null,  // { running, paused, volume, vad, start_time, ... }
 
       // ============================================
       // LOCAL UI STATE (not synced to server)
@@ -45,7 +46,7 @@ export const useStore = create(
       isAltHeld: false,
       layoutMode: 'auto',
       gitBranches: {},  // { [projectPath]: branchName } - fetched per entity
-      servicesLoading: { speak: false, hear: false, chronicle: false },
+      servicesLoading: { speak: false, hear: false, chronicle: false, mcp: false },
       serviceTargets: {},  // Target state when toggling
 
       // ============================================
@@ -88,6 +89,11 @@ export const useStore = create(
             }
           })
           state.services = { ...state.services, ...serverState.services }
+        }
+
+        // Chronicle details (volume, vad, etc.)
+        if (serverState.chronicleDetails !== undefined) {
+          state.chronicleDetails = serverState.chronicleDetails
         }
       }),
 

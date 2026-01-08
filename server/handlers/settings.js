@@ -4,7 +4,7 @@
 
 import fs from 'fs'
 import path from 'path'
-import { LOGS_DIR } from '../config.js'
+import { LOGS_DIR, PROJECT_LOGS_DIR, BACKEND_LOG, FRONTEND_LOG } from '../config.js'
 import {
   appState, saveState, broadcastState, broadcast,
   applySettingsToEnv, generateEntityId, getNextEntityNumber,
@@ -337,6 +337,48 @@ export const handlers = {
 
     fs.appendFileSync(logFile, logEntry)
     console.error('[Frontend Error]', error.message, error.source ? `(${error.source})` : '')
+  },
+
+  // Log viewer - get log lines with tail-like pagination
+  'logs:read': (ws, data) => {
+    const { type = 'backend', lines = 100 } = data
+    const logFile = type === 'frontend' ? FRONTEND_LOG : BACKEND_LOG
+
+    try {
+      if (!fs.existsSync(logFile)) {
+        ws.send(JSON.stringify({ event: 'logs:data', type, lines: [], total: 0 }))
+        return
+      }
+
+      const content = fs.readFileSync(logFile, 'utf-8')
+      const allLines = content.split('\n').filter(l => l.trim())
+      const lastLines = allLines.slice(-lines)
+
+      ws.send(JSON.stringify({
+        event: 'logs:data',
+        type,
+        lines: lastLines,
+        total: allLines.length
+      }))
+    } catch (err) {
+      console.error('[logs:read] Error:', err)
+      ws.send(JSON.stringify({ event: 'logs:data', type, lines: [], error: err.message }))
+    }
+  },
+
+  // Clear log file
+  'logs:clear': (ws, data) => {
+    const { type = 'backend' } = data
+    const logFile = type === 'frontend' ? FRONTEND_LOG : BACKEND_LOG
+
+    try {
+      if (fs.existsSync(logFile)) {
+        fs.writeFileSync(logFile, '')
+      }
+      ws.send(JSON.stringify({ event: 'logs:cleared', type }))
+    } catch (err) {
+      console.error('[logs:clear] Error:', err)
+    }
   },
 }
 

@@ -22,8 +22,10 @@ if (process.env.IRIS_RESUME === '1') {
 }
 
 // Personality/system prompt
+// Use --system-prompt to REPLACE default prompt (skips CLAUDE.md reading)
+// instead of --append-system-prompt which adds to it
 if (process.env.IRIS_PERSONALITY) {
-  args.push('--append-system-prompt', process.env.IRIS_PERSONALITY)
+  args.push('--system-prompt', process.env.IRIS_PERSONALITY)
 }
 
 // Initial task/prompt - MUST come before --mcp-config (variadic arg)

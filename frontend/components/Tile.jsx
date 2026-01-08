@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import TileCard from './TileCard'
+import DropIndicator from './DropIndicator'
 import { renderEntityView } from './EntityRenderer'
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
-import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
@@ -69,6 +69,24 @@ export default function Tile({
     }
   }, [send, tileId, isFocused, isAltHeld])
 
+  // Calculate which half the cursor is in based on position relative to element center
+  const calculateHalf = (input, element) => {
+    const rect = element.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const deltaX = input.clientX - centerX
+    const deltaY = input.clientY - centerY
+
+    // Compare absolute distances to determine axis
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      // More horizontal - show left or right half
+      return deltaX < 0 ? 'left' : 'right'
+    } else {
+      // More vertical - show top or bottom half
+      return deltaY < 0 ? 'top' : 'bottom'
+    }
+  }
+
   // Setup drop target
   useEffect(() => {
     const el = ref.current
@@ -77,42 +95,34 @@ export default function Tile({
     return dropTargetForElements({
       element: el,
       getData: ({ input, element }) => {
-        // Attach closest edge data for split detection
-        const data = attachClosestEdge({ tileId }, {
-          element,
-          input,
-          allowedEdges: ['top', 'bottom', 'left', 'right']
-        })
-        return data
+        // Calculate half and attach to data
+        const half = calculateHalf(input, element)
+        return { tileId, half }
       },
-      onDragEnter: ({ self, source }) => {
-        const edge = extractClosestEdge(self.data)
+      onDragEnter: ({ self, source, location }) => {
+        const half = calculateHalf(location.current.input, ref.current)
         const isRearrange = source.data.source === 'tile-rearrange'
         const isSelf = source.data.tileId === tileId
-        setDropState({ isDraggedOver: !isSelf, closestEdge: edge, isRearrange })
+        setDropState({ isDraggedOver: !isSelf, closestEdge: half, isRearrange })
       },
-      onDrag: ({ self, source }) => {
-        const edge = extractClosestEdge(self.data)
+      onDrag: ({ self, source, location }) => {
+        const half = calculateHalf(location.current.input, ref.current)
         const isRearrange = source.data.source === 'tile-rearrange'
         const isSelf = source.data.tileId === tileId
-        setDropState({ isDraggedOver: !isSelf, closestEdge: edge, isRearrange })
+        setDropState({ isDraggedOver: !isSelf, closestEdge: half, isRearrange })
       },
       onDragLeave: () => {
         setDropState({ isDraggedOver: false, closestEdge: null, isRearrange: false })
       },
-      onDrop: ({ source, self }) => {
-        const edge = extractClosestEdge(self.data)
+      onDrop: ({ source, self, location }) => {
+        const half = calculateHalf(location.current.input, ref.current)
         const { source: dragSource, entityId: droppedEntityId, entityType, tileId: sourceTileId } = source.data
 
-        // Determine zone from edge (null edge = center)
-        const zone = edge || 'center'
-
-        // With single entity per tile, center drop splits horizontally
-        // (No more stacking - use stages for that)
-        const direction = (zone === 'left' || zone === 'right' || zone === 'center')
+        // Determine direction from half
+        const direction = (half === 'left' || half === 'right')
           ? 'horizontal'
           : 'vertical'
-        const position = zone === 'center' ? 'right' : zone
+        const position = half
 
         if (dragSource === 'tile-rearrange') {
           // Alt+drag tile rearrangement - don't drop on self
@@ -204,34 +214,17 @@ export default function Tile({
     )
   }
 
-  // Get edge indicator styles
-  const getEdgeIndicatorStyle = () => {
-    if (!dropState.isDraggedOver) return {}
-
-    const edge = dropState.closestEdge
-    const isRearrange = dropState.isRearrange
-    const baseStyle = isRearrange
-      ? 'absolute bg-orange-500/40 transition-all duration-150'
-      : 'absolute bg-accent/40 transition-all duration-150'
-
-    const labelPrefix = isRearrange ? 'Move' : 'Split'
-
-    switch (edge) {
-      case 'top':
-        return { className: `${baseStyle} top-0 left-0 right-0 h-1/4`, label: `${labelPrefix} above` }
-      case 'bottom':
-        return { className: `${baseStyle} bottom-0 left-0 right-0 h-1/4`, label: `${labelPrefix} below` }
-      case 'left':
-        return { className: `${baseStyle} top-0 bottom-0 left-0 w-1/4`, label: `${labelPrefix} left` }
-      case 'right':
-        return { className: `${baseStyle} top-0 bottom-0 right-0 w-1/4`, label: `${labelPrefix} right` }
-      default:
-        // Center = split/move right (no more stacking)
-        return { className: `${baseStyle} top-0 bottom-0 right-0 w-1/2`, label: `${labelPrefix} right` }
-    }
+  // Generate label for drop indicator
+  const getDropLabel = () => {
+    const prefix = dropState.isRearrange ? 'Move' : 'Split'
+    const direction = {
+      top: 'above',
+      bottom: 'below',
+      left: 'left',
+      right: 'right'
+    }[dropState.closestEdge] || 'right'
+    return `${prefix} ${direction}`
   }
-
-  const edgeIndicator = getEdgeIndicatorStyle()
 
   // Build tile classes
   const tileClasses = [
@@ -313,16 +306,12 @@ export default function Tile({
       )}
 
       {/* Drop indicator overlay */}
-      {dropState.isDraggedOver && (
-        <div className="absolute inset-0 pointer-events-none z-50">
-          <div className={edgeIndicator.className} />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="px-3 py-1.5 bg-accent/80 text-white text-sm font-medium rounded-full shadow-lg">
-              {edgeIndicator.label}
-            </span>
-          </div>
-        </div>
-      )}
+      <DropIndicator
+        variant="half"
+        position={dropState.closestEdge}
+        label={getDropLabel()}
+        visible={dropState.isDraggedOver}
+      />
     </div>
   )
 }

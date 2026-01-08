@@ -8,6 +8,7 @@ import { WebSocketServer } from 'ws'
 import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
 import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getStateForBroadcast, broadcastState } from './state.js'
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
+import { setBroadcast as setChronicleBroadcast, startWatcher as startChronicleWatcher, stopWatcher as stopChronicleWatcher } from './chronicle.js'
 import { detachAllFromClient, killAllPty } from './pty.js'
 import { handleMessage } from './handlers/index.js'
 import { setupApi } from './api.js'
@@ -61,9 +62,10 @@ function broadcast(event, data = {}) {
   broadcastLog.log(`Sent to ${sent}/${wsClients.size} clients`)
 }
 
-// Wire up broadcast to state and services modules
+// Wire up broadcast to state, services, and chronicle modules
 setStateBroadcast(broadcast)
 setServicesBroadcast(broadcast)
+setChronicleBroadcast(broadcast)
 
 // Load persisted state
 loadState()
@@ -212,8 +214,9 @@ oauthServer.listen(OAUTH_PORT, () => {
   log.log(`OAuth callback server on :${OAUTH_PORT}`)
 })
 
-// Start health checks
+// Start health checks and chronicle watcher
 startHealthChecks()
+startChronicleWatcher()
 
 // Cleanup on exit
 process.on('SIGTERM', cleanup)
@@ -232,6 +235,7 @@ process.on('unhandledRejection', (reason, promise) => {
 function cleanup() {
   log.log('Shutting down server...')
   stopHealthChecks()
+  stopChronicleWatcher()
   killAllPty()
 
   // Close WebSocket server and wait for connections to drain

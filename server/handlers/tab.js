@@ -45,9 +45,10 @@ export const handlers = {
 
     appState.tabs = appState.tabs.filter(t => t.id !== tabId)
     if (appState.tabs.length === 0) {
-      appState.tabs = [{ id: 1, name: 'Olympus' }]
-      appState.tabCounter = 1
-      appState.activeTabId = 1
+      // Create a fresh tab with proper counter (don't hardcode ID 1)
+      appState.tabCounter++
+      appState.tabs = [{ id: appState.tabCounter, name: 'Olympus', stages: [], activeStageId: null }]
+      appState.activeTabId = appState.tabCounter
     } else if (appState.activeTabId === tabId) {
       appState.activeTabId = appState.tabs[0].id
     }

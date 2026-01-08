@@ -9,7 +9,10 @@ import {
   faXmark,
   faPlus,
   faScroll,
-  faEye
+  faEye,
+  faPlug,
+  faTerminal,
+  faTrash
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import DraggableTypeButton from './DraggableTypeButton'
@@ -47,7 +50,10 @@ function ChronicleButton() {
   const [hasMore, setHasMore] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [status, setStatus] = useState({ running: false, volume: 0, start_time: null })
+
+  // Get chronicle status from store (pushed via WebSocket)
+  const chronicleDetails = useStore(state => state.chronicleDetails)
+  const status = chronicleDetails || { running: false, volume: 0, start_time: null }
 
   const menuRef = useRef(null)
   const scrollRef = useRef(null)
@@ -110,40 +116,20 @@ function ChronicleButton() {
       })
   }, [open])
 
-  // Poll for new entries and status
+  // Listen for new transcript lines via WebSocket (pushed from server)
   useEffect(() => {
-    if (!open || initialLoading) return
+    if (!open) return
 
-    const pollNew = () => {
-      // Get newest line's timestamp
-      const newestTs = lines.length > 0 ? lines[lines.length - 1]?.timestamp : null
-
-      if (newestTs) {
-        const params = new URLSearchParams({
-          cursor: newestTs,
-          count: '10',
-          direction: 'after'
-        })
-        fetch(`${CHRONICLE_URL}/chronicle/history?${params}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data.lines?.length) {
-              setLines(prev => [...prev, ...data.lines])
-            }
-          })
-          .catch(() => {})
+    const handleNewLine = (event) => {
+      const line = event.detail
+      if (line) {
+        setLines(prev => [...prev, line])
       }
-
-      // Status for volume bar
-      fetch(`${CHRONICLE_URL}/chronicle/status`)
-        .then(r => r.json())
-        .then(data => setStatus(data))
-        .catch(() => {})
     }
 
-    const interval = setInterval(pollNew, 1000)
-    return () => clearInterval(interval)
-  }, [open, initialLoading, lines])
+    window.addEventListener('iris:chronicle:line', handleNewLine)
+    return () => window.removeEventListener('iris:chronicle:line', handleNewLine)
+  }, [open])
 
   // IntersectionObserver for loading older entries when scrolling up
   useEffect(() => {
@@ -317,6 +303,187 @@ function ChronicleButton() {
   )
 }
 
+function LogsButton({ send }) {
+  const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('backend')
+  const [lines, setLines] = useState({ backend: [], frontend: [] })
+  const [loading, setLoading] = useState(false)
+  const menuRef = useRef(null)
+  const scrollRef = useRef(null)
+  const wasAtBottomRef = useRef(true)
+
+  // Fetch logs
+  const fetchLogs = useCallback((type) => {
+    if (!send) return
+    send({ event: 'logs:read', type, lines: 200 })
+  }, [send])
+
+  // Listen for log data via global WebSocket message listeners
+  useEffect(() => {
+    if (!open) return
+
+    const handleMessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.event === 'logs:data') {
+          // Check if we're at bottom before updating
+          if (scrollRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+            wasAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 50
+          }
+
+          setLines(prev => ({ ...prev, [msg.type]: msg.lines || [] }))
+          setLoading(false)
+
+          // Auto-scroll to bottom only if we were already at bottom
+          if (wasAtBottomRef.current) {
+            setTimeout(() => {
+              if (scrollRef.current) {
+                scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+              }
+            }, 50)
+          }
+        } else if (msg.event === 'logs:cleared') {
+          setLines(prev => ({ ...prev, [msg.type]: [] }))
+        }
+      } catch {}
+    }
+
+    // Subscribe to global WebSocket message listeners
+    const messageListeners = window.__irisWsMessageListeners
+    if (messageListeners) {
+      messageListeners.add(handleMessage)
+      return () => messageListeners.delete(handleMessage)
+    }
+  }, [open])
+
+  // Initial load and polling when open
+  useEffect(() => {
+    if (!open) return
+
+    setLoading(true)
+    fetchLogs(activeTab)
+
+    const interval = setInterval(() => {
+      fetchLogs(activeTab)
+    }, 1000) // Poll every second for real-time updates
+
+    return () => clearInterval(interval)
+  }, [open, activeTab, fetchLogs])
+
+  // Handle clear
+  const handleClear = () => {
+    if (!send) return
+    send({ event: 'logs:clear', type: activeTab })
+  }
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const currentLines = lines[activeTab] || []
+
+  // Parse log line to extract level
+  const getLineLevel = (line) => {
+    if (line.includes('ERROR')) return 'error'
+    if (line.includes('WARN')) return 'warn'
+    return 'info'
+  }
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <IconButton
+        icon={faTerminal}
+        size="md"
+        variant="glass"
+        onClick={() => setOpen(!open)}
+        title="System logs"
+      />
+      {open && (
+        <div className="absolute left-full bottom-0 ml-2 w-[500px] max-h-[70vh] liquid-glass-popup flex flex-col z-50">
+          {/* Tabs */}
+          <div className="flex border-b border-white/10">
+            <button
+              onClick={() => setActiveTab('backend')}
+              className={`flex-1 px-4 py-2 text-xs font-medium transition-all ${
+                activeTab === 'backend'
+                  ? 'text-white border-b-2 border-blue-400'
+                  : 'text-white/50 hover:text-white/70'
+              }`}
+            >
+              Backend
+            </button>
+            <button
+              onClick={() => setActiveTab('frontend')}
+              className={`flex-1 px-4 py-2 text-xs font-medium transition-all ${
+                activeTab === 'frontend'
+                  ? 'text-white border-b-2 border-green-400'
+                  : 'text-white/50 hover:text-white/70'
+              }`}
+            >
+              Frontend
+            </button>
+          </div>
+
+          {/* Log content */}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-3 min-h-[300px] max-h-[calc(70vh-80px)] font-mono text-[10px]"
+          >
+            {loading && currentLines.length === 0 ? (
+              <div className="flex justify-center items-center py-8">
+                <Spinner />
+              </div>
+            ) : currentLines.length === 0 ? (
+              <p className="text-white/40 text-xs text-center py-4">No logs yet</p>
+            ) : (
+              <div className="space-y-0.5">
+                {currentLines.map((line, i) => {
+                  const level = getLineLevel(line)
+                  return (
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap break-all ${
+                        level === 'error' ? 'text-red-400' :
+                        level === 'warn' ? 'text-yellow-400' :
+                        'text-white/60'
+                      }`}
+                    >
+                      {line}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between p-2 border-t border-white/10">
+            <span className="text-[10px] text-white/40">
+              {currentLines.length} lines
+            </span>
+            <button
+              onClick={handleClear}
+              className="px-2 py-1 text-[10px] text-white/50 hover:text-white/80 hover:bg-white/10 rounded transition-all flex items-center gap-1"
+            >
+              <FontAwesomeIcon icon={faTrash} className="text-[8px]" />
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
@@ -334,6 +501,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
   }, [open])
 
   const serviceList = [
+    { name: 'MCP', key: 'mcp', icon: faPlug, readOnly: true },
     { name: 'Hear', key: 'hear', icon: faEarListen },
     { name: 'Chronicle', key: 'chronicle', icon: faScroll, parent: 'hear' },
     { name: 'Speak', key: 'speak', icon: faVolumeHigh },
@@ -361,7 +529,8 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
             const isLoading = servicesLoading[service.key]
             const hasParent = service.parent
             const parentActive = hasParent ? services[service.parent] : true
-            const isDisabled = isLoading || (hasParent && !parentActive)
+            const isReadOnly = service.readOnly
+            const isDisabled = isLoading || (hasParent && !parentActive) || isReadOnly
 
             return (
               <button
@@ -369,13 +538,17 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
                 onClick={() => !isDisabled && onToggle(service.key, isActive)}
                 disabled={isDisabled}
                 className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 transition-all rounded-lg mx-auto ${
-                  isDisabled && !isLoading
-                    ? 'text-white/20 cursor-not-allowed'
-                    : isLoading
-                      ? 'text-yellow-400 cursor-wait'
-                      : isActive
-                        ? 'liquid-glass-text hover:bg-white/10'
-                        : 'liquid-glass-text-muted hover:bg-white/10'
+                  isReadOnly
+                    ? isActive
+                      ? 'liquid-glass-text cursor-default'
+                      : 'liquid-glass-text-muted cursor-default'
+                    : isDisabled && !isLoading
+                      ? 'text-white/20 cursor-not-allowed'
+                      : isLoading
+                        ? 'text-yellow-400 cursor-wait'
+                        : isActive
+                          ? 'liquid-glass-text hover:bg-white/10'
+                          : 'liquid-glass-text-muted hover:bg-white/10'
                 }`}
                 style={{
                   width: 'calc(100% - 8px)',
@@ -388,11 +561,12 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
                 ) : (
                   <FontAwesomeIcon
                     icon={service.icon}
-                    className={`text-[10px] w-3 ${isActive ? 'text-green-400' : 'opacity-50'}`}
+                    className={`text-[10px] w-3 ${isActive ? 'text-green-400' : isReadOnly && !isActive ? 'text-red-400' : 'opacity-50'}`}
                   />
                 )}
                 <span className={isActive ? '' : isLoading ? '' : 'opacity-60'}>{service.name}</span>
                 {isActive && !isLoading && <span className="ml-auto text-green-400 text-[10px]">●</span>}
+                {isReadOnly && !isActive && !isLoading && <span className="ml-auto text-red-400 text-[10px]">●</span>}
               </button>
             )
           })}
@@ -527,6 +701,23 @@ export default function LeftSidebar({
           IRIS {version && `- ${version}`}
         </span>
       </div>
+
+      {/* Logs button - above Chronicle */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{
+          opacity: loadStage >= 2 ? 1 : 0,
+          scale: loadStage >= 2 ? 1 : 0.8
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 400,
+          damping: 25,
+          delay: (!initialLoadDone || loadStage < 5) ? 0.10 : 0
+        }}
+      >
+        <LogsButton send={send} />
+      </motion.div>
 
       {/* Chronicle preview button - above Powers */}
       {powers && (

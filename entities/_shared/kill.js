@@ -8,6 +8,7 @@ import {
   normalizeTabOrder, findStageByEntity, deleteTabIfEmpty
 } from '../../server/state.js'
 import * as layout from '../../server/layout.js'
+import { getAllEntityIds } from '../../server/layout.js'
 
 /**
  * Remove an entity from state and update focus.
@@ -21,6 +22,18 @@ export function removeEntity(entityId) {
 
   const tabId = entity.tabId
   const order = entity.order || 0
+
+  // Capture stage siblings BEFORE removal (for focus fallback)
+  let stageSiblings = []
+  if (tabId) {
+    const tab = appState.tabs.find(t => t.id === tabId)
+    if (tab) {
+      const stage = findStageByEntity(tab, entityId)
+      if (stage) {
+        stageSiblings = getAllEntityIds(stage.layout).filter(id => id !== entityId)
+      }
+    }
+  }
 
   // Remove from state
   delete appState.entities[entityId]
@@ -46,7 +59,7 @@ export function removeEntity(entityId) {
 
   // Update focus if needed
   if (appState.focusedEntity === entityId) {
-    updateFocusAfterKill(tabId, order)
+    updateFocusAfterKill(tabId, order, stageSiblings)
   }
 
   return { entity, tabId }
@@ -54,25 +67,32 @@ export function removeEntity(entityId) {
 
 /**
  * Update focused entity after killing one.
- * Finds the next logical entity to focus.
+ * Prioritizes siblings in the same stage, then falls back to tab-level order.
  * @param {number} tabId - Tab the killed entity was in
  * @param {number} killedOrder - Order of the killed entity
+ * @param {string[]} stageSiblings - Entity IDs that were in the same stage
  */
-export function updateFocusAfterKill(tabId, killedOrder) {
-  const remaining = Object.entries(appState.entities)
-    .filter(([_, e]) => e.tabId === tabId)
-    .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
-
-  // Find entity with order just below killed one
+export function updateFocusAfterKill(tabId, killedOrder, stageSiblings = []) {
   let newFocused = null
-  for (let i = remaining.length - 1; i >= 0; i--) {
-    if ((remaining[i][1].order || 0) < killedOrder) {
-      newFocused = remaining[i][0]
-      break
+
+  // First priority: stay in the same stage
+  if (stageSiblings.length > 0) {
+    newFocused = stageSiblings[0]
+  } else {
+    // Fall back to tab-level: find entity with order just below killed one
+    const remaining = Object.entries(appState.entities)
+      .filter(([_, e]) => e.tabId === tabId)
+      .sort((a, b) => (a[1].order || 0) - (b[1].order || 0))
+
+    for (let i = remaining.length - 1; i >= 0; i--) {
+      if ((remaining[i][1].order || 0) < killedOrder) {
+        newFocused = remaining[i][0]
+        break
+      }
     }
-  }
-  if (!newFocused && remaining.length > 0) {
-    newFocused = remaining[0][0]
+    if (!newFocused && remaining.length > 0) {
+      newFocused = remaining[0][0]
+    }
   }
 
   appState.focusedEntity = newFocused

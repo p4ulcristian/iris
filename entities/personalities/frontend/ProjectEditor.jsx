@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSave, faFolder, faArrowLeft } from '@fortawesome/free-solid-svg-icons'
+import { faSave, faArrowLeft } from '@fortawesome/free-solid-svg-icons'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
 
@@ -18,14 +18,12 @@ export default function ProjectEditor({ project, onBack }) {
   const [hasChanges, setHasChanges] = useState(false)
   const [saveMessage, setSaveMessage] = useState(null)
 
-  // Load project details if not new
   useEffect(() => {
     if (!isNew && project?.name) {
       send({ event: 'projects:get', name: project.name })
     }
   }, [project?.name, isNew, send])
 
-  // Handle WebSocket responses
   useEffect(() => {
     const handleMessage = (event) => {
       try {
@@ -60,7 +58,6 @@ export default function ProjectEditor({ project, onBack }) {
     }
   }, [project?.name, description])
 
-  // Track changes
   useEffect(() => {
     const descriptionChanged = description !== originalDescription
     const nameValid = isNew ? projectName.trim() : true
@@ -70,13 +67,13 @@ export default function ProjectEditor({ project, onBack }) {
   const handleSave = useCallback(() => {
     const name = isNew ? projectName.trim() : project?.name
     if (!name) {
-      setSaveMessage('Project name required')
+      setSaveMessage('Name required')
       setTimeout(() => setSaveMessage(null), 2000)
       return
     }
 
     if (!projectPath) {
-      setSaveMessage('Project path required')
+      setSaveMessage('Path required')
       setTimeout(() => setSaveMessage(null), 2000)
       return
     }
@@ -91,104 +88,88 @@ export default function ProjectEditor({ project, onBack }) {
     })
   }, [send, isNew, projectName, project?.name, projectPath, description, project?.isDefault])
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        if (hasChanges) {
-          handleSave()
-        }
+        if (hasChanges) handleSave()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleSave, hasChanges])
 
-  // Shorten path for display
   const shortPath = projectPath?.replace(/^\/home\/[^/]+/, '~') || ''
 
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e]">
+    <div className="h-full overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-white/10 bg-black/20">
-        {/* Back button */}
+      <div className="flex items-center gap-3 mb-6">
         {onBack && (
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 px-2 py-1 text-xs text-white/60 hover:text-white hover:bg-white/10 rounded transition-colors"
-            title="Back"
+            className="flex items-center justify-center w-8 h-8 text-text-tertiary hover:text-text-primary hover:bg-white/10 rounded-lg transition-colors"
           >
-            <FontAwesomeIcon icon={faArrowLeft} size="sm" />
+            <FontAwesomeIcon icon={faArrowLeft} />
           </button>
         )}
-
-        <FontAwesomeIcon icon={faFolder} className="text-blue-400" />
-
-        <span className="flex-1 text-white text-sm font-medium">
-          {isNew ? 'New Project' : project?.name}
-        </span>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges || isSaving}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded transition-colors ${
-              hasChanges
-                ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
-                : 'bg-white/5 text-white/30 cursor-not-allowed'
-            }`}
-            title="Save (Ctrl+S)"
-          >
-            <FontAwesomeIcon icon={faSave} size="xs" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </button>
+        <div className="flex-1">
+          <h1 className="text-xl font-medium text-text-primary">
+            {isNew ? 'New Project' : project?.name}
+          </h1>
+          <p className="text-sm text-text-tertiary">{shortPath || 'No path'}</p>
         </div>
-
-        {/* Save message */}
+        <button
+          onClick={handleSave}
+          disabled={!hasChanges || isSaving}
+          className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors ${
+            hasChanges
+              ? 'bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30'
+              : 'bg-white/5 text-text-tertiary border border-white/10 cursor-not-allowed'
+          }`}
+        >
+          <FontAwesomeIcon icon={faSave} />
+          {isSaving ? 'Saving...' : 'Save'}
+        </button>
         {saveMessage && (
-          <span className={`text-xs ${
-            saveMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'
-          }`}>
+          <span className={`text-sm ${saveMessage.startsWith('Error') ? 'text-red-400' : 'text-green-400'}`}>
             {saveMessage}
           </span>
         )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Name field (only for new projects) */}
+      <div className="space-y-6">
+        {/* Name */}
         {isNew && (
           <div>
-            <label className="block text-xs text-white/60 mb-1">Project Name</label>
+            <label className="block text-xs text-text-tertiary mb-1">Name</label>
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="my-project"
-              className="w-full bg-white/5 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:border-blue-400"
+              className="w-full bg-black/20 text-text-primary text-sm rounded-lg px-3 py-2 border border-white/10 focus:border-accent/50 focus:outline-none"
             />
           </div>
         )}
 
-        {/* Path (read-only) */}
+        {/* Path */}
         <div>
-          <label className="block text-xs text-white/60 mb-1">Path</label>
-          <div className="w-full bg-white/5 text-white/70 text-sm rounded px-3 py-2 border border-white/10 font-mono">
+          <label className="block text-xs text-text-tertiary mb-1">Path</label>
+          <div className="w-full bg-black/20 text-text-secondary text-sm rounded-lg px-3 py-2 border border-white/10 font-mono">
             {shortPath || 'No path selected'}
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-xs text-white/60 mb-1">Description</label>
+          <label className="block text-xs text-text-tertiary mb-1">Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What is this project about?"
             rows={4}
-            className="w-full bg-white/5 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:border-blue-400 resize-none"
+            className="w-full bg-black/20 text-text-primary text-sm rounded-lg px-3 py-2 border border-white/10 focus:border-accent/50 focus:outline-none resize-none"
           />
         </div>
       </div>

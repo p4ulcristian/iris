@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
+import DropIndicator from './DropIndicator'
 
 /**
  * Drop zone for ungrouping tiles (dropping them back to the sidebar)
@@ -53,14 +54,11 @@ export default function TileUngroupDropZone({ children, className = '' }) {
       {children}
 
       {/* Drop overlay when dragging a tile over */}
-      {isOver && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
-          <div className="absolute inset-0 bg-orange-500/20 border-2 border-dashed border-orange-500 rounded-xl" />
-          <div className="relative px-4 py-2 bg-orange-500/90 text-white text-sm font-medium rounded-lg shadow-lg">
-            Ungroup {draggedName}
-          </div>
-        </div>
-      )}
+      <DropIndicator
+        variant="full"
+        label={`Ungroup ${draggedName}`}
+        visible={isOver}
+      />
     </div>
   )
 }

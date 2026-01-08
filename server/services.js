@@ -17,7 +17,8 @@ export function setBroadcast(fn) {
 export const serviceStatus = {
   speak: false,
   hear: false,
-  chronicle: false
+  chronicle: false,
+  mcp: false
 }
 
 // Service processes we've started
@@ -25,9 +26,13 @@ const serviceProcesses = {}
 
 let healthCheckInterval = null
 
+// Full chronicle status (volume, vad, etc.)
+let chronicleDetails = null
+
 async function checkChronicleStatus() {
   // Only check chronicle if hear is running
   if (!serviceStatus.hear) {
+    chronicleDetails = null
     return false
   }
 
@@ -39,17 +44,20 @@ async function checkChronicleStatus() {
         res.on('end', () => {
           try {
             const status = JSON.parse(data)
+            chronicleDetails = status
             resolve(status.running === true)
           } catch {
+            chronicleDetails = null
             resolve(false)
           }
         })
       } else {
+        chronicleDetails = null
         resolve(false)
       }
     })
-    req.on('error', () => resolve(false))
-    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.on('error', () => { chronicleDetails = null; resolve(false) })
+    req.on('timeout', () => { req.destroy(); chronicleDetails = null; resolve(false) })
   })
 }
 
@@ -78,6 +86,17 @@ async function checkServiceHealth(name, port) {
   })
 }
 
+// Check MCP health (Iris API reachability)
+async function checkMcpHealth() {
+  return new Promise((resolve) => {
+    const req = http.get('http://127.0.0.1:9998/api/health', { timeout: 1000 }, (res) => {
+      resolve(res.statusCode === 200)
+    })
+    req.on('error', () => resolve(false))
+    req.on('timeout', () => { req.destroy(); resolve(false) })
+  })
+}
+
 export async function checkAllServices() {
   // Skip health checks if powers are disabled
   if (!isPowersEnabled()) {
@@ -86,25 +105,37 @@ export async function checkAllServices() {
 
   const results = await Promise.all([
     checkServiceHealth('speak', SERVICES.speak.port),
-    checkServiceHealth('hear', SERVICES.hear.port)
+    checkServiceHealth('hear', SERVICES.hear.port),
+    checkMcpHealth()
   ])
+
+  const prevSpeak = serviceStatus.speak
+  const prevHear = serviceStatus.hear
+  const prevMcp = serviceStatus.mcp
 
   serviceStatus.speak = results[0]
   serviceStatus.hear = results[1]
+  serviceStatus.mcp = results[2]
 
   // Check chronicle status (depends on hear being up)
   const chronicleStatus = await checkChronicleStatus()
 
   const changed = (
-    serviceStatus.speak !== results[0] ||
-    serviceStatus.hear !== results[1] ||
+    prevSpeak !== serviceStatus.speak ||
+    prevHear !== serviceStatus.hear ||
+    prevMcp !== serviceStatus.mcp ||
     serviceStatus.chronicle !== chronicleStatus
   )
 
   serviceStatus.chronicle = chronicleStatus
 
-  if (changed && broadcastFn) {
-    broadcastFn('services:status', { services: serviceStatus })
+  // Always broadcast when chronicle is running (for volume/vad updates)
+  // or when any service status changed
+  if (broadcastFn && (changed || serviceStatus.chronicle)) {
+    broadcastFn('services:status', {
+      services: serviceStatus,
+      chronicleDetails: chronicleDetails
+    })
   }
 }
 

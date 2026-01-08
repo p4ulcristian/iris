@@ -4,6 +4,7 @@ import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useStore } from '../store'
 import EntityCard from './EntityCard'
+import DropIndicator from './DropIndicator'
 
 /**
  * EntityGroup - Renders a stage's entities
@@ -238,9 +239,12 @@ function EntityCardDropTarget({
       className="relative"
     >
       {/* Drop indicator - top */}
-      {dropState.isDraggedOver && dropState.closestEdge === 'top' && (
-        <div className="absolute -top-1.5 left-0 right-0 h-0.5 bg-teal-400 rounded-full z-10" />
-      )}
+      <DropIndicator
+        variant="edge"
+        position="top"
+        label="Insert above"
+        visible={dropState.isDraggedOver && dropState.closestEdge === 'top'}
+      />
 
       <EntityCard
         entity={entity}
@@ -259,9 +263,12 @@ function EntityCardDropTarget({
       />
 
       {/* Drop indicator - bottom */}
-      {dropState.isDraggedOver && dropState.closestEdge === 'bottom' && (
-        <div className="absolute -bottom-1.5 left-0 right-0 h-0.5 bg-teal-400 rounded-full z-10" />
-      )}
+      <DropIndicator
+        variant="edge"
+        position="bottom"
+        label="Insert below"
+        visible={dropState.isDraggedOver && dropState.closestEdge === 'bottom'}
+      />
     </motion.div>
   )
 }

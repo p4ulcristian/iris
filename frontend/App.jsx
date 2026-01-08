@@ -180,7 +180,15 @@ export default function App() {
 
       case 'services:status':
         // Services status is just a partial sync
-        syncState({ services: data.services })
+        syncState({
+          services: data.services,
+          chronicleDetails: data.chronicleDetails || null
+        })
+        break
+
+      case 'chronicle:line':
+        // Dispatch event for ChronicleButton to handle
+        window.dispatchEvent(new CustomEvent('iris:chronicle:line', { detail: data.line }))
         break
 
       // Entity status updates come through state:sync now

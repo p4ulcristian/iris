@@ -144,12 +144,16 @@ export function loadState() {
       })
   } catch {}
 
+  // Get the first valid tab ID (never assume tab 1 exists)
+  const getFirstTabId = () => appState.tabs[0]?.id || appState.activeTabId || 1
+
   // Add new sockets to first tab
   sockets.forEach(sock => {
     if (!appState.entities[sock.name]) {
+      const firstTabId = getFirstTabId()
       // Calculate next order inline (getNextOrder may not be available during load)
       const ordersInTab = Object.values(appState.entities)
-        .filter(e => e.tabId === 1)
+        .filter(e => e.tabId === firstTabId)
         .map(e => e.order ?? 0)
       const nextOrder = ordersInTab.length > 0 ? Math.max(...ordersInTab) + 1 : 0
 
@@ -157,9 +161,24 @@ export function loadState() {
         id: sock.name,
         type: 'god',
         name: sock.name,
-        tabId: 1,
+        tabId: firstTabId,
         order: nextOrder
       }
+    }
+  })
+
+  // Recover orphaned entities (entities whose tabId doesn't exist)
+  const validTabIds = new Set(appState.tabs.map(t => t.id))
+  Object.values(appState.entities).forEach(entity => {
+    if (!validTabIds.has(entity.tabId)) {
+      const firstTabId = getFirstTabId()
+      log.warn(`Recovering orphaned entity "${entity.id}" from non-existent tab ${entity.tabId} → tab ${firstTabId}`)
+      entity.tabId = firstTabId
+      // Recalculate order for the new tab
+      const ordersInTab = Object.values(appState.entities)
+        .filter(e => e.id !== entity.id && e.tabId === firstTabId)
+        .map(e => e.order ?? 0)
+      entity.order = ordersInTab.length > 0 ? Math.max(...ordersInTab) + 1 : 0
     }
   })
 

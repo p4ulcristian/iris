@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
+import DropIndicator from './DropIndicator'
 
 /**
  * RootDropZone - Handles drops when there's no layout (first entity in a tab)
@@ -43,14 +44,11 @@ export default function RootDropZone({ children, tabId, hasLayout }) {
       {children}
 
       {/* Drop indicator for empty state */}
-      {isDraggedOver && !hasLayout && (
-        <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
-          <div className="absolute inset-4 border-2 border-dashed border-accent/60 rounded-2xl bg-accent/10" />
-          <span className="px-4 py-2 bg-accent/80 text-white text-sm font-medium rounded-full shadow-lg z-10">
-            Drop to create first tile
-          </span>
-        </div>
-      )}
+      <DropIndicator
+        variant="full"
+        label="Create first tile"
+        visible={isDraggedOver && !hasLayout}
+      />
     </div>
   )
 }

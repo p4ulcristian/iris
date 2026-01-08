@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faPlus, faPuzzlePiece, faDna, faFolder, faPlug } from '@fortawesome/free-solid-svg-icons'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import PersonalityCard from './PersonalityCard'
 import TraitCard from './TraitCard'
 import ProjectCard from './ProjectCard'
@@ -251,194 +250,113 @@ export default function PersonalitiesView() {
     )
   }
 
+  // Section header component
+  const SectionHeader = ({ title, count, onNew }) => (
+    <div className="flex items-center justify-between mb-3">
+      <h2 className="text-sm font-medium text-text-secondary uppercase tracking-wider">
+        {title} <span className="text-text-tertiary">({count})</span>
+      </h2>
+      <button
+        onClick={onNew}
+        className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary border border-white/10 rounded-lg transition-colors"
+      >
+        <FontAwesomeIcon icon={faPlus} size="xs" />
+        New
+      </button>
+    </div>
+  )
+
   // Render list view
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/20">
-        <h2 className="text-white text-sm font-medium">Personalities & Traits</h2>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full text-white/40">
-            Loading...
+    <div className="h-full overflow-y-auto">
+      {isLoading ? (
+        <div className="flex items-center justify-center h-full text-text-tertiary">
+          Loading...
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* Traits Section */}
+          <div>
+            <SectionHeader title="Traits" count={traits.length} onNew={handleNewTrait} />
+            {traits.length === 0 ? (
+              <p className="text-sm text-text-tertiary">No traits yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {traits.map((trait, index) => (
+                  <TraitCard
+                    key={trait.name}
+                    trait={trait}
+                    onEdit={handleEditTrait}
+                    onDelete={handleDeleteTrait}
+                    staggerIndex={index}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : (
-          <>
-            {/* Traits Section */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-white/70">
-                  <FontAwesomeIcon icon={faPuzzlePiece} size="sm" className="text-purple-400" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Traits</span>
-                  <span className="text-xs text-white/40">({traits.length})</span>
-                </div>
-                <motion.button
-                  onClick={handleNewTrait}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 rounded transition-colors"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FontAwesomeIcon icon={faPlus} size="xs" />
-                  New
-                </motion.button>
+
+          {/* MCP Servers Section */}
+          <div>
+            <SectionHeader title="MCP Servers" count={mcpServers.length} onNew={handleNewMcpServer} />
+            {mcpServers.length === 0 ? (
+              <p className="text-sm text-text-tertiary">No MCP servers yet.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {mcpServers.map((server, index) => (
+                  <McpServerCard
+                    key={server.name}
+                    server={server}
+                    onEdit={handleEditMcpServer}
+                    onDelete={handleDeleteMcpServer}
+                    staggerIndex={index}
+                  />
+                ))}
               </div>
+            )}
+          </div>
 
-              {traits.length === 0 ? (
-                <div className="text-xs text-white/40 py-4 text-center">
-                  No traits yet. Create one to build composable personalities.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <AnimatePresence mode="popLayout">
-                    {traits.map((trait, index) => (
-                      <TraitCard
-                        key={trait.name}
-                        trait={trait}
-                        onEdit={handleEditTrait}
-                        onDelete={handleDeleteTrait}
-                        staggerIndex={index}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/10" />
-
-            {/* MCP Servers Section */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-white/70">
-                  <FontAwesomeIcon icon={faPlug} size="sm" className="text-cyan-400" />
-                  <span className="text-xs font-medium uppercase tracking-wide">MCP Servers</span>
-                  <span className="text-xs text-white/40">({mcpServers.length})</span>
-                </div>
-                <motion.button
-                  onClick={handleNewMcpServer}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 rounded transition-colors"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FontAwesomeIcon icon={faPlus} size="xs" />
-                  New
-                </motion.button>
+          {/* Personalities Section */}
+          <div>
+            <SectionHeader title="Personalities" count={personalities.length} onNew={handleNewPersonality} />
+            {personalities.length === 0 ? (
+              <p className="text-sm text-text-tertiary">No personalities yet.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {personalities.map((personality, index) => (
+                  <PersonalityCard
+                    key={personality.name}
+                    personality={personality}
+                    onEdit={handleEditPersonality}
+                    onDelete={handleDeletePersonality}
+                    staggerIndex={index}
+                  />
+                ))}
               </div>
+            )}
+          </div>
 
-              {mcpServers.length === 0 ? (
-                <div className="text-xs text-white/40 py-4 text-center">
-                  No MCP servers yet. Add one to extend Claude's capabilities.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <AnimatePresence mode="popLayout">
-                    {mcpServers.map((server, index) => (
-                      <McpServerCard
-                        key={server.name}
-                        server={server}
-                        onEdit={handleEditMcpServer}
-                        onDelete={handleDeleteMcpServer}
-                        staggerIndex={index}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/10" />
-
-            {/* Personalities Section */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-white/70">
-                  <FontAwesomeIcon icon={faDna} size="sm" className="text-purple-400" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Personalities</span>
-                  <span className="text-xs text-white/40">({personalities.length})</span>
-                </div>
-                <motion.button
-                  onClick={handleNewPersonality}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 rounded transition-colors"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FontAwesomeIcon icon={faPlus} size="xs" />
-                  New
-                </motion.button>
+          {/* Projects Section */}
+          <div>
+            <SectionHeader title="Projects" count={projects.length} onNew={handleNewProject} />
+            {projects.length === 0 ? (
+              <p className="text-sm text-text-tertiary">No projects yet.</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {projects.map((project, index) => (
+                  <ProjectCard
+                    key={project.name}
+                    project={project}
+                    onEdit={handleEditProject}
+                    onDelete={handleDeleteProject}
+                    onSetDefault={handleSetDefaultProject}
+                    staggerIndex={index}
+                  />
+                ))}
               </div>
-
-              {personalities.length === 0 ? (
-                <div className="text-xs text-white/40 py-4 text-center">
-                  No personalities yet. Create one to combine traits.
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  <AnimatePresence mode="popLayout">
-                    {personalities.map((personality, index) => (
-                      <PersonalityCard
-                        key={personality.name}
-                        personality={personality}
-                        onEdit={handleEditPersonality}
-                        onDelete={handleDeletePersonality}
-                        staggerIndex={index}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-white/10" />
-
-            {/* Projects Section */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-white/70">
-                  <FontAwesomeIcon icon={faFolder} size="sm" className="text-blue-400" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Projects</span>
-                  <span className="text-xs text-white/40">({projects.length})</span>
-                </div>
-                <motion.button
-                  onClick={handleNewProject}
-                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 rounded transition-colors"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FontAwesomeIcon icon={faPlus} size="xs" />
-                  New
-                </motion.button>
-              </div>
-
-              {projects.length === 0 ? (
-                <div className="text-xs text-white/40 py-4 text-center">
-                  No projects yet. Add one to give Claude context about your work.
-                </div>
-              ) : (
-                <div className="grid gap-3">
-                  <AnimatePresence mode="popLayout">
-                    {projects.map((project, index) => (
-                      <ProjectCard
-                        key={project.name}
-                        project={project}
-                        onEdit={handleEditProject}
-                        onDelete={handleDeleteProject}
-                        onSetDefault={handleSetDefaultProject}
-                        staggerIndex={index}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
