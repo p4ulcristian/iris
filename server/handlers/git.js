@@ -43,15 +43,20 @@ export const handlers = {
     const projectPath = data.project
     if (!projectPath) return
 
-    git.getStatus(projectPath).then(status => {
-      git.getCurrentBranch(projectPath).then(branch => {
-        ws.send(JSON.stringify({
-          event: 'git:status:response',
-          project: projectPath,
-          branch,
-          ...status
-        }))
-      })
+    Promise.all([
+      git.getStatus(projectPath),
+      git.getCurrentBranch(projectPath),
+      git.getAheadBehind(projectPath)
+    ]).then(([status, branch, aheadBehind]) => {
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project: projectPath,
+        branch,
+        ahead: aheadBehind.ahead,
+        behind: aheadBehind.behind,
+        noUpstream: aheadBehind.noUpstream,
+        ...status
+      }))
     }).catch(err => {
       ws.send(JSON.stringify({ event: 'git:error', project: projectPath, error: err.message }))
     })
@@ -154,6 +159,339 @@ export const handlers = {
         project,
         branches,
         current
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:commit': (ws, data) => {
+    const { project, message, amend } = data
+    if (!project || !message) return
+
+    git.commit(project, message, amend).then(() => {
+      return git.getStatus(project)
+    }).then(status => {
+      ws.send(JSON.stringify({
+        event: 'git:commit:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        ...status
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:push': (ws, data) => {
+    const { project, remote, branch, force } = data
+    if (!project) return
+
+    git.push(project, remote, branch, force).then(() => {
+      return git.getAheadBehind(project)
+    }).then(aheadBehind => {
+      ws.send(JSON.stringify({
+        event: 'git:push:response',
+        project,
+        ok: true,
+        ahead: aheadBehind.ahead,
+        behind: aheadBehind.behind
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:pull': (ws, data) => {
+    const { project, remote, branch, rebase } = data
+    if (!project) return
+
+    git.pull(project, remote, branch, rebase).then(() => {
+      return Promise.all([
+        git.getStatus(project),
+        git.getAheadBehind(project)
+      ])
+    }).then(([status, aheadBehind]) => {
+      ws.send(JSON.stringify({
+        event: 'git:pull:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        ahead: aheadBehind.ahead,
+        behind: aheadBehind.behind,
+        ...status
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:fetch': (ws, data) => {
+    const { project, remote } = data
+    if (!project) return
+
+    git.fetch(project, remote).then(() => {
+      return git.getAheadBehind(project)
+    }).then(aheadBehind => {
+      ws.send(JSON.stringify({
+        event: 'git:fetch:response',
+        project,
+        ok: true,
+        ahead: aheadBehind.ahead,
+        behind: aheadBehind.behind
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:checkout': (ws, data) => {
+    const { project, ref } = data
+    if (!project || !ref) return
+
+    git.checkout(project, ref).then(() => {
+      return Promise.all([
+        git.getStatus(project),
+        git.getCurrentBranch(project),
+        git.getAheadBehind(project)
+      ])
+    }).then(([status, branch, aheadBehind]) => {
+      ws.send(JSON.stringify({
+        event: 'git:checkout:response',
+        project,
+        ok: true,
+        branch
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        branch,
+        ahead: aheadBehind.ahead,
+        behind: aheadBehind.behind,
+        ...status
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:branch:create': (ws, data) => {
+    const { project, name, startPoint } = data
+    if (!project || !name) return
+
+    git.createBranch(project, name, startPoint).then(() => {
+      return git.getBranches(project)
+    }).then(branches => {
+      ws.send(JSON.stringify({
+        event: 'git:branch:create:response',
+        project,
+        ok: true,
+        branch: name
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:branches:response',
+        project,
+        branches,
+        current: name
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:branch:delete': (ws, data) => {
+    const { project, name, force } = data
+    if (!project || !name) return
+
+    git.deleteBranch(project, name, force).then(() => {
+      return Promise.all([
+        git.getBranches(project),
+        git.getCurrentBranch(project)
+      ])
+    }).then(([branches, current]) => {
+      ws.send(JSON.stringify({
+        event: 'git:branch:delete:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:branches:response',
+        project,
+        branches,
+        current
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:stash:list': (ws, data) => {
+    const { project } = data
+    if (!project) return
+
+    git.stashList(project).then(stashes => {
+      ws.send(JSON.stringify({
+        event: 'git:stash:list:response',
+        project,
+        stashes
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:stash:create': (ws, data) => {
+    const { project, message } = data
+    if (!project) return
+
+    git.stashCreate(project, message).then(() => {
+      return Promise.all([
+        git.getStatus(project),
+        git.stashList(project)
+      ])
+    }).then(([status, stashes]) => {
+      ws.send(JSON.stringify({
+        event: 'git:stash:create:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        ...status
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:stash:list:response',
+        project,
+        stashes
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:stash:apply': (ws, data) => {
+    const { project, index } = data
+    if (!project) return
+
+    git.stashApply(project, index || 0).then(() => {
+      return git.getStatus(project)
+    }).then(status => {
+      ws.send(JSON.stringify({
+        event: 'git:stash:apply:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        ...status
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:stash:pop': (ws, data) => {
+    const { project, index } = data
+    if (!project) return
+
+    git.stashPop(project, index || 0).then(() => {
+      return Promise.all([
+        git.getStatus(project),
+        git.stashList(project)
+      ])
+    }).then(([status, stashes]) => {
+      ws.send(JSON.stringify({
+        event: 'git:stash:pop:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:status:response',
+        project,
+        ...status
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:stash:list:response',
+        project,
+        stashes
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:stash:drop': (ws, data) => {
+    const { project, index } = data
+    if (!project) return
+
+    git.stashDrop(project, index || 0).then(() => {
+      return git.stashList(project)
+    }).then(stashes => {
+      ws.send(JSON.stringify({
+        event: 'git:stash:drop:response',
+        project,
+        ok: true
+      }))
+      ws.send(JSON.stringify({
+        event: 'git:stash:list:response',
+        project,
+        stashes
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:commit:details': (ws, data) => {
+    const { project, hash } = data
+    if (!project || !hash) return
+
+    git.getCommitDetails(project, hash).then(details => {
+      ws.send(JSON.stringify({
+        event: 'git:commit:details:response',
+        project,
+        ...details
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:commit:diff': (ws, data) => {
+    const { project, hash, file } = data
+    if (!project || !hash) return
+
+    git.getCommitDiff(project, hash, file).then(diff => {
+      ws.send(JSON.stringify({
+        event: 'git:commit:diff:response',
+        project,
+        hash,
+        file: file || null,
+        diff
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
+    })
+  },
+
+  'git:remotes': (ws, data) => {
+    const { project } = data
+    if (!project) return
+
+    git.getRemotes(project).then(remotes => {
+      ws.send(JSON.stringify({
+        event: 'git:remotes:response',
+        project,
+        remotes
       }))
     }).catch(err => {
       ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))

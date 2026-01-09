@@ -777,10 +777,6 @@ export default function App() {
                             animate={{ y: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                             style={{ pointerEvents: isActive ? 'auto' : 'none' }}
-                            onAnimationComplete={() => {
-                              // Notify terminals to recalculate after animation
-                              window.dispatchEvent(new CustomEvent('iris:animation-complete'))
-                            }}
                           >
                             {item.isEmpty ? (
                               // Empty tab welcome screen
@@ -977,7 +973,6 @@ export default function App() {
               <TerminalContent
                 entity={god}
                 isFocused={false}
-                isHidden={true}
               />
             </TileCard>
           </div>

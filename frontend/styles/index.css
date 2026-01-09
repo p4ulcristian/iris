@@ -137,10 +137,19 @@ body.alt-held .entity-content {
   background: rgba(255, 255, 255, 0.35);
 }
 
-/* Force xterm's virtual scrollbar to always be visible */
-.xterm .xterm-scrollable-element > .scrollbar.vertical {
-  visibility: visible !important;
+/* Style xterm's virtual scrollbar when visible */
+.xterm .xterm-scrollable-element > .scrollbar.vertical.visible {
   opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 3px;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
 }
 
 /* Tab container performance optimizations */
@@ -160,10 +169,7 @@ body.alt-held .entity-content {
   contain: layout style paint;
 }
 
-.stage-offscreen {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 100vh;
-}
+/* .stage-offscreen removed - content-visibility breaks getBoundingClientRect for terminal resize polling */
 
 /* Animations */
 @keyframes pulse {

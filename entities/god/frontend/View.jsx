@@ -19,7 +19,7 @@ const APPROX_CELL_HEIGHT = 17
 // Resize polling interval (ms)
 const RESIZE_POLL_INTERVAL = 200
 
-export default function TerminalContent({ entity, isFocused, isHidden }) {
+export default function TerminalContent({ entity, isFocused }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const wsRef = useRef(null)
@@ -149,6 +149,21 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
 
+    // Force xterm's virtual scrollbar to always be visible
+    const forceScrollbarVisible = () => {
+      const scrollbar = containerRef.current?.querySelector('.xterm-scrollable-element > .scrollbar.vertical')
+      if (scrollbar) {
+        scrollbar.classList.remove('invisible')
+        scrollbar.classList.add('visible')
+      }
+    }
+
+    // Keep scrollbar visible on scroll and content changes
+    const onScrollDisposable = term.onScroll(forceScrollbarVisible)
+    const onWriteDisposable = term.onWriteParsed(forceScrollbarVisible)
+
+    // Initial force after render
+    setTimeout(forceScrollbarVisible, 100)
 
     // Helper to measure and update cell dimensions
     const updateCellDimensions = () => {
@@ -308,6 +323,8 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
 
     return () => {
       onFirstRender.dispose()
+      onScrollDisposable.dispose()
+      onWriteDisposable.dispose()
       clearInterval(resizePoll)
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)

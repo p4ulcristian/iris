@@ -152,3 +152,140 @@ export async function isGitRepo(projectPath) {
     return false
   }
 }
+
+export async function getAheadBehind(projectPath) {
+  try {
+    const branch = await getCurrentBranch(projectPath)
+    if (!branch) return { ahead: 0, behind: 0 }
+
+    // Check if upstream exists
+    try {
+      await runGit(projectPath, ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`])
+    } catch {
+      return { ahead: 0, behind: 0, noUpstream: true }
+    }
+
+    const output = await runGit(projectPath, ['rev-list', '--left-right', '--count', `${branch}...${branch}@{upstream}`])
+    const [ahead, behind] = output.trim().split(/\s+/).map(Number)
+    return { ahead: ahead || 0, behind: behind || 0 }
+  } catch {
+    return { ahead: 0, behind: 0 }
+  }
+}
+
+export async function commit(projectPath, message, amend = false) {
+  const args = ['commit', '-m', message]
+  if (amend) args.push('--amend')
+  return await runGit(projectPath, args)
+}
+
+export async function push(projectPath, remote = 'origin', branch = null, force = false) {
+  const args = ['push', remote]
+  if (branch) args.push(branch)
+  if (force) args.push('--force')
+  return await runGit(projectPath, args)
+}
+
+export async function pull(projectPath, remote = 'origin', branch = null, rebase = false) {
+  const args = ['pull', remote]
+  if (branch) args.push(branch)
+  if (rebase) args.push('--rebase')
+  return await runGit(projectPath, args)
+}
+
+export async function fetch(projectPath, remote = '--all') {
+  return await runGit(projectPath, ['fetch', remote])
+}
+
+export async function checkout(projectPath, ref) {
+  return await runGit(projectPath, ['checkout', ref])
+}
+
+export async function createBranch(projectPath, name, startPoint = null) {
+  const args = ['checkout', '-b', name]
+  if (startPoint) args.push(startPoint)
+  return await runGit(projectPath, args)
+}
+
+export async function deleteBranch(projectPath, name, force = false) {
+  const args = ['branch', force ? '-D' : '-d', name]
+  return await runGit(projectPath, args)
+}
+
+export async function stashList(projectPath) {
+  try {
+    const output = await runGit(projectPath, ['stash', 'list', '--format=%gd%x00%s%x00%ai'])
+    return output.split('\n').filter(Boolean).map(line => {
+      const [ref, message, date] = line.split('\x00')
+      return { ref, message, date }
+    })
+  } catch {
+    return []
+  }
+}
+
+export async function stashCreate(projectPath, message = null) {
+  const args = ['stash', 'push']
+  if (message) args.push('-m', message)
+  return await runGit(projectPath, args)
+}
+
+export async function stashApply(projectPath, index = 0) {
+  return await runGit(projectPath, ['stash', 'apply', `stash@{${index}}`])
+}
+
+export async function stashPop(projectPath, index = 0) {
+  return await runGit(projectPath, ['stash', 'pop', `stash@{${index}}`])
+}
+
+export async function stashDrop(projectPath, index = 0) {
+  return await runGit(projectPath, ['stash', 'drop', `stash@{${index}}`])
+}
+
+export async function getRemotes(projectPath) {
+  try {
+    const output = await runGit(projectPath, ['remote', '-v'])
+    const remotes = {}
+    output.split('\n').filter(Boolean).forEach(line => {
+      const match = line.match(/^(\S+)\s+(\S+)\s+\((\w+)\)$/)
+      if (match) {
+        const [, name, url, type] = match
+        if (!remotes[name]) remotes[name] = {}
+        remotes[name][type] = url
+      }
+    })
+    return Object.entries(remotes).map(([name, urls]) => ({ name, ...urls }))
+  } catch {
+    return []
+  }
+}
+
+export async function getCommitDetails(projectPath, hash) {
+  const format = '%H%x00%s%x00%b%x00%an%x00%ae%x00%ai%x00%P'
+  const output = await runGit(projectPath, ['show', '--format=' + format, '-s', hash])
+  const [fullHash, subject, body, author, email, date, parents] = output.trim().split('\x00')
+
+  // Get changed files
+  const filesOutput = await runGit(projectPath, ['diff-tree', '--no-commit-id', '--name-status', '-r', hash])
+  const files = filesOutput.split('\n').filter(Boolean).map(line => {
+    const [status, ...pathParts] = line.split('\t')
+    return { status: statusChar(status), file: pathParts.join('\t') }
+  })
+
+  return {
+    hash: fullHash,
+    subject,
+    body: body.trim(),
+    author,
+    email,
+    date,
+    parents: parents ? parents.split(' ') : [],
+    files
+  }
+}
+
+export async function getCommitDiff(projectPath, hash, file = null) {
+  const args = ['show', '--no-color', hash]
+  if (file) args.push('--', file)
+  return await runGit(projectPath, args)
+}

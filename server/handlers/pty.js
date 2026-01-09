@@ -132,7 +132,8 @@ export const handlers = {
     }
 
     // Wait a bit for new terminals to initialize, then send command
-    const initDelay = terminal ? 100 : 1500
+    // New terminals need ~3s for Zellij + shell to fully initialize
+    const initDelay = terminal ? 100 : 3000
     setTimeout(() => {
       // First send Ctrl+C to clear any stuck input
       try {
@@ -158,9 +159,9 @@ export const handlers = {
           return
         }
 
-        // Poll for output file
+        // Poll for output file (150 attempts * 200ms = 30s max)
         let attempts = 0
-        const maxAttempts = 30
+        const maxAttempts = 150
         const pollInterval = setInterval(() => {
           attempts++
 
