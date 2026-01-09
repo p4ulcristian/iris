@@ -26,20 +26,28 @@ export default function TerminalContent({ entity, isFocused }) {
   const cellDimsRef = useRef(null)
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
 
+  const { name, displayName, color } = entity
+  const godName = name
+
   // Track which container the terminal is attached to (for hot reload detection)
   const attachedContainerRef = useRef(null)
   const [remountKey, setRemountKey] = useState(0)
 
-  // Detect hot reload: container DOM changed but React preserved our refs
+  // Detect container change: force terminal remount if container DOM node changes
   useLayoutEffect(() => {
     if (attachedContainerRef.current && attachedContainerRef.current !== containerRef.current) {
-      // Container changed - force terminal effect to re-run
+      console.warn(`[${godName}] Container changed! old=${attachedContainerRef.current?.className} new=${containerRef.current?.className}`)
       setRemountKey(k => k + 1)
     }
+    // Always update the attached ref
+    attachedContainerRef.current = containerRef.current
   })
 
-  const { name, displayName, color } = entity
-  const godName = name
+  // Log mount/unmount
+  useEffect(() => {
+    console.warn(`[${godName}] Component mounted, remountKey=${remountKey}`)
+    return () => console.warn(`[${godName}] Component unmounting`)
+  }, [godName, remountKey])
 
   // Capture initial color for loading message (don't want color changes to recreate terminal)
   const initialColorRef = useRef(color)
@@ -59,7 +67,7 @@ export default function TerminalContent({ entity, isFocused }) {
     const cellHeight = cellDimsRef.current?.height || APPROX_CELL_HEIGHT
     return {
       cols: Math.floor(width / cellWidth) || 80,
-      rows: Math.floor(height / cellHeight) || 24
+      rows: Math.ceil(height / cellHeight) || 24  // Round up to avoid cutting off bottom row
     }
   }
 
@@ -112,9 +120,12 @@ export default function TerminalContent({ entity, isFocused }) {
   }, [isFocused])
 
 
+
   // Main terminal setup
   useEffect(() => {
     if (!containerRef.current) return
+
+    console.warn(`[${godName}] Terminal effect running, container:`, containerRef.current)
 
     // Track current container for hot reload detection
     attachedContainerRef.current = containerRef.current
@@ -271,8 +282,20 @@ export default function TerminalContent({ entity, isFocused }) {
         // Only resize if dimensions actually changed
         if (cols > 0 && rows > 0 &&
             (cols !== lastSizeRef.current.cols || rows !== lastSizeRef.current.rows)) {
+          const buffer = term.buffer?.active
+          const beforeBase = buffer?.baseY || 0
+          const beforeViewport = buffer?.viewportY || 0
+
           lastSizeRef.current = { cols, rows }
           term.resize(cols, rows)
+
+          const afterBase = buffer?.baseY || 0
+          const afterViewport = buffer?.viewportY || 0
+          console.warn(`[${godName}] Resize ${cols}x${rows} | buffer: base ${beforeBase}->${afterBase}, viewport ${beforeViewport}->${afterViewport}`)
+
+          // Refresh to sync scroll state after resize
+          term.refresh(0, term.rows - 1)
+          forceScrollbarVisible()
 
           // Send to server if WebSocket is ready
           if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -299,16 +322,29 @@ export default function TerminalContent({ entity, isFocused }) {
     wsRef.current = ws
 
     ws.onopen = () => {
-      console.log(`[TerminalContent] ${godName}: WebSocket opened, sending pty:attach`)
+      console.warn(`[TerminalContent] ${godName}: WebSocket opened, sending pty:attach`)
       ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
     }
 
+    let isFirstMessage = true
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
         if (msg.event === 'pty:output' && msg.godName === godName) {
           if (typeof msg.data === 'string') {
             term.write(msg.data)
+            // After initial buffer replay, reset scroll state and log buffer info
+            if (isFirstMessage && msg.data.length > 500) {
+              isFirstMessage = false
+              console.warn(`[${godName}] Buffer received: ${msg.data.length} chars`)
+              setTimeout(() => {
+                const buffer = term.buffer?.active
+                console.warn(`[${godName}] After write: type=${buffer?.type}, base=${buffer?.baseY}, viewport=${buffer?.viewportY}, length=${buffer?.length}`)
+                term.scrollToBottom()
+                term.refresh(0, term.rows - 1)
+                forceScrollbarVisible()
+              }, 100)
+            }
           }
         }
       } catch (e) {
@@ -321,7 +357,38 @@ export default function TerminalContent({ entity, isFocused }) {
 
     term.focus()
 
+    // Wheel handler on WINDOW to ensure we always catch events
+    const handleWheel = (e) => {
+      // Only handle if event target is inside our container
+      if (!container.contains(e.target)) return
+
+      const buffer = term.buffer?.active
+      const base = buffer?.baseY || 0
+
+      console.warn(`[${godName}] wheel event: base=${base}, target=${e.target.className}`)
+
+      if (base > 0) {
+        // Has scrollback - scroll xterm buffer
+        const lines = Math.sign(e.deltaY) * Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
+        term.scrollLines(lines)
+      } else {
+        // No scrollback - send wheel as SGR mouse escape sequence to PTY for TUI apps
+        // SGR format: \x1b[<button;x;yM where button is 64 (up) or 65 (down)
+        const button = e.deltaY > 0 ? 65 : 64  // 65=down, 64=up
+        const scrollCount = Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
+        for (let i = 0; i < scrollCount; i++) {
+          wsRef.current?.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
+        }
+      }
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    window.addEventListener('wheel', handleWheel, { capture: true, passive: false })
+    console.warn(`[${godName}] Wheel handler attached to window, container=${container.className}`)
+
     return () => {
+      console.warn(`[${godName}] Terminal effect cleanup - disposing xterm`)
+      window.removeEventListener('wheel', handleWheel, { capture: true })
       onFirstRender.dispose()
       onScrollDisposable.dispose()
       onWriteDisposable.dispose()
@@ -334,6 +401,7 @@ export default function TerminalContent({ entity, isFocused }) {
       ws.close()
     }
   }, [godName, remountKey])
+
 
   return (
     <div

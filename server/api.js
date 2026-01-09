@@ -473,6 +473,17 @@ export function setupApi() {
       return true
     }
 
+    // POST /debug-wheel - Log wheel events for debugging
+    if (req.method === 'POST' && url.pathname === '/debug-wheel') {
+      const data = await parseJson(req)
+      const fs = await import('fs')
+      const logLine = `${new Date().toISOString()} ${JSON.stringify(data)}\n`
+      fs.appendFileSync('/tmp/iris-wheel-debug.log', logLine)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+      return true
+    }
+
     // Not handled by API
     return false
   }

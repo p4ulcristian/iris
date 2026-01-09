@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Dev mode logging
 const isDev = !__dirname.includes('app.asar')
-const projectRoot = isDev ? path.join(__dirname, '../..') : null
+const projectRoot = isDev ? path.join(__dirname, '..') : null
 const frontendLogFile = projectRoot ? path.join(projectRoot, 'logs', 'frontend.txt') : null
 
 function logToFrontend(level, message) {
@@ -31,8 +31,10 @@ function clearFrontendLog() {
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true })
     }
-    fs.writeFileSync(frontendLogFile, '')
-  } catch {}
+    fs.writeFileSync(frontendLogFile, `[STARTUP] isDev=${isDev}, logFile=${frontendLogFile}\n`)
+  } catch (e) {
+    console.error('Failed to clear frontend log:', e)
+  }
 }
 
 // Prevent multiple instances

@@ -188,6 +188,7 @@ export default function PersonalityEditor({ personality, onBack, onOpenTrait }) 
                         type="checkbox"
                         checked={enabledTraits.includes(trait.name)}
                         onChange={() => toggleTrait(trait.name)}
+                        onClick={(e) => e.stopPropagation()}
                         className="accent-accent"
                       />
                       <div className="flex-1 min-w-0">
@@ -238,6 +239,7 @@ export default function PersonalityEditor({ personality, onBack, onOpenTrait }) 
                         type="checkbox"
                         checked={enabledMcpServers.includes(server.name)}
                         onChange={() => toggleMcpServer(server.name)}
+                        onClick={(e) => e.stopPropagation()}
                         className="accent-accent"
                       />
                       <div className="flex-1 min-w-0">

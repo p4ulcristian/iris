@@ -167,21 +167,37 @@ export default function SummonModal({
             </div>
           </div>
 
-          {/* Show traits for selected personality */}
+          {/* Show traits and MCP servers for selected personality */}
           {(() => {
             const selected = personalities.find(p => p.name === selectedPersonality)
-            if (selected?.type === 'traits' && selected.traits?.length > 0) {
+            if (selected?.type === 'traits') {
               return (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {selected.traits.map(trait => (
-                    <span
-                      key={trait}
-                      className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300"
-                    >
-                      {trait}
-                    </span>
-                  ))}
-                </div>
+                <>
+                  {selected.traits?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selected.traits.map(trait => (
+                        <span
+                          key={trait}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300"
+                        >
+                          {trait}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {selected.mcpServers?.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selected.mcpServers.map(server => (
+                        <span
+                          key={server}
+                          className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300"
+                        >
+                          {server}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )
             }
             if (selectedPersonality === 'none') {

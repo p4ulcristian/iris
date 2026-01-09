@@ -12,6 +12,7 @@
   ],
   "mcpServers": [
     "iris",
-    "playwright"
+    "playwright",
+    "railway"
   ]
 }

@@ -1,6 +1,6 @@
 {
   "name": "playwright",
   "description": "Browser automation and testing",
-  "command": "bun",
-  "args": ["x", "-y", "@playwright/mcp@latest", "--isolated"]
+  "command": "bunx",
+  "args": ["-y", "@playwright/mcp@latest", "--isolated"]
 }

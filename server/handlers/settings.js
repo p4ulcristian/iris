@@ -384,13 +384,34 @@ export const handlers = {
 
 // Helper for focus navigation - navigates across ALL tabs as one continuous list
 function handleFocusNavigation(direction) {
-  // Build global entity list (all tabs, all entities, in visual order)
+  // Build global entity list based on stage order (visual order), not entity.order
   const globalEntities = []
+
+  // Helper to collect entity IDs from a layout node
+  const collectEntityIds = (node) => {
+    if (!node) return []
+    if (node.type === 'tile') {
+      if (node.entityId) return [node.entityId]
+      if (node.entityIds?.length) return node.entityIds
+      return []
+    }
+    if (node.type === 'split' && node.children) {
+      return node.children.flatMap(child => collectEntityIds(child))
+    }
+    return []
+  }
+
   for (const tab of appState.tabs) {
-    const tabEntities = Object.values(appState.entities)
-      .filter(e => e.tabId === tab.id)
-      .sort((a, b) => (a.order || 0) - (b.order || 0))
-    globalEntities.push(...tabEntities.map(e => ({ entity: e, tab })))
+    // Iterate stages in their array order (visual order)
+    for (const stage of (tab.stages || [])) {
+      const entityIds = collectEntityIds(stage.layout)
+      for (const entityId of entityIds) {
+        const entity = appState.entities[entityId]
+        if (entity) {
+          globalEntities.push({ entity, tab, stage })
+        }
+      }
+    }
   }
 
   if (globalEntities.length === 0) return
@@ -406,7 +427,7 @@ function handleFocusNavigation(direction) {
     newIdx = currentIdx < 0 ? globalEntities.length - 1 : (currentIdx - 1 + globalEntities.length) % globalEntities.length
   }
 
-  const { entity: newEntity, tab: newTab } = globalEntities[newIdx]
+  const { entity: newEntity, tab: newTab, stage: newStage } = globalEntities[newIdx]
 
   // Switch tab if needed
   if (newTab.id !== appState.activeTabId) {
@@ -416,11 +437,10 @@ function handleFocusNavigation(direction) {
   // Update focus
   appState.focusedEntity = newEntity.id
 
-  // Update active stage
-  const stage = findStageByEntity(newTab, newEntity.id)
-  if (stage) {
-    newTab.activeStageId = stage.id
-    const tile = layout.findTileByEntity(stage.layout, newEntity.id)
+  // Update active stage (use the stage we already have from the entity list)
+  if (newStage) {
+    newTab.activeStageId = newStage.id
+    const tile = layout.findTileByEntity(newStage.layout, newEntity.id)
     if (tile) {
       appState.focusedTile = tile.id
     }
