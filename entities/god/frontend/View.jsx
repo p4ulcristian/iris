@@ -106,18 +106,35 @@ export default function TerminalContent({ entity, isFocused }) {
       const term = termRef.current
       if (!term) return
 
+      const buffer = term.buffer?.active
+      const base = buffer?.baseY || 0
+
+      // Determine scroll amount
+      let lines = 0
       switch (e.detail.key) {
-        case 'ArrowUp': term.scrollLines(-5); break
-        case 'ArrowDown': term.scrollLines(5); break
-        case 'PageUp': term.scrollLines(-term.rows); break
-        case 'PageDown': term.scrollLines(term.rows); break
+        case 'ArrowUp': lines = -5; break
+        case 'ArrowDown': lines = 5; break
+        case 'PageUp': lines = -term.rows; break
+        case 'PageDown': lines = term.rows; break
       }
-      term.refresh(0, term.rows - 1)
+
+      if (base > 0) {
+        // Has scrollback - scroll xterm buffer
+        term.scrollLines(lines)
+        term.refresh(0, term.rows - 1)
+      } else if (wsRef.current?.readyState === WebSocket.OPEN) {
+        // No scrollback - send SGR mouse sequences to PTY for TUI apps
+        const button = lines > 0 ? 65 : 64  // 65=down, 64=up
+        const count = Math.abs(lines)
+        for (let i = 0; i < count; i++) {
+          wsRef.current.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
+        }
+      }
     }
 
     window.addEventListener('iris:scroll-terminal', handleScroll)
     return () => window.removeEventListener('iris:scroll-terminal', handleScroll)
-  }, [isFocused])
+  }, [isFocused, godName])
 
 
 
@@ -159,22 +176,6 @@ export default function TerminalContent({ entity, isFocused }) {
     // Load clipboard addon for OSC 52 support
     const clipboardAddon = new ClipboardAddon()
     term.loadAddon(clipboardAddon)
-
-    // Force xterm's virtual scrollbar to always be visible
-    const forceScrollbarVisible = () => {
-      const scrollbar = containerRef.current?.querySelector('.xterm-scrollable-element > .scrollbar.vertical')
-      if (scrollbar) {
-        scrollbar.classList.remove('invisible')
-        scrollbar.classList.add('visible')
-      }
-    }
-
-    // Keep scrollbar visible on scroll and content changes
-    const onScrollDisposable = term.onScroll(forceScrollbarVisible)
-    const onWriteDisposable = term.onWriteParsed(forceScrollbarVisible)
-
-    // Initial force after render
-    setTimeout(forceScrollbarVisible, 100)
 
     // Helper to measure and update cell dimensions
     const updateCellDimensions = () => {
@@ -295,7 +296,6 @@ export default function TerminalContent({ entity, isFocused }) {
 
           // Refresh to sync scroll state after resize
           term.refresh(0, term.rows - 1)
-          forceScrollbarVisible()
 
           // Send to server if WebSocket is ready
           if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -342,7 +342,6 @@ export default function TerminalContent({ entity, isFocused }) {
                 console.warn(`[${godName}] After write: type=${buffer?.type}, base=${buffer?.baseY}, viewport=${buffer?.viewportY}, length=${buffer?.length}`)
                 term.scrollToBottom()
                 term.refresh(0, term.rows - 1)
-                forceScrollbarVisible()
               }, 100)
             }
           }
@@ -390,8 +389,6 @@ export default function TerminalContent({ entity, isFocused }) {
       console.warn(`[${godName}] Terminal effect cleanup - disposing xterm`)
       window.removeEventListener('wheel', handleWheel, { capture: true })
       onFirstRender.dispose()
-      onScrollDisposable.dispose()
-      onWriteDisposable.dispose()
       clearInterval(resizePoll)
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
