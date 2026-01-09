@@ -401,14 +401,9 @@ export function setupApi() {
         return true
       }
 
-      const mockWs = { send: () => {} }
-
       try {
-        handlers['entity:spawn'](mockWs, {
-          type: 'code',
-          name: filePath.split('/').pop(),
-          data: { path: filePath, line: line || 1, project }
-        }, process.cwd())
+        // Use code:open handler which properly sets pendingFile
+        handlers['code:open'](null, { filePath, line: line || 1 })
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, path: filePath }))
