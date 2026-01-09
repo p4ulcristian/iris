@@ -1,7 +1,6 @@
 {
   "name": "iris",
   "description": "Control Iris - spawn gods, run terminals, manage entities",
-  "command": "node",
-  "args": ["mcp/iris.js"],
-  "relative": true
+  "command": "bun",
+  "args": ["/home/p4ulcristian/Work/iris/mcp/iris.js"]
 }

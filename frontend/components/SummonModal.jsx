@@ -6,7 +6,6 @@ import Button from './ui/Button'
 
 export default function SummonModal({
   isOpen,
-  usedGodNames = [],
   onSummon,
   onCancel
 }) {
@@ -18,13 +17,19 @@ export default function SummonModal({
   const [projects, setProjects] = useState([])
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
+  const entities = useStore(s => s.entities)
   const { send, lastMessage } = useWebSocket(WS_URL)
 
-  // Get available gods from server-provided godColors
+  // All gods always available (infinite gods with numbering)
   const allGods = Object.keys(godColors)
-  const usedLower = usedGodNames.map(n => n.toLowerCase())
-  const availableGods = allGods.filter(g => !usedLower.includes(g))
-  const godPool = availableGods.length > 0 ? availableGods : allGods
+
+  // Get base names of currently spawned gods (zeus-2 → zeus)
+  const usedBaseNames = new Set(
+    Object.values(entities)
+      .filter(e => e.type === 'god')
+      .map(e => e.id.toLowerCase().replace(/-?\d+$/, '').trim())
+  )
+  const availableGods = allGods.filter(g => !usedBaseNames.has(g))
 
   // Fetch personalities and projects on open
   useEffect(() => {
@@ -52,13 +57,14 @@ export default function SummonModal({
     }
   }, [lastMessage])
 
-  // Pick random god on open (or when godPool becomes available)
+  // Pick random god on open (prefer unused gods first)
   useEffect(() => {
-    if (isOpen && godPool.length > 0 && !selectedGod) {
-      const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
+    if (isOpen && allGods.length > 0 && !selectedGod) {
+      const pool = availableGods.length > 0 ? availableGods : allGods
+      const randomGod = pool[Math.floor(Math.random() * pool.length)]
       setSelectedGod(randomGod)
     }
-  }, [isOpen, godPool, selectedGod])
+  }, [isOpen, allGods, availableGods, selectedGod])
 
   // Reset state when modal opens
   useEffect(() => {
@@ -91,7 +97,7 @@ export default function SummonModal({
   const handleSubmit = (e) => {
     e?.preventDefault()
     // Use selectedGod or fall back to first available god
-    const god = selectedGod || godPool[0]
+    const god = selectedGod || allGods[0]
     if (!god) return
     const name = god.charAt(0).toUpperCase() + god.slice(1)
     onSummon(name, task.trim(), selectedPersonality, selectedProject)
@@ -124,7 +130,7 @@ export default function SummonModal({
                 borderLeftColor: godColors[selectedGod] || '#888'
               }}
             >
-              {godPool.map(god => (
+              {allGods.map(god => (
                 <option key={god} value={god}>
                   {god.charAt(0).toUpperCase() + god.slice(1)}
                 </option>

@@ -118,13 +118,22 @@ export function loadState() {
 
   // Merge with discovered sessions (gods/terminals with active zellij sessions)
   const sockets = listGodSockets()
-  const socketNames = new Set(sockets.map(s => s.name))
+  const socketNameMap = new Map(sockets.map(s => [s.name.toLowerCase(), s.name]))
 
-  // Remove terminal-type entities without sockets
+  // Reconcile entities with sockets (case-insensitive, preserve data)
   Object.keys(appState.entities).forEach(id => {
     const entity = appState.entities[id]
-    if ((entity.type === 'god' || entity.type === 'terminal') && !socketNames.has(id)) {
+    if (entity.type !== 'god' && entity.type !== 'terminal') return
+
+    const canonicalName = socketNameMap.get(id.toLowerCase())
+    if (!canonicalName) {
+      // No matching socket - remove entity
       delete appState.entities[id]
+    } else if (canonicalName !== id) {
+      // Case mismatch - migrate entity to canonical name (preserving all data)
+      const migrated = { ...entity, id: canonicalName, name: canonicalName }
+      delete appState.entities[id]
+      appState.entities[canonicalName] = migrated
     }
   })
 
@@ -147,7 +156,7 @@ export function loadState() {
   // Get the first valid tab ID (never assume tab 1 exists)
   const getFirstTabId = () => appState.tabs[0]?.id || appState.activeTabId || 1
 
-  // Add new sockets to first tab
+  // Add new sockets to first tab (entities already normalized to canonical names above)
   sockets.forEach(sock => {
     if (!appState.entities[sock.name]) {
       const firstTabId = getFirstTabId()
@@ -558,6 +567,52 @@ export function getNextEntityNumber(type) {
       return match ? parseInt(match[1]) : 0
     })
   return existing.length > 0 ? Math.max(...existing) + 1 : 1
+}
+
+// Extract base god name from numbered god ID
+// "zeus-2" → "zeus", "Zeus 3" → "zeus", "athena" → "athena"
+export function getBaseGodName(name) {
+  return name.toLowerCase().replace(/-?\d+$/, '').replace(/\s+\d+$/, '').trim()
+}
+
+// Get the next number for a god (always increment, never reuse)
+export function getNextGodNumber(baseName) {
+  const base = baseName.toLowerCase()
+  const pattern = new RegExp(`^${base}(-\\d+)?$`, 'i')
+  const existing = Object.keys(appState.entities)
+    .filter(id => pattern.test(id))
+    .map(id => {
+      const match = id.match(/-(\d+)$/)
+      return match ? parseInt(match[1]) : 1
+    })
+  return existing.length > 0 ? Math.max(...existing) + 1 : 1
+}
+
+// Generate a unique god entity ID (Zeus, Zeus-2, Zeus-3, etc.)
+// Prefers base name if available, otherwise numbers from 2
+// IDs are capitalized to match socket names from listGodSockets()
+export function generateGodId(baseName) {
+  const base = baseName.toLowerCase()
+  const capitalized = base.charAt(0).toUpperCase() + base.slice(1)
+
+  // Case-insensitive check - if base name not taken, use capitalized form
+  const existingKey = Object.keys(appState.entities).find(id => id.toLowerCase() === base)
+  if (!existingKey) {
+    return capitalized
+  }
+
+  // Base taken - find next number (starting from 2)
+  const num = getNextGodNumber(base)
+  return `${capitalized}-${num}`
+}
+
+// Generate display name for a god ID (zeus → "Zeus", zeus-2 → "Zeus 2")
+export function getGodDisplayName(godId) {
+  const match = godId.match(/^([a-z]+)(-(\d+))?$/)
+  if (!match) return godId
+  const base = match[1].charAt(0).toUpperCase() + match[1].slice(1)
+  const num = match[3]
+  return num ? `${base} ${num}` : base
 }
 
 // Check if powers (voice services) are enabled

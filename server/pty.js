@@ -117,6 +117,14 @@ function attachPtyInternal(godName, ws, cols, rows, sessionName, T) {
     entry.clients.add(ws)
     ptyLog(`[pty:attach] ${godName}: PTY exists, now ${entry.clients.size} clients`)
 
+    // Resize PTY to match new client's dimensions (important for layout changes)
+    if (entry.terminal && cols && rows &&
+        Number.isInteger(cols) && Number.isInteger(rows) &&
+        cols >= 10 && cols <= 500 && rows >= 5 && rows <= 200) {
+      ptyLog(`[pty:attach] ${godName}: resizing existing PTY to ${cols}x${rows}`)
+      entry.terminal.resize(cols, rows)
+    }
+
     // Send buffered content to new client
     const buffer = outputBuffers.get(godName)
     if (buffer && ws.readyState === 1) {
@@ -238,7 +246,10 @@ export function resizePty(godName, cols, rows) {
 
   const entry = ptyProcesses.get(godName)
   if (entry?.terminal) {
+    ptyLog(`[pty:resize] ${godName}: resizing to ${cols}x${rows}`)
     entry.terminal.resize(cols, rows)
+  } else {
+    ptyLog(`[pty:resize] ${godName}: no PTY entry found`)
   }
 }
 

@@ -2,7 +2,7 @@
  * Cemetery utilities for fallen gods.
  */
 
-import { appState } from '../../server/state.js'
+import { appState, getBaseGodName } from '../../server/state.js'
 import { PANTHEON } from '../../server/config.js'
 
 /**
@@ -13,8 +13,9 @@ export function addToCemetery(entity) {
   if (entity.type !== 'god') return
   if (!entity.sessionId) return
 
-  const godKey = entity.id.toLowerCase()
-  const pantheonGod = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
+  // Extract base name for PANTHEON lookup (zeus-2 → zeus)
+  const baseName = getBaseGodName(entity.id)
+  const pantheonGod = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
   const tab = appState.tabs.find(t => t.id === entity.tabId)
 
   const fallen = {

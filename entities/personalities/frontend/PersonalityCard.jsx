@@ -1,66 +1,50 @@
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare, faTrash, faLock } from '@fortawesome/free-solid-svg-icons'
+import { Card, IconButton } from '../../_ui'
 
 export default function PersonalityCard({ personality, onEdit, onDelete }) {
-  const { name, source, preview } = personality
+  const { name, source, traits = [], mcpServers = [] } = personality
   const isBundled = source === 'bundled'
 
+  const traitCount = traits?.length || 0
+  const mcpCount = mcpServers?.length || 0
+  const summary = [
+    traitCount > 0 && `${traitCount} trait${traitCount !== 1 ? 's' : ''}`,
+    mcpCount > 0 && `${mcpCount} server${mcpCount !== 1 ? 's' : ''}`
+  ].filter(Boolean).join(', ') || 'Empty'
+
   return (
-    <div
-      className="group liquid-glass p-3 rounded-lg cursor-pointer hover:bg-white/10 transition-colors"
-      onClick={() => onEdit?.(personality)}
-    >
-      {/* Header row */}
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-sm font-medium text-text-primary flex-1 truncate">
-          {name}
-        </span>
-
-        {/* Source badge */}
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-tertiary border border-white/10">
-          {isBundled ? 'bundled' : 'user'}
-        </span>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit?.(personality)
-            }}
-            className="w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-white/10 rounded transition-all"
+    <Card hover compact onClick={() => onEdit?.(personality)}>
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-text-primary truncate">{name}</span>
+            {isBundled && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-text-tertiary border border-white/10 shrink-0">
+                bundled
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-text-tertiary truncate mt-0.5">{summary}</p>
+        </div>
+        <div className="flex items-center shrink-0">
+          <IconButton
+            icon={faPenToSquare}
+            onClick={(e) => { e.stopPropagation(); onEdit?.(personality) }}
             title="Edit"
-          >
-            <FontAwesomeIcon icon={faPenToSquare} size="xs" />
-          </button>
-
-          {!isBundled && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete?.(personality)
-              }}
-              className="w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-red-400 hover:bg-white/10 rounded transition-all"
+            className="text-text-tertiary hover:text-text-primary"
+          />
+          {isBundled ? (
+            <IconButton icon={faLock} disabled title="Bundled" className="text-text-tertiary/50" />
+          ) : (
+            <IconButton
+              icon={faTrash}
+              onClick={(e) => { e.stopPropagation(); onDelete?.(personality) }}
               title="Delete"
-            >
-              <FontAwesomeIcon icon={faTrash} size="xs" />
-            </button>
-          )}
-
-          {isBundled && (
-            <span className="w-6 h-6 flex items-center justify-center text-text-tertiary/50" title="Read-only">
-              <FontAwesomeIcon icon={faLock} size="xs" />
-            </span>
+              className="text-text-tertiary hover:text-red-400"
+            />
           )}
         </div>
       </div>
-
-      {/* Preview */}
-      {preview && (
-        <div className="text-xs text-text-tertiary line-clamp-2 font-mono">
-          {preview}
-        </div>
-      )}
-    </div>
+    </Card>
   )
 }

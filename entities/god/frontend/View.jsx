@@ -16,12 +16,15 @@ function hexToRgb(hex) {
 const APPROX_CELL_WIDTH = 8.4
 const APPROX_CELL_HEIGHT = 17
 
+// Resize polling interval (ms)
+const RESIZE_POLL_INTERVAL = 200
+
 export default function TerminalContent({ entity, isFocused, isHidden }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
   const wsRef = useRef(null)
   const cellDimsRef = useRef(null)
-  const resizeTimeoutRef = useRef(null)
+  const lastSizeRef = useRef({ cols: 0, rows: 0 })
 
   // Track which container the terminal is attached to (for hot reload detection)
   const attachedContainerRef = useRef(null)
@@ -108,63 +111,6 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     return () => window.removeEventListener('iris:scroll-terminal', handleScroll)
   }, [isFocused])
 
-  // Resize when becoming visible (tab switch)
-  const wasHiddenRef = useRef(isHidden)
-  useEffect(() => {
-    if (wasHiddenRef.current && !isHidden && termRef.current && containerRef.current) {
-      const timeout = setTimeout(() => {
-        try {
-          const { width, height } = containerRef.current.getBoundingClientRect()
-          if (width < 50 || height < 50) return
-
-          const dims = termRef.current?._core?._renderService?.dimensions
-          if (dims?.css?.cell) {
-            cellDimsRef.current = { width: dims.css.cell.width, height: dims.css.cell.height }
-          }
-          const { cols, rows } = calcDimensions(width, height)
-          const term = termRef.current
-          if (term && cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
-            term.resize(cols, rows)
-          }
-        } catch {}
-      }, 50)
-      wasHiddenRef.current = isHidden
-      return () => clearTimeout(timeout)
-    }
-    wasHiddenRef.current = isHidden
-  }, [isHidden])
-
-  // Resize after animations complete (transforms can desync xterm's scroll state)
-  useEffect(() => {
-    const handleAnimationComplete = () => {
-      if (!termRef.current || !containerRef.current) return
-
-      // Small delay to ensure transforms have settled
-      setTimeout(() => {
-        try {
-          const term = termRef.current
-          if (!term) return
-
-          // Force xterm to recalculate scroll state by:
-          // 1. Refresh the display
-          term.refresh(0, term.rows - 1)
-
-          // 2. Trigger viewport scroll recalculation via scrollLines(0)
-          term.scrollLines(0)
-
-          // 3. Access viewport and force reflow if needed
-          const viewport = containerRef.current?.querySelector('.xterm-viewport')
-          if (viewport) {
-            // Reading scrollHeight forces browser to recalculate layout
-            void viewport.scrollHeight
-          }
-        } catch {}
-      }, 16) // One frame delay
-    }
-
-    window.addEventListener('iris:animation-complete', handleAnimationComplete)
-    return () => window.removeEventListener('iris:animation-complete', handleAnimationComplete)
-  }, [])
 
   // Main terminal setup
   useEffect(() => {
@@ -233,8 +179,8 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     document.fonts.ready.then(() => {
       if (updateCellDimensions()) {
         // Fonts caused dimension change - refit terminal
-        const rect = container.getBoundingClientRect()
-        if (rect.width > 50 && rect.height > 50) {
+        const rect = containerRef.current?.getBoundingClientRect()
+        if (rect && rect.width > 50 && rect.height > 50) {
           const { cols, rows } = calcDimensions(rect.width, rect.height)
           if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
             term.resize(cols, rows)
@@ -298,53 +244,33 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
     const container = containerRef.current
     container.addEventListener('keydown', handleShortcut, true)
 
-    // ResizeObserver: measure container and resize terminal
-    const resizeObserver = new ResizeObserver((entries) => {
-      // Debounce to avoid excessive resize events during animations/drags
-      clearTimeout(resizeTimeoutRef.current)
-      resizeTimeoutRef.current = setTimeout(() => {
-        const { width, height } = entries[0].contentRect
+    // Simple polling for resize - reliable and self-healing
+    const resizePoll = setInterval(() => {
+      try {
+        const { width, height } = container.getBoundingClientRect()
+        if (width < 50 || height < 50) return
 
-        // During layout transitions, dimensions may briefly report as 0/small
-        // before CSS settles. Retry after a frame instead of giving up.
-        if (width < 50 || height < 50) {
-          requestAnimationFrame(() => {
-            const rect = container.getBoundingClientRect()
-            if (rect.width >= 50 && rect.height >= 50) {
-              try {
-                updateCellDimensions()
-                const { cols, rows } = calcDimensions(rect.width, rect.height)
-                if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
-                  term.resize(cols, rows)
-                }
-              } catch {}
-            }
-          })
-          return
-        }
+        updateCellDimensions()
+        const { cols, rows } = calcDimensions(width, height)
 
-        try {
-          updateCellDimensions()
-          const { cols, rows } = calcDimensions(width, height)
-          if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
-            term.resize(cols, rows)
+        // Only resize if dimensions actually changed
+        if (cols > 0 && rows > 0 &&
+            (cols !== lastSizeRef.current.cols || rows !== lastSizeRef.current.rows)) {
+          lastSizeRef.current = { cols, rows }
+          term.resize(cols, rows)
+
+          // Send to server if WebSocket is ready
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              event: 'pty:resize',
+              godName,
+              cols,
+              rows
+            }))
           }
-        } catch {}
-      }, 50)
-    })
-    resizeObserver.observe(container)
-
-    // onResize: single source of truth for notifying server
-    const onResizeDisposable = term.onResize(({ cols, rows }) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          event: 'pty:resize',
-          godName,
-          cols,
-          rows
-        }))
-      }
-    })
+        }
+      } catch {}
+    }, RESIZE_POLL_INTERVAL)
 
     // Send user input to PTY
     term.onData((data) => {
@@ -382,9 +308,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
 
     return () => {
       onFirstRender.dispose()
-      onResizeDisposable.dispose()
-      clearTimeout(resizeTimeoutRef.current)
-      resizeObserver.disconnect()
+      clearInterval(resizePoll)
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
       }
@@ -397,7 +321,7 @@ export default function TerminalContent({ entity, isFocused, isHidden }) {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 terminal-content"
+      className="absolute inset-0 entity-content"
     />
   )
 }

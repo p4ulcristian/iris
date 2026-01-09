@@ -87,7 +87,7 @@ export default function MarkdownView({ entity }) {
   }
 
   return (
-    <div className="absolute inset-0 overflow-y-auto bg-[#1e1e1e] p-8">
+    <div className="absolute inset-0 overflow-y-auto bg-[#1e1e1e] p-8 entity-content">
       <div className="max-w-3xl mx-auto">
         <MarkdownRenderer content={content} />
       </div>

@@ -253,7 +253,7 @@ export default function BrowserView({ entity }) {
   const isSecure = activeTab?.url?.startsWith('https://')
 
   return (
-    <div className="absolute inset-0 flex flex-col overflow-hidden">
+    <div className="absolute inset-0 flex flex-col overflow-hidden entity-content">
       {/* Tab bar */}
       <div className="flex-shrink-0 flex items-center gap-1 px-2 pt-2 bg-black/30">
         {tabs.map(tab => (

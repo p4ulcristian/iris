@@ -600,6 +600,7 @@ export default function LeftSidebar({
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const version = useStore(s => s.version)
+  const entityRegistry = useStore(s => s.entityRegistry)
 
   const handleServiceToggle = (service, isActive) => {
     if (!send) return
@@ -783,121 +784,26 @@ export default function LeftSidebar({
         <AnimatePresence>
           {sidebarButtonsExpanded && (
             <motion.div
-              className="absolute left-full bottom-0 ml-2 flex flex-col gap-3 items-center p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 z-50"
+              className="absolute left-full bottom-0 ml-2 flex flex-wrap gap-1.5 items-center p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 z-50 max-w-[280px]"
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -20, opacity: 0 }}
               transition={{ duration: 0.2, ease: 'easeOut' }}
             >
-              {/* System */}
-              <div className="flex gap-1.5">
-                <DraggableTypeButton
-                  entityType="settings"
-                  title="Settings - drag to split"
-                  onClick={() => onSpawnEntity('settings')}
-                />
-                <DraggableTypeButton
-                  entityType="cemetery"
-                  title="Cemetery - drag to split"
-                  onClick={() => onSpawnEntity('cemetery')}
-                />
-              </div>
-
-              {/* Social & Media */}
-              <div className="flex gap-1.5">
-                <DraggableTypeButton
-                  entityType="youtube-music"
-                  title="YouTube Music - drag to split"
-                  onClick={() => onSpawnEntity('youtube-music')}
-                />
-                <DraggableTypeButton
-                  entityType="rsvp"
-                  title="RSVP Speed Reader - drag to split"
-                  onClick={() => onSpawnEntity('rsvp')}
-                />
-              </div>
-
-              {/* Productivity */}
-              <div className="flex gap-1.5">
-                <DraggableTypeButton
-                  entityType="linear"
-                  title="Linear - drag to split"
-                  onClick={() => onSpawnEntity('linear')}
-                />
-                <DraggableTypeButton
-                  entityType="calendar"
-                  title="Calendar - drag to split"
-                  onClick={() => onSpawnEntity('calendar')}
-                />
-                <DraggableTypeButton
-                  entityType="history"
-                  title="History - drag to split"
-                  onClick={() => onSpawnEntity('history')}
-                />
-                <DraggableTypeButton
-                  entityType="oracle"
-                  title="Oracle - drag to split"
-                  onClick={() => onSpawnEntity('oracle')}
-                />
-                <DraggableTypeButton
-                  entityType="pomodoro"
-                  title="Pomodoro - drag to split"
-                  onClick={() => onSpawnEntity('pomodoro')}
-                />
-                <DraggableTypeButton
-                  entityType="todo"
-                  title="Todo - drag to split"
-                  onClick={() => onSpawnEntity('todo')}
-                />
-              </div>
-
-              {/* Dev Tools */}
-              <div className="flex gap-1.5">
-                <DraggableTypeButton
-                  entityType="terminal"
-                  title="Terminal (Alt+R) - drag to split"
-                  onClick={() => onSpawnEntity('terminal')}
-                />
-                <DraggableTypeButton
-                  entityType="code"
-                  title="Code Viewer - drag to split"
-                  onClick={() => onSpawnEntity('code')}
-                />
-                <DraggableTypeButton
-                  entityType="git"
-                  title="Git - drag to split"
-                  onClick={() => onSpawnEntity('git')}
-                />
-                <DraggableTypeButton
-                  entityType="browser"
-                  title="Browser - drag to split"
-                  onClick={() => onSpawnEntity('browser')}
-                />
-                <DraggableTypeButton
-                  entityType="draw"
-                  title="Draw (SVG generator) - drag to split"
-                  onClick={() => onSpawnEntity('draw')}
-                />
-              </div>
-
-              {/* Divider */}
-              <div className="w-full h-px bg-white/10" />
-
-              {/* Primary: God & Personalities (large) */}
-              <div className="flex gap-2">
-                <DraggableTypeButton
-                  entityType="god"
-                  title="New god (Alt+N) - drag to split"
-                  onClick={onOpenSummonModal}
-                  size="large"
-                />
-                <DraggableTypeButton
-                  entityType="personalities"
-                  title="Personalities - drag to split"
-                  onClick={() => onSpawnEntity('personalities')}
-                  size="large"
-                />
-              </div>
+              {entityRegistry._order?.map(type => {
+                const entity = entityRegistry[type]
+                if (!entity) return null
+                const isGod = type === 'god'
+                return (
+                  <DraggableTypeButton
+                    key={type}
+                    entityType={type}
+                    title={`${entity.label} - drag to split`}
+                    onClick={isGod ? onOpenSummonModal : () => onSpawnEntity(type)}
+                    size={isGod ? 'large' : 'medium'}
+                  />
+                )
+              })}
             </motion.div>
           )}
         </AnimatePresence>

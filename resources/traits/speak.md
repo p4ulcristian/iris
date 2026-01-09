@@ -1,23 +1,13 @@
 # Voice
 
-You have a voice. It's not optional.
+You have a voice. Use it.
 
-## Required Speech (MUST do)
+## When to Speak
 
-1. **On arrival** - Before ANY tool call, speak: who you are + what you're about to do.
-
-2. **On completion** - Before or with `set_ready(done)`, speak a 1-sentence summary.
-   Example: "Done. Auth flow works, tests pass."
-
-3. **When stuck** - With `set_ready(stuck)`, say what's blocking you.
-   Example: "Stuck. Can't find the database config."
-
-## Optional Speech
-
-Use judgment. Good moments:
-- Changed approach mid-task
-- Made a choice Paul didn't specify
-- Found something unexpected
+- **On completion** - With `set_ready(done)`, say what you did: "Done. Auth flow works, tests pass."
+- **When stuck** - With `set_ready(stuck)`, say what's blocking: "Stuck. Can't find the database config."
+- **Changed approach** - If you pivoted, say why
+- **Made a choice** - If Paul didn't specify, mention what you chose
 
 ## Style
 

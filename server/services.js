@@ -26,40 +26,8 @@ const serviceProcesses = {}
 
 let healthCheckInterval = null
 
-// Full chronicle status (volume, vad, etc.)
+// Chronicle details extracted from hear health check
 let chronicleDetails = null
-
-async function checkChronicleStatus() {
-  // Only check chronicle if hear is running
-  if (!serviceStatus.hear) {
-    chronicleDetails = null
-    return false
-  }
-
-  return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${SERVICES.hear.port}/chronicle/status`, { timeout: 1000 }, (res) => {
-      if (res.statusCode === 200) {
-        let data = ''
-        res.on('data', chunk => data += chunk)
-        res.on('end', () => {
-          try {
-            const status = JSON.parse(data)
-            chronicleDetails = status
-            resolve(status.running === true)
-          } catch {
-            chronicleDetails = null
-            resolve(false)
-          }
-        })
-      } else {
-        chronicleDetails = null
-        resolve(false)
-      }
-    })
-    req.on('error', () => { chronicleDetails = null; resolve(false) })
-    req.on('timeout', () => { req.destroy(); chronicleDetails = null; resolve(false) })
-  })
-}
 
 async function checkServiceHealth(name, port) {
   // For services without a port, check if process is running
@@ -79,10 +47,37 @@ async function checkServiceHealth(name, port) {
   // For HTTP services, check health endpoint
   return new Promise((resolve) => {
     const req = http.get(`http://127.0.0.1:${port}/health`, { timeout: 1000 }, (res) => {
-      resolve(res.statusCode === 200)
+      if (res.statusCode !== 200) {
+        resolve(false)
+        return
+      }
+
+      // For hear service, extract chronicle details from response
+      if (name === 'hear') {
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => {
+          try {
+            const health = JSON.parse(data)
+            chronicleDetails = health.chronicle || null
+          } catch {
+            chronicleDetails = null
+          }
+          resolve(true)
+        })
+      } else {
+        resolve(true)
+      }
     })
-    req.on('error', () => resolve(false))
-    req.on('timeout', () => { req.destroy(); resolve(false) })
+    req.on('error', () => {
+      if (name === 'hear') chronicleDetails = null
+      resolve(false)
+    })
+    req.on('timeout', () => {
+      req.destroy()
+      if (name === 'hear') chronicleDetails = null
+      resolve(false)
+    })
   })
 }
 
@@ -117,21 +112,20 @@ export async function checkAllServices() {
   serviceStatus.hear = results[1]
   serviceStatus.mcp = results[2]
 
-  // Check chronicle status (depends on hear being up)
-  const chronicleStatus = await checkChronicleStatus()
+  // Chronicle status comes from hear health check (chronicleDetails)
+  const chronicleRunning = chronicleDetails?.running === true
 
   const changed = (
     prevSpeak !== serviceStatus.speak ||
     prevHear !== serviceStatus.hear ||
     prevMcp !== serviceStatus.mcp ||
-    serviceStatus.chronicle !== chronicleStatus
+    serviceStatus.chronicle !== chronicleRunning
   )
 
-  serviceStatus.chronicle = chronicleStatus
+  serviceStatus.chronicle = chronicleRunning
 
-  // Always broadcast when chronicle is running (for volume/vad updates)
-  // or when any service status changed
-  if (broadcastFn && (changed || serviceStatus.chronicle)) {
+  // Broadcast on status change, or when chronicle is running (for volume/vad updates)
+  if (broadcastFn && (changed || chronicleRunning)) {
     broadcastFn('services:status', {
       services: serviceStatus,
       chronicleDetails: chronicleDetails

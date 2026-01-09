@@ -328,17 +328,10 @@ export default function App() {
     })
   }, [send])
 
-  // Spawn a random available god
+  // Spawn a random god (server picks unused first, then numbers)
   const handleSpawnRandomGod = useCallback(() => {
-    const allGods = Object.keys(godColors)
-    if (allGods.length === 0) return // Not loaded yet
-    const usedNames = getAllGodNames().map(n => n.toLowerCase())
-    const availableGods = allGods.filter(g => !usedNames.includes(g))
-    const godPool = availableGods.length > 0 ? availableGods : allGods
-    const randomGod = godPool[Math.floor(Math.random() * godPool.length)]
-    const name = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
-    send({ event: 'god:spawn', name, task: '' })
-  }, [send, godColors, getAllGodNames])
+    send({ event: 'god:spawn', task: '' })
+  }, [send])
 
   // Spawn a raw terminal (no Claude)
   const handleSpawnTerminal = useCallback(() => {
@@ -1005,7 +998,6 @@ export default function App() {
       {/* Summon modal */}
       <SummonModal
         isOpen={summonModalOpen}
-        usedGodNames={getAllGodNames()}
         onSummon={(name, task, personality, project) => {
           handleSummonGod(name, task, personality, project)
           setSummonModalOpen(false)
@@ -1014,7 +1006,11 @@ export default function App() {
       />
 
       {/* Shortcuts popup (shown while Alt is held) */}
-      <ShortcutsPopup isOpen={showShortcuts} />
+      <ShortcutsPopup
+        isOpen={showShortcuts}
+        onSpawnEntity={handleSpawnEntity}
+        onOpenSummonModal={() => setSummonModalOpen(true)}
+      />
     </div>
     </DragProvider>
   )

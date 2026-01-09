@@ -1,4 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion'
+import { useStore } from '../store'
+import EntityIcon from './EntityIcon'
 
 // Detect if we're on macOS
 const isMacOS = /Mac|iPhone|iPad|iPod/.test(navigator.platform)
@@ -69,7 +71,23 @@ function Section({ title, items }) {
   )
 }
 
-export default function ShortcutsPopup({ isOpen }) {
+function EntityButton({ type, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-white/10 transition-colors pointer-events-auto"
+      title={label}
+    >
+      <EntityIcon type={type} size="medium" />
+      <span className="text-[10px] text-text-secondary">{label}</span>
+    </button>
+  )
+}
+
+export default function ShortcutsPopup({ isOpen, onSpawnEntity, onOpenSummonModal }) {
+  const entityRegistry = useStore(s => s.entityRegistry)
+  const order = entityRegistry._order || []
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -85,7 +103,7 @@ export default function ShortcutsPopup({ isOpen }) {
 
           {/* Popup */}
           <motion.div
-            className="relative liquid-glass-modal p-6 max-w-xl"
+            className="relative liquid-glass-modal p-6 max-w-2xl"
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
@@ -100,6 +118,31 @@ export default function ShortcutsPopup({ isOpen }) {
                 <Section key={i} title={section.title} items={section.items} />
               ))}
             </div>
+
+            {/* Entity spawn section */}
+            {order.length > 0 && (
+              <>
+                <div className="border-t border-white/10 my-4" />
+                <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3 text-center">
+                  Quick Spawn
+                </h3>
+                <div className="flex flex-wrap justify-center gap-1">
+                  {order.map(type => {
+                    const entity = entityRegistry[type]
+                    if (!entity) return null
+                    const isGod = type === 'god'
+                    return (
+                      <EntityButton
+                        key={type}
+                        type={type}
+                        label={entity.label}
+                        onClick={() => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type)}
+                      />
+                    )
+                  })}
+                </div>
+              </>
+            )}
 
             <p className="text-xs text-text-secondary text-center mt-4 opacity-60">
               Release {modifierKey} to close

@@ -2,11 +2,12 @@
  * Layout management handlers (tile splits, merges, moves).
  */
 
-import { GOD_COLORS } from '../config.js'
+import { GOD_COLORS, PANTHEON } from '../config.js'
 import {
   appState, saveState, broadcastState,
   generateEntityId, getNextEntityNumber, generateStageId, getNextOrder,
-  findStageByEntity, getActiveStage, getEntityRegistry
+  findStageByEntity, getActiveStage, getEntityRegistry,
+  generateGodId, getGodDisplayName, getBaseGodName
 } from '../state.js'
 import * as layout from '../layout.js'
 import { createGodSession, createTerminalSession } from '../gods.js'
@@ -47,22 +48,28 @@ export const handlers = {
     let targetEntityId = entityId
     if (entityType && !entityId) {
       if (entityType === 'god') {
-        // Pick random available god
-        const godColors = Object.keys(GOD_COLORS)
-        const usedNames = Object.values(appState.entities).filter(e => e.type === 'god').map(e => e.name?.toLowerCase())
-        const availableGods = godColors.filter(g => !usedNames.includes(g))
-        const godPool = availableGods.length > 0 ? availableGods : godColors
-        const randomGod = godPool[Math.floor(Math.random() * godPool.length)] || 'zeus'
-        const godName = randomGod.charAt(0).toUpperCase() + randomGod.slice(1)
+        // Pick from unused gods first, then random if all taken
+        const pantheonNames = Object.keys(PANTHEON)
+        const usedBaseNames = new Set(
+          Object.keys(appState.entities)
+            .filter(id => appState.entities[id].type === 'god')
+            .map(id => getBaseGodName(id))
+        )
+        const available = pantheonNames.filter(n => !usedBaseNames.has(n))
+        const baseName = available.length > 0
+          ? available[Math.floor(Math.random() * available.length)]
+          : pantheonNames[Math.floor(Math.random() * pantheonNames.length)] || 'zeus'
+        const entityId = generateGodId(baseName)
+        const displayName = getGodDisplayName(entityId)
 
-        clearOutputBuffer(godName)
-        const god = createGodSession(godName, '', projectRoot, {
+        clearOutputBuffer(entityId)
+        const god = createGodSession(entityId, '', projectRoot, {
           startPrompt: appState.settings?.startPrompt,
           userName: appState.settings?.userName
         })
         if (god && !god.exists) {
-          const entity = createEntityBase(godName, 'god', {
-            name: godName,
+          const entity = createEntityBase(entityId, 'god', {
+            name: displayName,
             extra: {
               mission: null,
               sessionId: god.sessionId || null,
@@ -70,9 +77,9 @@ export const handlers = {
               readyState: 'working'
             }
           })
-          addEntity(godName, entity)
-          createStageForEntity(godName)
-          finalizeSpawn(godName)
+          addEntity(entityId, entity)
+          createStageForEntity(entityId)
+          finalizeSpawn(entityId)
         }
         return
       } else if (entityType === 'terminal') {

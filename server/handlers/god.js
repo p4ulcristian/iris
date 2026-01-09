@@ -5,7 +5,8 @@
 import { PANTHEON } from '../config.js'
 import {
   appState, saveState, broadcastState,
-  getNextOrder, normalizeTabOrder
+  getNextOrder, normalizeTabOrder,
+  generateGodId, getGodDisplayName, getBaseGodName
 } from '../state.js'
 import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from '../gods.js'
 import { killPty, getOutputBuffer, clearOutputBuffer } from '../pty.js'
@@ -29,24 +30,25 @@ export const handlers = {
     const T = () => `T+${Date.now() - spawnStart}ms`
     console.log(`[god:spawn] ${T()} Received:`, data)
 
-    // If no name provided, pick a random available god from pantheon
-    let godName = data.name
-    if (!godName) {
+    // If no name provided, pick from unused gods first, then random if all taken
+    let baseName = data.name?.toLowerCase()
+    if (!baseName) {
       const pantheonNames = Object.keys(PANTHEON)
-      const usedNames = new Set(Object.keys(appState.entities).map(n => n.toLowerCase()))
-      const available = pantheonNames.filter(n => !usedNames.has(n))
-      godName = available.length > 0
+      const usedBaseNames = new Set(
+        Object.keys(appState.entities)
+          .filter(id => appState.entities[id].type === 'god')
+          .map(id => getBaseGodName(id))
+      )
+      const available = pantheonNames.filter(n => !usedBaseNames.has(n))
+      baseName = available.length > 0
         ? available[Math.floor(Math.random() * available.length)]
         : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
     }
 
-    // Check if god already exists and is working
-    const existingEntity = appState.entities[godName]
-    if (existingEntity && existingEntity.readyState !== 'failed') {
-      console.log('[god:spawn] God already exists:', godName)
-      ws.send(JSON.stringify({ event: 'god:spawned', name: godName, exists: true }))
-      return
-    }
+    // Generate unique entity ID (zeus, zeus-2, zeus-3, etc.)
+    const entityId = generateGodId(baseName)
+    const displayName = getGodDisplayName(entityId)
+    console.log(`[god:spawn] ${T()} Base: ${baseName}, EntityID: ${entityId}, Display: ${displayName}`)
 
     // Determine working directory - use selected project path if provided
     let workingDir = projectRoot
@@ -58,10 +60,10 @@ export const handlers = {
     }
 
     // STEP 1: Add entity immediately with 'spawning' state
-    appState.entities[godName] = {
-      id: godName,
+    appState.entities[entityId] = {
+      id: entityId,
       type: 'god',
-      name: godName,
+      name: displayName,
       tabId: appState.activeTabId,
       order: getNextOrder(appState.activeTabId),
       mission: data.task || null,
@@ -72,18 +74,18 @@ export const handlers = {
     }
 
     // Create stage for this entity
-    createStageForEntity(godName)
-    appState.focusedEntity = godName
+    createStageForEntity(entityId)
+    appState.focusedEntity = entityId
     saveState()
     console.log(`[god:spawn] ${T()} Added spawning entity, broadcasting...`)
     broadcastState()
 
     // STEP 2: Create the zellij session
-    clearOutputBuffer(godName)
+    clearOutputBuffer(entityId)
     console.log(`[god:spawn] ${T()} Calling createGodSession`)
     let god
     try {
-      god = createGodSession(godName, data.task, workingDir, {
+      god = createGodSession(entityId, data.task, workingDir, {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName,
         personality: data.personality
@@ -96,16 +98,16 @@ export const handlers = {
     // STEP 3: Update state based on result
     if (!god) {
       console.error('[god:spawn] FAILED - createGodSession returned null')
-      appState.entities[godName].readyState = 'failed'
-      appState.entities[godName].status = 'Session failed to start'
+      appState.entities[entityId].readyState = 'failed'
+      appState.entities[entityId].status = 'Session failed to start'
       saveState()
       broadcastState()
       return
     }
 
     // Success - update to working state
-    appState.entities[godName].readyState = 'working'
-    appState.entities[godName].sessionId = god.sessionId || null
+    appState.entities[entityId].readyState = 'working'
+    appState.entities[entityId].sessionId = god.sessionId || null
     saveState()
     console.log('[god:spawn] SUCCESS - broadcasting final state')
     broadcastState()

@@ -65,6 +65,13 @@ def setup_logging(service_name: str) -> logging.Logger:
     return logging.getLogger(service_name)
 
 
+class HealthCheckFilter(logging.Filter):
+    """Filter out /health endpoint requests from logs."""
+    def filter(self, record):
+        msg = record.getMessage()
+        return '/health' not in msg
+
+
 def create_app(cors: bool = True) -> Flask:
     """Create Flask app with standard configuration.
 
@@ -78,6 +85,9 @@ def create_app(cors: bool = True) -> Flask:
 
     if cors:
         CORS(app)
+
+    # Suppress /health request logs (too noisy)
+    logging.getLogger('werkzeug').addFilter(HealthCheckFilter())
 
     # Add shutdown endpoint
     @app.route('/shutdown', methods=['POST'])

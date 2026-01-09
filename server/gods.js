@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
 import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 import { createLogger } from './logger.js'
+import { getBaseGodName } from './state.js'
 
 const log = createLogger('gods')
 
@@ -145,11 +146,12 @@ export function listGodSessions() {
         if (!sessionName.startsWith(SESSION_PREFIX)) return null
 
         const name = sessionName.replace(SESSION_PREFIX, '')
-        const capitalName = name.charAt(0).toUpperCase() + name.slice(1)
-        const god = PANTHEON[name.toLowerCase()] || { color: '#888', voice: 'emma' }
+        // Extract base name for PANTHEON lookup (zeus-2 → zeus)
+        const baseName = getBaseGodName(name)
+        const god = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
 
         return {
-          name: capitalName,
+          name: name.charAt(0).toUpperCase() + name.slice(1),
           sessionName,
           socketPath: sessionName, // For backwards compat
           color: god.color,
@@ -175,7 +177,9 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
 
   const godKey = name.toLowerCase()
   const sessionName = getSessionName(godKey)
-  const god = PANTHEON[godKey] || { color: '#888', voice: 'emma' }
+  // Extract base name for PANTHEON lookup (zeus-2 → zeus)
+  const baseName = getBaseGodName(name)
+  const god = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
   const { resumeSessionId, startPrompt, personality = 'god' } = options
 
   // Check if session already exists

@@ -1,76 +1,43 @@
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faPenToSquare, faTrash, faStar } from '@fortawesome/free-solid-svg-icons'
+import { Card, IconButton } from '../../_ui'
 
 export default function ProjectCard({ project, onEdit, onDelete, onSetDefault }) {
-  const { name, path, description, isDefault } = project
-
-  // Shorten path for display
+  const { name, path, isDefault } = project
   const shortPath = path?.replace(/^\/home\/[^/]+/, '~') || ''
 
   return (
-    <div
-      className={`group liquid-glass p-3 rounded-lg cursor-pointer hover:bg-white/10 transition-colors ${
-        isDefault ? 'ring-1 ring-accent/30' : ''
-      }`}
+    <Card
+      hover
+      compact
       onClick={() => onEdit?.(project)}
+      className={isDefault ? 'ring-1 ring-accent/30' : ''}
     >
-      {/* Header row */}
-      <div className="flex items-center gap-2 mb-1">
-        {/* Default toggle */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onSetDefault?.(project)
-          }}
-          className={`w-5 h-5 flex items-center justify-center transition-colors ${
-            isDefault ? 'text-accent' : 'text-text-tertiary/30 hover:text-accent/50'
-          }`}
+      <div className="flex items-center gap-3">
+        <IconButton
+          icon={faStar}
+          onClick={(e) => { e.stopPropagation(); onSetDefault?.(project) }}
           title={isDefault ? 'Default project' : 'Set as default'}
-        >
-          <FontAwesomeIcon icon={faStar} size="xs" />
-        </button>
-
-        <span className="text-sm font-medium text-text-primary flex-1 truncate">
-          {name}
-        </span>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit?.(project)
-            }}
-            className="w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-white/10 rounded transition-all"
+          className={isDefault ? 'text-accent' : 'text-text-tertiary/30 hover:text-accent/50'}
+        />
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium text-text-primary truncate block">{name}</span>
+          <p className="text-xs text-text-tertiary truncate mt-0.5 font-mono">{shortPath}</p>
+        </div>
+        <div className="flex items-center shrink-0">
+          <IconButton
+            icon={faPenToSquare}
+            onClick={(e) => { e.stopPropagation(); onEdit?.(project) }}
             title="Edit"
-          >
-            <FontAwesomeIcon icon={faPenToSquare} size="xs" />
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete?.(project)
-            }}
-            className="w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-red-400 hover:bg-white/10 rounded transition-all"
+            className="text-text-tertiary hover:text-text-primary"
+          />
+          <IconButton
+            icon={faTrash}
+            onClick={(e) => { e.stopPropagation(); onDelete?.(project) }}
             title="Delete"
-          >
-            <FontAwesomeIcon icon={faTrash} size="xs" />
-          </button>
+            className="text-text-tertiary hover:text-red-400"
+          />
         </div>
       </div>
-
-      {/* Path */}
-      <div className="text-xs text-text-tertiary font-mono truncate pl-7">
-        {shortPath}
-      </div>
-
-      {/* Description */}
-      {description && (
-        <div className="text-xs text-text-secondary mt-1 line-clamp-1 pl-7">
-          {description}
-        </div>
-      )}
-    </div>
+    </Card>
   )
 }

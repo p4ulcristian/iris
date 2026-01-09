@@ -709,7 +709,7 @@ export default function CodeView({ entity }) {
   }, [loadDirectory, entity, projects, projectsFetched, storeInitialLoadDone])
 
   return (
-    <div className="absolute inset-0 flex overflow-hidden">
+    <div className="absolute inset-0 flex overflow-hidden entity-content">
       {/* File tree sidebar - liquid glass */}
       <div
         className={`flex-shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl transition-all duration-200 ${
