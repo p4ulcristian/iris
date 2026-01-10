@@ -14,9 +14,7 @@ async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHi
     return { name, path: dirPath, type: 'file' }
   }
 
-  const node = { name, path: dirPath, type: 'directory', children: [] }
-
-  if (currentDepth >= maxDepth) return node
+  const node = { name, path: dirPath, type: 'directory', children: [], fileCount: 0, folderCount: 0 }
 
   try {
     const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
@@ -32,12 +30,24 @@ async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHi
       return true
     })
 
+    // Count files and folders
     for (const entry of filtered) {
-      const childPath = path.join(dirPath, entry.name)
       if (entry.isDirectory()) {
-        node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1, showHidden))
+        node.folderCount++
       } else {
-        node.children.push({ name: entry.name, path: childPath, type: 'file' })
+        node.fileCount++
+      }
+    }
+
+    // Only recurse into children if within depth limit
+    if (currentDepth < maxDepth) {
+      for (const entry of filtered) {
+        const childPath = path.join(dirPath, entry.name)
+        if (entry.isDirectory()) {
+          node.children.push(await readDirectoryTree(childPath, maxDepth, currentDepth + 1, showHidden))
+        } else {
+          node.children.push({ name: entry.name, path: childPath, type: 'file' })
+        }
       }
     }
   } catch (err) {
@@ -45,6 +55,65 @@ async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHi
   }
 
   return node
+}
+
+// Stats cache with TTL
+const statsCache = new Map()
+const CACHE_TTL = 30000 // 30 seconds
+
+// Check if file is a text file for line counting
+function isTextFile(filename) {
+  const textExtensions = ['js', 'jsx', 'ts', 'tsx', 'py', 'json', 'md', 'css', 'html', 'yaml', 'yml', 'sh', 'clj', 'cljs', 'cljc', 'edn', 'txt', 'xml', 'svg', 'vue', 'scss', 'sass', 'less', 'sql', 'graphql', 'rs', 'go', 'java', 'kt', 'rb', 'php', 'c', 'cpp', 'h', 'hpp', 'swift', 'toml', 'ini', 'conf', 'env']
+  const ext = filename.split('.').pop()?.toLowerCase()
+  return textExtensions.includes(ext)
+}
+
+// Calculate folder stats recursively
+async function calculateFolderStats(dirPath, showHidden = false) {
+  let fileCount = 0
+  let folderCount = 0
+  let lineCount = 0
+  let totalSize = 0
+
+  try {
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      // Skip filtered entries
+      if (['node_modules', '__pycache__', 'dist', 'build', '.git'].includes(entry.name)) continue
+      if (!showHidden && entry.name.startsWith('.')) continue
+
+      const fullPath = path.join(dirPath, entry.name)
+
+      if (entry.isDirectory()) {
+        folderCount++
+        // Recurse into subdirectory
+        const subStats = await calculateFolderStats(fullPath, showHidden)
+        fileCount += subStats.fileCount
+        folderCount += subStats.folderCount
+        lineCount += subStats.lineCount
+        totalSize += subStats.totalSize
+      } else {
+        fileCount++
+        try {
+          const stat = await fs.promises.stat(fullPath)
+          totalSize += stat.size
+
+          // Count lines for text files only (and limit file size to avoid reading huge files)
+          if (isTextFile(entry.name) && stat.size < 1024 * 1024) { // Max 1MB
+            const content = await fs.promises.readFile(fullPath, 'utf-8')
+            lineCount += content.split('\n').length
+          }
+        } catch (err) {
+          // Skip files we can't read
+        }
+      }
+    }
+  } catch (err) {
+    // Permission denied or other error
+  }
+
+  return { fileCount, folderCount, lineCount, totalSize }
 }
 
 export const handlers = {
@@ -93,11 +162,42 @@ export const handlers = {
         return true
       })
 
-      const children = filtered.map(entry => ({
-        name: entry.name,
-        path: path.join(dirPath, entry.name),
-        type: entry.isDirectory() ? 'directory' : 'file',
-        children: entry.isDirectory() ? [] : undefined
+      // Build children with counts for folders
+      const children = await Promise.all(filtered.map(async entry => {
+        const childPath = path.join(dirPath, entry.name)
+
+        if (entry.isDirectory()) {
+          // Count files and folders in this directory
+          let fileCount = 0
+          let folderCount = 0
+
+          try {
+            const subEntries = await fs.promises.readdir(childPath, { withFileTypes: true })
+            const subFiltered = subEntries.filter(e => {
+              if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) return false
+              if (!showHidden && e.name.startsWith('.')) return false
+              return true
+            })
+
+            for (const sub of subFiltered) {
+              if (sub.isDirectory()) folderCount++
+              else fileCount++
+            }
+          } catch (err) {
+            // Permission denied or other error - counts stay 0
+          }
+
+          return {
+            name: entry.name,
+            path: childPath,
+            type: 'directory',
+            children: [],
+            fileCount,
+            folderCount
+          }
+        } else {
+          return { name: entry.name, path: childPath, type: 'file' }
+        }
       }))
 
       ws.send(JSON.stringify({ id, event: 'file:children', ok: true, path: dirPath, children }))
@@ -176,5 +276,35 @@ export const handlers = {
       console.log('[file:delete] Error:', err.message)
       ws.send(JSON.stringify({ id, event: 'file:delete', ok: false, error: err.message }))
     })
+  },
+
+  'file:folder-stats': async (ws, data) => {
+    const { id } = data
+    const dirPath = data.path
+    const showHidden = data.showHidden || false
+
+    if (!dirPath) {
+      ws.send(JSON.stringify({ id, event: 'file:folder-stats', ok: false, error: 'Missing path parameter' }))
+      return
+    }
+
+    // Check cache
+    const cacheKey = `${dirPath}:${showHidden}`
+    const cached = statsCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      ws.send(JSON.stringify({ id, event: 'file:folder-stats', ok: true, path: dirPath, stats: cached.stats }))
+      return
+    }
+
+    try {
+      const stats = await calculateFolderStats(dirPath, showHidden)
+
+      // Cache result
+      statsCache.set(cacheKey, { stats, timestamp: Date.now() })
+
+      ws.send(JSON.stringify({ id, event: 'file:folder-stats', ok: true, path: dirPath, stats }))
+    } catch (err) {
+      ws.send(JSON.stringify({ id, event: 'file:folder-stats', ok: false, path: dirPath, error: err.message }))
+    }
   },
 }

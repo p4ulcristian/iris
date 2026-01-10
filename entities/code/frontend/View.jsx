@@ -86,12 +86,60 @@ function getFileIcon(filename) {
   return FILE_ICONS[ext] || FILE_ICONS.default
 }
 
+// Format file size
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// Format line count
+function formatLines(count) {
+  if (count < 1000) return count.toString()
+  return `${(count / 1000).toFixed(1)}k`
+}
+
+// Folder stats inline card
+function FolderStatsCard({ stats, isLoading, depth }) {
+  return (
+    <div
+      className="mx-1 my-1 p-2 bg-white/5 rounded-lg border border-white/10"
+      style={{ marginLeft: `${depth * 14 + 10}px`, marginRight: '10px' }}
+    >
+      {isLoading ? (
+        <div className="text-[11px] text-white/40 animate-pulse">Loading stats...</div>
+      ) : stats ? (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+          <div className="flex items-center gap-1.5 text-white/60">
+            <span>📄</span>
+            <span>{stats.fileCount.toLocaleString()} files</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-white/60">
+            <span>📁</span>
+            <span>{stats.folderCount.toLocaleString()} folders</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-white/60">
+            <span>📏</span>
+            <span>{formatLines(stats.lineCount)} lines</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-white/60">
+            <span>💾</span>
+            <span>{formatSize(stats.totalSize)}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // File tree node component
-function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu }) {
+function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu, loadedStats, loadingStats }) {
   if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
   const isLoading = loadingFolders?.has(node.path)
+  const isStatsLoading = loadingStats?.has(node.path)
+  const stats = loadedStats?.[node.path]
 
   const handleContextMenu = (e) => {
     e.preventDefault()
@@ -130,6 +178,9 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
         )}
         <span className="truncate text-[13px]">{node.name}</span>
       </div>
+      {isFolder && isExpanded && (
+        <FolderStatsCard stats={stats} isLoading={isStatsLoading} depth={depth} />
+      )}
       {isFolder && isExpanded && node.children && (
         <div className="relative">
           {/* Subtle indent guide line */}
@@ -147,6 +198,8 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
               toggleFolder={toggleFolder}
               loadingFolders={loadingFolders}
               onContextMenu={onContextMenu}
+              loadedStats={loadedStats}
+              loadingStats={loadingStats}
             />
           ))}
         </div>
@@ -199,6 +252,8 @@ export default function CodeView({ entity }) {
   const [highlights, setHighlights] = useState({}) // {filePath: [{line, endLine, color, note}]}
   const [loading, setLoading] = useState(false)
   const [loadingFolders, setLoadingFolders] = useState(new Set())
+  const [loadedStats, setLoadedStats] = useState({})
+  const [loadingStats, setLoadingStats] = useState(new Set())
   const [pendingFileHandled, setPendingFileHandled] = useState(null)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
@@ -427,7 +482,9 @@ export default function CodeView({ entity }) {
   }, [showHidden, send])
 
   // Toggle folder expansion
-  const toggleFolder = useCallback((path) => {
+  const toggleFolder = useCallback(async (path) => {
+    const isExpanding = !expandedFolders.has(path)
+
     setExpandedFolders(prev => {
       const next = new Set(prev)
       if (next.has(path)) {
@@ -442,7 +499,26 @@ export default function CodeView({ entity }) {
       }
       return next
     })
-  }, [fileTree, findNode, loadFolderChildren])
+
+    // Load stats when expanding (if not already loaded)
+    if (isExpanding && !loadedStats[path]) {
+      setLoadingStats(prev => new Set([...prev, path]))
+      try {
+        const response = await request('file:folder-stats', { path, showHidden })
+        if (response.ok) {
+          setLoadedStats(prev => ({ ...prev, [path]: response.stats }))
+        }
+      } catch (err) {
+        console.error('Failed to load stats:', err)
+      } finally {
+        setLoadingStats(prev => {
+          const next = new Set(prev)
+          next.delete(path)
+          return next
+        })
+      }
+    }
+  }, [fileTree, findNode, loadFolderChildren, expandedFolders, loadedStats, showHidden, request])
 
   // Close file tab
   const closeFile = useCallback((path) => {
@@ -812,6 +888,8 @@ export default function CodeView({ entity }) {
                 toggleFolder={toggleFolder}
                 loadingFolders={loadingFolders}
                 onContextMenu={handleContextMenu}
+                loadedStats={loadedStats}
+                loadingStats={loadingStats}
               />
             ))}
           </div>
