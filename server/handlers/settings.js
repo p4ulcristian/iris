@@ -4,7 +4,8 @@
 
 import fs from 'fs'
 import path from 'path'
-import { LOGS_DIR, PROJECT_LOGS_DIR, BACKEND_LOG, FRONTEND_LOG } from '../config.js'
+import http from 'http'
+import { LOGS_DIR, PROJECT_LOGS_DIR, BACKEND_LOG, FRONTEND_LOG, SERVICES } from '../config.js'
 import {
   appState, saveState, broadcastState, broadcast,
   applySettingsToEnv, generateEntityId, getNextEntityNumber,
@@ -379,6 +380,43 @@ export const handlers = {
     } catch (err) {
       console.error('[logs:clear] Error:', err)
     }
+  },
+
+  // Speak volume control
+  'speak:volume': (ws, data) => {
+    const { volume } = data
+    if (volume === undefined) return
+
+    const port = SERVICES.speak.port
+    const postData = JSON.stringify({ volume })
+
+    const req = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path: '/volume',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData)
+      },
+      timeout: 2000
+    }, (res) => {
+      let body = ''
+      res.on('data', chunk => body += chunk)
+      res.on('end', () => {
+        try {
+          const result = JSON.parse(body)
+          ws.send(JSON.stringify({ event: 'speak:volume:result', ...result }))
+        } catch {}
+      })
+    })
+
+    req.on('error', (err) => {
+      console.error('[speak:volume] Error:', err.message)
+    })
+    req.on('timeout', () => req.destroy())
+    req.write(postData)
+    req.end()
   },
 }
 

@@ -164,3 +164,6 @@ export const REALMS = Object.keys(REALM_COLORS)
 export const GOD_COLORS = Object.fromEntries(
   Object.entries(PANTHEON).map(([name, data]) => [name, data.color])
 )
+
+// God spawn defaults
+export const DEFAULT_PERMISSION_MODE = 'bypass-plan'

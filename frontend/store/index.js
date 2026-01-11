@@ -35,6 +35,7 @@ export const useStore = create(
       version: null,
       services: { speak: false, hear: false, chronicle: false, mcp: false },
       chronicleDetails: null,  // { running, paused, volume, vad, start_time, ... }
+      speakDetails: null,  // { volume, muted }
 
       // ============================================
       // LOCAL UI STATE (not synced to server)
@@ -94,6 +95,11 @@ export const useStore = create(
         // Chronicle details (volume, vad, etc.)
         if (serverState.chronicleDetails !== undefined) {
           state.chronicleDetails = serverState.chronicleDetails
+        }
+
+        // Speak details (volume, muted)
+        if (serverState.speakDetails !== undefined) {
+          state.speakDetails = serverState.speakDetails
         }
       }),
 

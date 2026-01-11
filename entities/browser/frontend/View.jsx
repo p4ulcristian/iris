@@ -232,6 +232,19 @@ export default function BrowserView({ entity }) {
       ))
     }
 
+    // Intercept Google login - open in popup window instead
+    const handleWillNavigate = async (e) => {
+      const url = e.url
+      if (url.includes('accounts.google.com') || url.includes('accounts.youtube.com')) {
+        e.preventDefault()
+        // Open login in popup BrowserWindow (not blocked by Google)
+        await window.iris.openAuthPopup(url, 'persist:browser')
+        // Reload the page after login to pick up the session
+        webview.reload()
+      }
+    }
+
+    webview.addEventListener('will-navigate', handleWillNavigate)
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('did-navigate', handleNavigate)
     webview.addEventListener('did-navigate-in-page', handleNavigate)
@@ -240,6 +253,7 @@ export default function BrowserView({ entity }) {
     webview.addEventListener('did-stop-loading', handleLoadStop)
 
     return () => {
+      webview.removeEventListener('will-navigate', handleWillNavigate)
       webview.removeEventListener('page-title-updated', handleTitleUpdate)
       webview.removeEventListener('did-navigate', handleNavigate)
       webview.removeEventListener('did-navigate-in-page', handleNavigate)
@@ -308,6 +322,8 @@ export default function BrowserView({ entity }) {
             key={tab.id}
             ref={(el) => el && setupWebview(el, tab.id)}
             src={tab.url}
+            partition="persist:browser"
+            useragent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             style={{
               position: 'absolute',
               top: 0,

@@ -9,6 +9,7 @@ export { default as Input } from './Input.jsx'
 export { default as ActionButton } from './ActionButton.jsx'
 export { default as LoadingSpinner, LoadingState } from './LoadingSpinner.jsx'
 export { default as MarkdownRenderer, markdownComponents } from './MarkdownRenderer.jsx'
+export { default as FileIcon } from './FileIcon.jsx'
 
 export {
   formatTime,

@@ -484,21 +484,31 @@ function LogsButton({ send }) {
   )
 }
 
-function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
+function ServicesDropdown({ connected, services, servicesLoading, onToggle, speakDetails, onVolumeChange }) {
   const [open, setOpen] = useState(false)
+  const [localVolume, setLocalVolume] = useState(100)
+  const [isDragging, setIsDragging] = useState(false)
   const menuRef = useRef(null)
 
-  // Close menu when clicking outside
+  // Sync local volume from server when not dragging
+  useEffect(() => {
+    if (!isDragging && speakDetails?.volume !== undefined) {
+      setLocalVolume(Math.round(speakDetails.volume * 100))
+    }
+  }, [speakDetails?.volume, isDragging])
+
+  // Close menu when clicking outside (but not while dragging slider)
   useEffect(() => {
     if (!open) return
     const handleClickOutside = (e) => {
+      if (isDragging) return
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [open])
+  }, [open, isDragging])
 
   const serviceList = [
     { name: 'MCP', key: 'mcp', icon: faPlug, readOnly: true },
@@ -570,6 +580,37 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle }) {
               </button>
             )
           })}
+
+          {/* Volume slider for Speak service */}
+          {services.speak && (
+            <div className="px-3 py-2 flex items-center gap-2">
+              <span className="text-[10px] text-white/40 w-6">Vol</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={localVolume}
+                onMouseDown={() => setIsDragging(true)}
+                onMouseUp={() => {
+                  setIsDragging(false)
+                  onVolumeChange(localVolume / 100)
+                }}
+                onMouseLeave={() => {
+                  if (isDragging) {
+                    setIsDragging(false)
+                    onVolumeChange(localVolume / 100)
+                  }
+                }}
+                onChange={(e) => setLocalVolume(parseInt(e.target.value))}
+                style={{ accentColor: '#22c55e' }}
+                className="flex-1 h-2 cursor-pointer"
+              />
+              <span className="text-[10px] text-white/40 w-6 text-right">
+                {localVolume}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -596,6 +637,7 @@ export default function LeftSidebar({
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
+  const speakDetails = useStore(s => s.speakDetails)
   const powers = useStore(s => s.settings?.powers ?? true)
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
@@ -613,6 +655,11 @@ export default function LeftSidebar({
       event: isActive ? 'service:stop' : 'service:start',
       service
     })
+  }
+
+  const handleVolumeChange = (volume) => {
+    if (!send) return
+    send({ event: 'speak:volume', volume })
   }
 
   return (
@@ -759,6 +806,8 @@ export default function LeftSidebar({
             services={services}
             servicesLoading={servicesLoading}
             onToggle={handleServiceToggle}
+            speakDetails={speakDetails}
+            onVolumeChange={handleVolumeChange}
           />
         </motion.div>
       )}

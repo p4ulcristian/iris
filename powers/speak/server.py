@@ -91,6 +91,7 @@ tts_model = None
 player = None
 is_ready = False
 is_muted = False
+volume = 1.0  # 0.0 to 1.0
 
 # Queue system
 speak_queue = queue.Queue(maxsize=MAX_QUEUE_SIZE)
@@ -175,7 +176,7 @@ def queue_worker():
 
             try:
                 audio = tts_model.synthesize(text, voice=voice)
-                duration = player.play(audio, blocking=True, trim_prefix=True)
+                duration = player.play(audio, blocking=True, trim_prefix=True, volume=volume)
                 logger.info(f"[QUEUE] Played {duration:.2f}s of audio")
             except Exception as e:
                 logger.error(f"[QUEUE] Playback error: {e}")
@@ -265,7 +266,7 @@ def init_models():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({"ready": is_ready})
+    return jsonify({"ready": is_ready, "volume": volume, "muted": is_muted})
 
 
 @app.route('/speak', methods=['POST'])
@@ -341,6 +342,34 @@ def unmute():
     logger.info("[UNMUTE] TTS unmuted")
 
     return jsonify({"status": "ok", "muted": False})
+
+
+@app.route('/volume', methods=['GET'])
+def get_volume():
+    """Get current volume"""
+    return jsonify({"volume": volume})
+
+
+@app.route('/volume', methods=['POST'])
+def set_volume():
+    """Set volume (0.0 to 1.0)"""
+    global volume
+
+    data = request.get_json()
+    if not data or 'volume' not in data:
+        return jsonify({"error": "No volume provided"}), 400
+
+    new_volume = data['volume']
+    try:
+        new_volume = float(new_volume)
+        new_volume = max(0.0, min(1.0, new_volume))  # Clamp to 0-1
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid volume value"}), 400
+
+    volume = new_volume
+    logger.info(f"[VOLUME] Set to {volume:.2f}")
+
+    return jsonify({"status": "ok", "volume": volume})
 
 
 @app.route('/voices', methods=['GET'])

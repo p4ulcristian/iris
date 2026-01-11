@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
-import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
+import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN, DEFAULT_PERMISSION_MODE } from './config.js'
 import { createLogger } from './logger.js'
 import { getBaseGodName } from './state.js'
 
@@ -180,7 +180,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
   // Extract base name for PANTHEON lookup (zeus-2 → zeus)
   const baseName = getBaseGodName(name)
   const god = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, personality = 'god' } = options
+  const { resumeSessionId, startPrompt, personality = 'god', permissionMode = DEFAULT_PERMISSION_MODE } = options
 
   // Check if session already exists
   if (sessionExists(godKey)) {
@@ -265,7 +265,8 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       IRIS_RESUME: resumeSessionId ? '1' : '',
       IRIS_TASK: initPrompt || '',
       IRIS_PERSONALITY: personalityTempFile ? fs.readFileSync(personalityTempFile, 'utf-8') : '',
-      IRIS_MCP_CONFIG: mcpConfigJson || ''
+      IRIS_MCP_CONFIG: mcpConfigJson || '',
+      IRIS_PERMISSION_MODE: permissionMode || DEFAULT_PERMISSION_MODE
     }
 
     // Use permanent launcher script - no escaping issues

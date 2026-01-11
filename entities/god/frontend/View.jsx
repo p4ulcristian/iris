@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState, useLayoutEffect } from 'react'
+import { useEffect, useRef, useMemo, useState, useLayoutEffect, useCallback } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { ClipboardAddon } from '@xterm/addon-clipboard'
 import { generatePalette, getThemeTerminalSettings } from '@/themes'
@@ -67,7 +67,7 @@ export default function TerminalContent({ entity, isFocused }) {
     const cellHeight = cellDimsRef.current?.height || APPROX_CELL_HEIGHT
     return {
       cols: Math.floor(width / cellWidth) || 80,
-      rows: Math.ceil(height / cellHeight) || 24  // Round up to avoid cutting off bottom row
+      rows: Math.floor(height / cellHeight) || 24
     }
   }
 
@@ -400,10 +400,18 @@ export default function TerminalContent({ entity, isFocused }) {
   }, [godName, remountKey])
 
 
+  // Focus terminal when container is clicked (handles DOM focus loss)
+  const handleContainerClick = useCallback(() => {
+    if (termRef.current) {
+      termRef.current.focus()
+    }
+  }, [])
+
   return (
     <div
       ref={containerRef}
       className="absolute inset-0 entity-content"
+      onClick={handleContainerClick}
     />
   )
 }

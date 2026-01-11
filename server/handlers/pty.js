@@ -145,7 +145,7 @@ export const handlers = {
 
       // Small delay after Ctrl+C
       setTimeout(() => {
-        const wrappedCommand = `( ${command} ) > "${outputFile}" 2>&1; echo $? > "${exitFile}"`
+        const wrappedCommand = `( ${command} ) > "${outputFile}" 2>&1; cat "${outputFile}"; echo $? > "${exitFile}"`
         const success = sendToZellij(wrappedCommand)
 
         if (!success) {

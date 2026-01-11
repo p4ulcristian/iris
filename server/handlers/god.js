@@ -88,7 +88,8 @@ export const handlers = {
       god = createGodSession(entityId, data.task, workingDir, {
         startPrompt: appState.settings?.startPrompt,
         userName: appState.settings?.userName,
-        personality: data.personality
+        personality: data.personality,
+        permissionMode: data.permissionMode
       })
     } catch (err) {
       console.error(`[god:spawn] ${T()} createGodSession threw:`, err)

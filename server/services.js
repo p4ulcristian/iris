@@ -29,6 +29,9 @@ let healthCheckInterval = null
 // Chronicle details extracted from hear health check
 let chronicleDetails = null
 
+// Speak details extracted from speak health check
+let speakDetails = null
+
 async function checkServiceHealth(name, port) {
   // For services without a port, check if process is running
   if (!port) {
@@ -65,17 +68,32 @@ async function checkServiceHealth(name, port) {
           }
           resolve(true)
         })
+      } else if (name === 'speak') {
+        // For speak service, extract volume from response
+        let data = ''
+        res.on('data', chunk => data += chunk)
+        res.on('end', () => {
+          try {
+            const health = JSON.parse(data)
+            speakDetails = { volume: health.volume ?? 1.0, muted: health.muted ?? false }
+          } catch {
+            speakDetails = null
+          }
+          resolve(true)
+        })
       } else {
         resolve(true)
       }
     })
     req.on('error', () => {
       if (name === 'hear') chronicleDetails = null
+      if (name === 'speak') speakDetails = null
       resolve(false)
     })
     req.on('timeout', () => {
       req.destroy()
       if (name === 'hear') chronicleDetails = null
+      if (name === 'speak') speakDetails = null
       resolve(false)
     })
   })
@@ -128,7 +146,8 @@ export async function checkAllServices() {
   if (broadcastFn && (changed || chronicleRunning)) {
     broadcastFn('services:status', {
       services: serviceStatus,
-      chronicleDetails: chronicleDetails
+      chronicleDetails: chronicleDetails,
+      speakDetails: speakDetails
     })
   }
 }

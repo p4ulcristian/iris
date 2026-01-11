@@ -6,6 +6,7 @@ import * as personalities from '../personalities.js'
 import * as traits from '../traits.js'
 import * as mcpServers from '../mcp-servers.js'
 import * as projects from '../projects.js'
+import { DEFAULT_PERMISSION_MODE } from '../config.js'
 
 export const handlers = {
   // ==================== PERSONALITIES ====================
@@ -18,7 +19,10 @@ export const handlers = {
     }))
     ws.send(JSON.stringify({
       event: 'personalities:list:response',
-      personalities: personalitiesWithPreview
+      personalities: personalitiesWithPreview,
+      defaults: {
+        permissionMode: DEFAULT_PERMISSION_MODE
+      }
     }))
   },
 

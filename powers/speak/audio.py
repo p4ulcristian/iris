@@ -242,7 +242,7 @@ class AudioPlayer:
         self._subprocess = PlayerSubprocess(sample_rate=sample_rate, device=device)
         self._is_playing = False
 
-    def play(self, audio: np.ndarray, blocking: bool = True, trim_prefix: bool = False) -> float:
+    def play(self, audio: np.ndarray, blocking: bool = True, trim_prefix: bool = False, volume: float = 1.0) -> float:
         """
         Play audio data.
 
@@ -250,6 +250,7 @@ class AudioPlayer:
             audio: Audio samples as float32 numpy array
             blocking: If True, wait for playback to complete
             trim_prefix: If True, trim the "So, " prefix
+            volume: Volume level 0.0 to 1.0
 
         Returns:
             Duration in seconds (0 if non-blocking or error)
@@ -265,6 +266,10 @@ class AudioPlayer:
         peak = np.max(np.abs(audio))
         if peak > 1.0:
             audio = audio / peak
+
+        # Apply volume
+        if volume < 1.0:
+            audio = audio * volume
 
         # Trim prefix if requested
         if trim_prefix:

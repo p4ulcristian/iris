@@ -4,6 +4,11 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 import Button from './ui/Button'
 
+const PERMISSION_MODES = [
+  { value: 'bypass', label: 'Bypass', description: 'Full autonomy' },
+  { value: 'bypass-plan', label: 'Plan First', description: 'Plan with agent, then implement' },
+]
+
 export default function SummonModal({
   isOpen,
   onSummon,
@@ -15,6 +20,7 @@ export default function SummonModal({
   const [personalities, setPersonalities] = useState([])
   const [selectedProject, setSelectedProject] = useState(null)
   const [projects, setProjects] = useState([])
+  const [permissionMode, setPermissionMode] = useState(null)
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
   const entities = useStore(s => s.entities)
@@ -43,8 +49,12 @@ export default function SummonModal({
   useEffect(() => {
     if (lastMessage?.event === 'personalities:list:response') {
       setPersonalities(lastMessage.personalities || [])
+      // Set default permission mode from server (single source of truth)
+      if (lastMessage.defaults?.permissionMode && !permissionMode) {
+        setPermissionMode(lastMessage.defaults.permissionMode)
+      }
     }
-  }, [lastMessage])
+  }, [lastMessage, permissionMode])
 
   // Handle projects list response
   useEffect(() => {
@@ -74,8 +84,9 @@ export default function SummonModal({
       // Focus input after a brief delay for modal animation
       setTimeout(() => inputRef.current?.focus(), 50)
     } else {
-      // Reset selectedGod when modal closes so it picks new one next time
+      // Reset state when modal closes so it picks fresh values next time
       setSelectedGod('')
+      setPermissionMode(null)
     }
   }, [isOpen])
 
@@ -100,7 +111,7 @@ export default function SummonModal({
     const god = selectedGod || allGods[0]
     if (!god) return
     const name = god.charAt(0).toUpperCase() + god.slice(1)
-    onSummon(name, task.trim(), selectedPersonality, selectedProject)
+    onSummon(name, task.trim(), selectedPersonality, selectedProject, permissionMode)
   }
 
   if (!isOpen) return null
@@ -251,6 +262,32 @@ export default function SummonModal({
               }
               return null
             })()}
+          </div>
+        )}
+
+        {/* Permission mode selector */}
+        {permissionMode && (
+          <div className="mb-4">
+            <label className="block liquid-glass-text-muted text-sm mb-1.5">Mode</label>
+            <div className="flex gap-1.5">
+              {PERMISSION_MODES.map(mode => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setPermissionMode(mode.value)}
+                  className={`flex-1 px-2 py-1.5 rounded text-xs transition-all ${
+                    permissionMode === mode.value
+                      ? 'bg-white/20 text-white'
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/70'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            <p className="liquid-glass-text-muted text-xs mt-1.5 opacity-60">
+              {PERMISSION_MODES.find(m => m.value === permissionMode)?.description}
+            </p>
           </div>
         )}
 

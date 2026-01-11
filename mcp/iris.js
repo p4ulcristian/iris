@@ -63,13 +63,29 @@ async function apiPost(endpoint, data, timeout = 5000) {
   }
 }
 
-async function apiGet(endpoint) {
+async function apiGet(endpoint, timeout = 5000) {
   try {
-    const res = await fetch(`${API_BASE}/${endpoint}`, { timeout: 5000 });
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    const res = await fetch(`${API_BASE}/${endpoint}`, {
+      signal: controller.signal
+    });
+
+    clearTimeout(id);
     return res.ok ? await res.json() : { error: await res.text() };
   } catch (e) {
     return { error: e.message };
   }
+}
+
+// Response helpers
+function ok(msg) {
+  return { content: [{ type: "text", text: msg }] };
+}
+
+function fail(msg) {
+  return { content: [{ type: "text", text: msg }] };
 }
 
 // Resolve relative paths to absolute
@@ -101,20 +117,16 @@ server.tool(
   },
   async ({ task, god_name, project }) => {
     const health = await apiGet("health");
-    if (health.error) {
-      return { content: [{ type: "text", text: "Failed to spawn god - is Iris running?" }] };
-    }
+    if (health.error) return fail("Failed to spawn god - is Iris running?");
 
     const data = { event: "god:spawn", task };
     if (god_name) data.name = god_name;
     if (project) data.project = project;
 
     const result = await apiPost("spawn", data);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to spawn god: ${result.error}` }] };
-    }
+    if (result.error) return fail(`Failed to spawn god: ${result.error}`);
 
-    return { content: [{ type: "text", text: `Summoned ${result.name || "god"} to work on: ${task}` }] };
+    return ok(`Summoned ${result.name || "god"} to work on: ${task}`);
   }
 );
 
@@ -127,10 +139,8 @@ server.tool(
   },
   async ({ god_name, lines }) => {
     const result = await apiPost("peek", { god: god_name, lines });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to peek: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: result.output || "No output" }] };
+    if (result.error) return fail(`Failed to peek: ${result.error}`);
+    return ok(result.output || "No output");
   }
 );
 
@@ -143,10 +153,8 @@ server.tool(
   },
   async ({ god_name, text }) => {
     const result = await apiPost("push", { god: god_name, text });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to push: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Sent to ${god_name}: ${text}` }] };
+    if (result.error) return fail(`Failed to push: ${result.error}`);
+    return ok(`Sent to ${god_name}: ${text}`);
   }
 );
 
@@ -156,19 +164,15 @@ server.tool(
   {},
   async () => {
     const result = await apiPost("entities", {});
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to list: ${result.error}` }] };
-    }
+    if (result.error) return fail(`Failed to list: ${result.error}`);
 
     const entities = result.entities || [];
-    if (!entities.length) {
-      return { content: [{ type: "text", text: "No active entities" }] };
-    }
+    if (!entities.length) return ok("No active entities");
 
     const lines = entities.map(e =>
       `- ${e.name || "Unknown"} (${e.type || "entity"}): ${e.readyState || "unknown"}`
     );
-    return { content: [{ type: "text", text: lines.join("\n") }] };
+    return ok(lines.join("\n"));
   }
 );
 
@@ -181,14 +185,13 @@ server.tool(
   "Run a command in a god's dedicated terminal tab in Iris.",
   {
     command: z.string().describe("The shell command to execute"),
-    god_name: z.string().default("Hermes").describe("Which god's terminal to use")
+    god_name: z.string().default("Hermes").describe("Which god's terminal to use"),
+    timeout: z.number().default(60000).describe("Command timeout in ms (default 60s)")
   },
-  async ({ command, god_name }) => {
-    const result = await apiPost("run", { god: god_name, command }, 40000);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to run: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: result.output || "Command executed" }] };
+  async ({ command, god_name, timeout }) => {
+    const result = await apiPost("run", { god: god_name, command }, timeout);
+    if (result.error) return fail(`Failed to run: ${result.error}`);
+    return ok(result.output || "Command executed");
   }
 );
 
@@ -205,15 +208,11 @@ server.tool(
   },
   async ({ title, god_name }) => {
     const god = god_name || GOD_NAME;
-    if (!god) {
-      return { content: [{ type: "text", text: "No god specified and GOD_NAME env not set" }] };
-    }
+    if (!god) return fail("No god specified and GOD_NAME env not set");
 
     const result = await apiPost("title", { god, title });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to set title: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Set title to: ${title}` }] };
+    if (result.error) return fail(`Failed to set title: ${result.error}`);
+    return ok(`Set title to: ${title}`);
   }
 );
 
@@ -226,15 +225,11 @@ server.tool(
   },
   async ({ state, god_name }) => {
     const god = god_name || GOD_NAME;
-    if (!god) {
-      return { content: [{ type: "text", text: "No god specified and GOD_NAME env not set" }] };
-    }
+    if (!god) return fail("No god specified and GOD_NAME env not set");
 
     const result = await apiPost("ready", { god, state });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to set state: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Set state to: ${state}` }] };
+    if (result.error) return fail(`Failed to set state: ${result.error}`);
+    return ok(`Set state to: ${state}`);
   }
 );
 
@@ -256,10 +251,8 @@ server.tool(
     }
 
     const result = await apiPost("browse", { url: normalizedUrl });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to open browser: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Opened browser: ${normalizedUrl}` }] };
+    if (result.error) return fail(`Failed to open browser: ${result.error}`);
+    return ok(`Opened browser: ${normalizedUrl}`);
   }
 );
 
@@ -278,10 +271,8 @@ server.tool(
     if (project) data.project = project;
 
     const result = await apiPost("code", data);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to open code: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Opened: ${path}${line ? `:${line}` : ""}` }] };
+    if (result.error) return fail(`Failed to open code: ${result.error}`);
+    return ok(`Opened: ${path}${line ? `:${line}` : ""}`);
   }
 );
 
@@ -297,24 +288,30 @@ server.tool(
   async ({ path, lines, color, note }) => {
     const absPath = resolvePath(path);
 
-    // Parse lines string into ranges
+    // Parse lines string into ranges with validation
     const highlights = [];
     for (const part of lines.split(",")) {
       const trimmed = part.trim();
+      if (!trimmed) continue;
+
       if (trimmed.includes("-")) {
-        const [start, end] = trimmed.split("-").map(s => parseInt(s, 10));
+        const [startStr, endStr] = trimmed.split("-");
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        if (isNaN(start) || isNaN(end)) return fail(`Invalid line range: ${trimmed}`);
         highlights.push({ line: start, endLine: end, color, ...(note && { note }) });
       } else {
         const line = parseInt(trimmed, 10);
+        if (isNaN(line)) return fail(`Invalid line number: ${trimmed}`);
         highlights.push({ line, endLine: line, color, ...(note && { note }) });
       }
     }
 
+    if (!highlights.length) return fail("No valid line numbers provided");
+
     const result = await apiPost("code/highlight", { path: absPath, highlights });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to highlight: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Highlighted ${lines} in ${color}` }] };
+    if (result.error) return fail(`Failed to highlight: ${result.error}`);
+    return ok(`Highlighted ${lines} in ${color}`);
   }
 );
 
@@ -327,10 +324,8 @@ server.tool(
   async ({ path }) => {
     const data = path ? { path: resolvePath(path) } : {};
     const result = await apiPost("code/clear", data);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to clear: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: path ? `Cleared highlights from ${path}` : "Cleared all highlights" }] };
+    if (result.error) return fail(`Failed to clear: ${result.error}`);
+    return ok(path ? `Cleared highlights from ${path}` : "Cleared all highlights");
   }
 );
 
@@ -343,10 +338,8 @@ server.tool(
   async ({ path }) => {
     const absPath = resolvePath(path);
     const result = await apiPost("md", { path: absPath });
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to open markdown: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: `Opened: ${path}` }] };
+    if (result.error) return fail(`Failed to open markdown: ${result.error}`);
+    return ok(`Opened: ${path}`);
   }
 );
 
@@ -368,11 +361,9 @@ server.tool(
     if (voiceToUse) data.voice = voiceToUse;
 
     const result = await apiPost("say", data);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to speak: ${result.error}` }] };
-    }
+    if (result.error) return fail(`Failed to speak: ${result.error}`);
     const displayText = text.length > 50 ? `${text.slice(0, 50)}...` : text;
-    return { content: [{ type: "text", text: `Speaking: ${displayText}` }] };
+    return ok(`Speaking: ${displayText}`);
   }
 );
 
@@ -403,10 +394,8 @@ server.tool(
     if (voiceToUse) data.voice = voiceToUse;
 
     const result = await apiPost("say", data);
-    if (result.error) {
-      return { content: [{ type: "text", text: `Failed to greet: ${result.error}` }] };
-    }
-    return { content: [{ type: "text", text: greeting }] };
+    if (result.error) return fail(`Failed to greet: ${result.error}`);
+    return ok(greeting);
   }
 );
 
@@ -473,7 +462,7 @@ function generateCommitMessage(diffStat, issueId) {
 
   let header = `${prefix} ${description}`;
   if (header.length > 50) {
-    const maxLen = 50 - prefix.length - 4;
+    const maxLen = Math.max(10, 50 - prefix.length - 4);
     description = description.slice(0, maxLen) + "...";
     header = `${prefix} ${description}`;
   }
@@ -490,45 +479,46 @@ server.tool(
   "git_push",
   "Commit staged changes and push to remote with auto-generated message.",
   {
-    issue_id: z.string().optional().describe("Optional issue ID (e.g., 'IRO-123')")
+    issue_id: z.string().optional().describe("Optional issue ID (e.g., 'IRO-123')"),
+    cwd: z.string().optional().describe("Working directory (defaults to process cwd)")
   },
-  async ({ issue_id }) => {
+  async ({ issue_id, cwd }) => {
+    const execOpts = { encoding: "utf-8", cwd: cwd || process.cwd() };
+
     try {
       // Check for staged changes
       let diffStat;
       try {
-        diffStat = execSync("git diff --cached --stat", { encoding: "utf-8" });
+        diffStat = execSync("git diff --cached --stat", execOpts);
       } catch {
-        return { content: [{ type: "text", text: "Failed to run git diff" }] };
+        return fail("Failed to run git diff");
       }
 
-      if (!diffStat.trim()) {
-        return { content: [{ type: "text", text: "No staged changes to commit" }] };
-      }
+      if (!diffStat.trim()) return fail("No staged changes to commit");
 
       // Generate commit message
       const commitMsg = generateCommitMessage(diffStat, issue_id);
 
       // Commit
       try {
-        execSync(`git commit -m ${JSON.stringify(commitMsg)}`, { encoding: "utf-8" });
+        execSync(`git commit -m ${JSON.stringify(commitMsg)}`, execOpts);
       } catch (e) {
-        return { content: [{ type: "text", text: `Commit failed: ${e.message}` }] };
+        return fail(`Commit failed: ${e.message}`);
       }
 
       // Get commit hash
-      const commitHash = execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim().slice(0, 7);
+      const commitHash = execSync("git rev-parse HEAD", execOpts).trim().slice(0, 7);
 
       // Push
       try {
-        execSync("git push", { encoding: "utf-8" });
+        execSync("git push", execOpts);
       } catch (e) {
-        return { content: [{ type: "text", text: `Committed ${commitHash} but push failed: ${e.message}` }] };
+        return fail(`Committed ${commitHash} but push failed: ${e.message}`);
       }
 
-      return { content: [{ type: "text", text: `Committed ${commitHash} and pushed` }] };
+      return ok(`Committed ${commitHash} and pushed`);
     } catch (e) {
-      return { content: [{ type: "text", text: `Error: ${e.message}` }] };
+      return fail(`Error: ${e.message}`);
     }
   }
 );

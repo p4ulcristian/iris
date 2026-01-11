@@ -19,28 +19,7 @@ import {
 import { useStore } from '@/store'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
-import { IconButton, Input } from '../../_ui'
-
-// File icons by extension
-const FILE_ICONS = {
-  js: '📜',
-  jsx: '⚛️',
-  ts: '📘',
-  tsx: '⚛️',
-  json: '📋',
-  md: '📝',
-  py: '🐍',
-  css: '🎨',
-  html: '🌐',
-  yaml: '⚙️',
-  yml: '⚙️',
-  sh: '🔧',
-  clj: '🟣',
-  cljs: '🟣',
-  cljc: '🟣',
-  edn: '🟣',
-  default: '📄'
-}
+import { IconButton, Input, FileIcon } from '../../_ui'
 
 // Highlight colors
 const HIGHLIGHT_COLORS = {
@@ -77,13 +56,6 @@ function getLanguage(filename) {
     edn: 'clojure'
   }
   return langMap[ext] || 'plaintext'
-}
-
-// Get file icon
-function getFileIcon(filename) {
-  if (!filename) return FILE_ICONS.default
-  const ext = filename.split('.').pop()?.toLowerCase()
-  return FILE_ICONS[ext] || FILE_ICONS.default
 }
 
 // Format file size
@@ -174,7 +146,7 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
             className={`w-4 h-4 transition-colors ${isExpanded ? 'text-yellow-400' : 'text-yellow-500/70'}`}
           />
         ) : (
-          <span className="w-4 text-center text-xs opacity-80">{getFileIcon(node.name)}</span>
+          <FileIcon filename={node.name} size={16} />
         )}
         <span className="truncate text-[13px]">{node.name}</span>
       </div>
@@ -222,7 +194,7 @@ function EditorTab({ file, isActive, onClick, onClose }) {
         }
       `}
     >
-      <span className="text-xs opacity-80">{getFileIcon(file.name)}</span>
+      <FileIcon filename={file.name} size={14} />
       <span className="truncate text-[13px]">
         {file.name}
       </span>

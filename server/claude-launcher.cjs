@@ -11,7 +11,23 @@ const { writeFileSync, unlinkSync } = require('fs')
 const { join } = require('path')
 const { tmpdir } = require('os')
 
-const args = ['--dangerously-skip-permissions']
+// Permission mode handling (always set by gods.js, fallback to bypass for direct invocation)
+const permissionMode = process.env.IRIS_PERMISSION_MODE || 'bypass'
+const args = []
+
+// Both modes use skip-permissions for full autonomy
+if (permissionMode === 'bypass' || permissionMode === 'bypass-plan') {
+  args.push('--dangerously-skip-permissions')
+} else {
+  // Fallback for any legacy values
+  args.push('--dangerously-skip-permissions')
+}
+
+// For bypass-plan, append instruction to enter plan mode
+if (permissionMode === 'bypass-plan' && process.env.IRIS_TASK) {
+  process.env.IRIS_TASK = `${process.env.IRIS_TASK}\n\nBefore implementing, enter plan mode using the EnterPlanMode tool.`
+}
+
 let mcpTempFile = null
 
 // Session handling
@@ -42,7 +58,7 @@ if (process.env.IRIS_MCP_CONFIG && process.env.IRIS_MCP_CONFIG.startsWith('{')) 
 }
 
 // Debug
-console.error(`[launcher] ${T()} MCP: ${mcpTempFile ? 'yes' : 'no'}, args: ${args.length}`)
+console.error(`[launcher] ${T()} Mode: ${permissionMode}, MCP: ${mcpTempFile ? 'yes' : 'no'}, args: ${args.length}`)
 console.error(`[launcher] ${T()} Spawning claude...`)
 
 // Spawn claude with exact args - no shell

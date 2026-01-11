@@ -318,12 +318,13 @@ export default function App() {
 
   // Summon a new god (with specific name)
   // Server handles all state - no optimistic UI needed
-  const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null) => {
+  const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null, permissionMode) => {
     send({
       event: 'god:spawn',
       name,
       task,
       personality,
+      permissionMode,
       project
     })
   }, [send])
@@ -546,9 +547,12 @@ export default function App() {
         }
       }
 
-      // Escape: Clear focus
+      // Escape: Clear focus (only when terminal isn't focused - let Escape pass through to terminal apps)
       if (e.key === 'Escape' && focusedEntity) {
-        handleSetFocus(null)
+        const isTerminalFocused = document.activeElement?.closest('.entity-content')
+        if (!isTerminalFocused) {
+          handleSetFocus(null)
+        }
       }
 
       // Cmd+Up (Mac) / Alt+Up: Focus previous entity
@@ -993,8 +997,8 @@ export default function App() {
       {/* Summon modal */}
       <SummonModal
         isOpen={summonModalOpen}
-        onSummon={(name, task, personality, project) => {
-          handleSummonGod(name, task, personality, project)
+        onSummon={(name, task, personality, project, permissionMode) => {
+          handleSummonGod(name, task, personality, project, permissionMode)
           setSummonModalOpen(false)
         }}
         onCancel={() => setSummonModalOpen(false)}

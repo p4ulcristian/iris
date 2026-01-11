@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -279,6 +279,52 @@ ipcMain.handle('open-external', async (_, url) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url)
   }
+})
+
+// OAuth popup for services that block webview login (Google, etc.)
+ipcMain.handle('open-auth-popup', async (_, url, partition) => {
+  return new Promise((resolve) => {
+    const ses = session.fromPartition(partition)
+
+    // Spoof Chrome user agent
+    const chromeUA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    ses.setUserAgent(chromeUA)
+
+    const authWindow = new BrowserWindow({
+      width: 450,
+      height: 650,
+      parent: mainWindow,
+      modal: true,
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        session: ses,
+        // Disable automation detection
+        enableBlinkFeatures: '',
+        disableBlinkFeatures: 'AutomationControlled'
+      }
+    })
+
+    authWindow.loadURL(url)
+
+    authWindow.on('closed', () => {
+      resolve({ success: true })
+    })
+
+    // Close when navigating away from login
+    authWindow.webContents.on('did-navigate', (event, navUrl) => {
+      if (!navUrl.includes('accounts.google.com') &&
+          !navUrl.includes('accounts.youtube.com') &&
+          !navUrl.includes('signin')) {
+        setTimeout(() => {
+          if (!authWindow.isDestroyed()) {
+            authWindow.close()
+          }
+        }, 500)
+      }
+    })
+  })
 })
 
 // Focus existing window when second instance tries to launch

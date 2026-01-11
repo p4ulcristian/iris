@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('iris', {
   // File dialogs
   selectFolder: () => ipcRenderer.invoke('select-folder'),
   // External links
-  openExternal: (url) => ipcRenderer.invoke('open-external', url)
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  // OAuth popup for Google login
+  openAuthPopup: (url, partition) => ipcRenderer.invoke('open-auth-popup', url, partition)
 })
