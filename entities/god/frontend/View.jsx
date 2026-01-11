@@ -18,6 +18,8 @@ const APPROX_CELL_HEIGHT = 17
 
 // Resize polling interval (ms)
 const RESIZE_POLL_INTERVAL = 200
+// Debounce delay before sending resize to server (ms)
+const RESIZE_DEBOUNCE_DELAY = 300
 
 export default function TerminalContent({ entity, isFocused }) {
   const containerRef = useRef(null)
@@ -25,6 +27,7 @@ export default function TerminalContent({ entity, isFocused }) {
   const wsRef = useRef(null)
   const cellDimsRef = useRef(null)
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
+  const resizeDebounceRef = useRef(null)
 
   const { name, displayName, color } = entity
   const godName = name
@@ -147,11 +150,10 @@ export default function TerminalContent({ entity, isFocused }) {
     // Track current container for hot reload detection
     attachedContainerRef.current = containerRef.current
 
-    // Initial size from actual container measurement
-    const rect = containerRef.current.getBoundingClientRect()
+    // Initial size from actual container measurement (use offset* to ignore transforms)
     const { cols: initialCols, rows: initialRows } = calcDimensions(
-      rect.width || 800,
-      rect.height || 600
+      containerRef.current.offsetWidth || 800,
+      containerRef.current.offsetHeight || 600
     )
 
     // Gods (no displayName) hide cursor, terminals show it
@@ -206,9 +208,9 @@ export default function TerminalContent({ entity, isFocused }) {
     document.fonts.ready.then(() => {
       if (updateCellDimensions()) {
         // Fonts caused dimension change - refit terminal
-        const rect = containerRef.current?.getBoundingClientRect()
-        if (rect && rect.width > 50 && rect.height > 50) {
-          const { cols, rows } = calcDimensions(rect.width, rect.height)
+        const el = containerRef.current
+        if (el && el.offsetWidth > 50 && el.offsetHeight > 50) {
+          const { cols, rows } = calcDimensions(el.offsetWidth, el.offsetHeight)
           if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
             term.resize(cols, rows)
           }
@@ -272,9 +274,12 @@ export default function TerminalContent({ entity, isFocused }) {
     container.addEventListener('keydown', handleShortcut, true)
 
     // Simple polling for resize - reliable and self-healing
+    // Use offsetWidth/Height instead of getBoundingClientRect to ignore CSS transforms
+    // (Framer Motion uses scale/rotate which affects getBoundingClientRect)
     const resizePoll = setInterval(() => {
       try {
-        const { width, height } = container.getBoundingClientRect()
+        const width = container.offsetWidth
+        const height = container.offsetHeight
         if (width < 50 || height < 50) return
 
         updateCellDimensions()
@@ -290,22 +295,28 @@ export default function TerminalContent({ entity, isFocused }) {
           lastSizeRef.current = { cols, rows }
           term.resize(cols, rows)
 
-          const afterBase = buffer?.baseY || 0
-          const afterViewport = buffer?.viewportY || 0
-          console.warn(`[${godName}] Resize ${cols}x${rows} | buffer: base ${beforeBase}->${afterBase}, viewport ${beforeViewport}->${afterViewport}`)
+          // Clear xterm scrollback on resize to prevent corrupted reflow
+          // Zellij maintains the real history - xterm is just a view
+          term.clear()
 
-          // Refresh to sync scroll state after resize
-          term.refresh(0, term.rows - 1)
+          console.warn(`[${godName}] Resize ${cols}x${rows} - cleared scrollback`)
 
-          // Send to server if WebSocket is ready
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({
-              event: 'pty:resize',
-              godName,
-              cols,
-              rows
-            }))
+          // Debounce server resize - only send after size is stable
+          // This prevents rapid resize events from corrupting Zellij scrollback
+          if (resizeDebounceRef.current) {
+            clearTimeout(resizeDebounceRef.current)
           }
+          resizeDebounceRef.current = setTimeout(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              console.warn(`[${godName}] Sending debounced resize to server: ${cols}x${rows}`)
+              wsRef.current.send(JSON.stringify({
+                event: 'pty:resize',
+                godName,
+                cols,
+                rows
+              }))
+            }
+          }, RESIZE_DEBOUNCE_DELAY)
         }
       } catch {}
     }, RESIZE_POLL_INTERVAL)
@@ -390,6 +401,9 @@ export default function TerminalContent({ entity, isFocused }) {
       window.removeEventListener('wheel', handleWheel, { capture: true })
       onFirstRender.dispose()
       clearInterval(resizePoll)
+      if (resizeDebounceRef.current) {
+        clearTimeout(resizeDebounceRef.current)
+      }
       if (textarea) {
         textarea.removeEventListener('keydown', handleShortcut, true)
       }

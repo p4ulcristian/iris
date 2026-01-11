@@ -219,10 +219,13 @@ export function detachPty(godName, ws) {
 
   entry.clients.delete(ws)
 
-  // Keep PTY alive even with no clients - this prevents Claude Code input from getting stuck
-  // The PTY will be killed explicitly when the god is banished via killPty()
+  // Kill PTY when last client disconnects - this detaches from Zellij
+  // Next connection will create fresh PTY with correct size
+  // (Zellij uses minimum size of all attached clients, so stale clients cause sizing issues)
   if (entry.clients.size === 0) {
-    ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
+    ptyLog(`[detach] ${godName}: last client disconnected, killing PTY to detach from Zellij`)
+    entry.proc.kill()
+    ptyProcesses.delete(godName)
   }
 }
 
@@ -254,11 +257,21 @@ export function resizePty(godName, cols, rows) {
 }
 
 export function detachAllFromClient(ws) {
+  const toKill = []
   ptyProcesses.forEach((entry, godName) => {
     entry.clients.delete(ws)
     ptyLog(`[detach] ${godName}: ${entry.clients.size} clients remaining`)
     if (entry.clients.size === 0) {
-      ptyLog(`[detach] ${godName}: last client disconnected, keeping PTY alive`)
+      toKill.push(godName)
+    }
+  })
+  // Kill PTYs with no clients - detach from Zellij so next attach gets correct size
+  toKill.forEach(godName => {
+    const entry = ptyProcesses.get(godName)
+    if (entry) {
+      ptyLog(`[detach] ${godName}: last client disconnected, killing PTY to detach from Zellij`)
+      entry.proc.kill()
+      ptyProcesses.delete(godName)
     }
   })
 }
