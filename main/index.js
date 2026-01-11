@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, session } from 'electron'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
+import { importChromeGoogleCookies } from './chrome-cookies.js'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
 
@@ -278,6 +279,24 @@ ipcMain.handle('select-folder', async () => {
 ipcMain.handle('open-external', async (_, url) => {
   if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
     await shell.openExternal(url)
+  }
+})
+
+// Import Chrome's Google cookies
+ipcMain.handle('import-chrome-cookies', async () => {
+  console.log('[chrome-import] Starting cookie import...')
+  try {
+    // Import to default session (no partition)
+    const ses = session.defaultSession
+    console.log('[chrome-import] Got session, calling importChromeGoogleCookies...')
+    const result = await importChromeGoogleCookies(ses)
+    console.log('[chrome-import] Success:', result)
+
+    return { success: true, ...result }
+  } catch (e) {
+    console.error('[chrome-import] Failed:', e.message)
+    console.error('[chrome-import] Stack:', e.stack)
+    return { success: false, error: e.message }
   }
 })
 

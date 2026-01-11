@@ -14,7 +14,10 @@ import {
   faEye,
   faEyeSlash,
   faBars,
-  faTrash
+  faTrash,
+  faFileLines,
+  faCode,
+  faDatabase
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '@/store'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -73,29 +76,31 @@ function formatLines(count) {
 
 // Folder stats inline card
 function FolderStatsCard({ stats, isLoading, depth }) {
+  // Align with children: 4px base + (depth+1) * 14px for tree branches + icon spacing
+  const marginLeft = depth === 0 ? 24 : 4 + (depth + 1) * 14
   return (
     <div
-      className="mx-1 my-1 p-2 bg-white/5 rounded-lg border border-white/10"
-      style={{ marginLeft: `${depth * 14 + 10}px`, marginRight: '10px' }}
+      className="my-0.5 px-2 py-1 bg-white/5 rounded border border-white/10 mr-2"
+      style={{ marginLeft }}
     >
       {isLoading ? (
-        <div className="text-[11px] text-white/40 animate-pulse">Loading stats...</div>
+        <div className="text-[8px] text-white/40 animate-pulse">Loading...</div>
       ) : stats ? (
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-          <div className="flex items-center gap-1.5 text-white/60">
-            <span>📄</span>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[8px]">
+          <div className="flex items-center gap-1 text-white/50">
+            <FontAwesomeIcon icon={faFileLines} className="w-2 h-2" />
             <span>{stats.fileCount.toLocaleString()} files</span>
           </div>
-          <div className="flex items-center gap-1.5 text-white/60">
-            <span>📁</span>
+          <div className="flex items-center gap-1 text-white/50">
+            <FontAwesomeIcon icon={faFolderTree} className="w-2 h-2" />
             <span>{stats.folderCount.toLocaleString()} folders</span>
           </div>
-          <div className="flex items-center gap-1.5 text-white/60">
-            <span>📏</span>
+          <div className="flex items-center gap-1 text-white/50">
+            <FontAwesomeIcon icon={faCode} className="w-2 h-2" />
             <span>{formatLines(stats.lineCount)} lines</span>
           </div>
-          <div className="flex items-center gap-1.5 text-white/60">
-            <span>💾</span>
+          <div className="flex items-center gap-1 text-white/50">
+            <FontAwesomeIcon icon={faDatabase} className="w-2 h-2" />
             <span>{formatSize(stats.totalSize)}</span>
           </div>
         </div>
@@ -104,8 +109,32 @@ function FolderStatsCard({ stats, isLoading, depth }) {
   )
 }
 
+// Tree branch connector for L-shaped indent guides
+function TreeBranch({ depth, isLast, parentIsLast = [] }) {
+  console.log('[TreeBranch]', { depth, isLast, parentIsLast })
+  if (depth === 0) return null
+
+  return (
+    <div className="flex bg-red-500/20">
+      {/* Continuation lines from ancestors */}
+      {parentIsLast.slice(0, -1).map((wasLast, i) => (
+        <div key={i} className="w-4 h-6 flex justify-center border border-blue-500/50">
+          {!wasLast && <div className="w-0.5 h-full bg-white/60" />}
+        </div>
+      ))}
+      {/* Current branch connector: ├── or └── */}
+      <div className="w-4 h-6 relative border border-green-500/50">
+        {/* Vertical line */}
+        <div className={`absolute left-1/2 -translate-x-1/2 w-0.5 bg-white/60 ${isLast ? 'top-0 h-1/2' : 'h-full'}`} />
+        {/* Horizontal line */}
+        <div className="absolute top-1/2 left-1/2 w-2 h-0.5 bg-white/60" />
+      </div>
+    </div>
+  )
+}
+
 // File tree node component
-function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu, loadedStats, loadingStats }) {
+function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu, loadedStats, loadingStats }) {
   if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
@@ -119,19 +148,23 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
     onContextMenu?.(e, node)
   }
 
+  // Build ancestry for children
+  const childParentIsLast = [...parentIsLast, isLast]
+
   return (
     <div>
       <div
         onClick={() => isFolder ? toggleFolder(node.path) : onFileClick(node)}
         onContextMenu={handleContextMenu}
         className={`
-          flex items-center gap-2 py-1.5 cursor-pointer rounded-lg mx-1
+          flex items-center gap-1.5 py-1 cursor-pointer rounded mx-0.5 pr-2
           hover:bg-white/8 active:bg-white/12 transition-all duration-150
           ${isFolder ? 'text-white/70' : 'text-white/85'}
           ${isExpanded ? 'bg-white/5' : ''}
         `}
-        style={{ paddingLeft: `${depth * 14 + 10}px`, paddingRight: '10px' }}
+        style={{ paddingLeft: depth === 0 ? '8px' : '4px' }}
       >
+        <TreeBranch depth={depth} isLast={isLast} parentIsLast={childParentIsLast} />
         {isFolder && (
           <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`}>
             <FontAwesomeIcon
@@ -143,28 +176,25 @@ function TreeNode({ node, depth = 0, onFileClick, expandedFolders, toggleFolder,
         {isFolder ? (
           <FontAwesomeIcon
             icon={isExpanded ? faFolderOpen : faFolder}
-            className={`w-4 h-4 transition-colors ${isExpanded ? 'text-yellow-400' : 'text-yellow-500/70'}`}
+            className={`w-3.5 h-3.5 transition-colors ${isExpanded ? 'text-yellow-400' : 'text-yellow-500/70'}`}
           />
         ) : (
-          <FileIcon filename={node.name} size={16} />
+          <FileIcon filename={node.name} size={14} />
         )}
-        <span className="truncate text-[13px]">{node.name}</span>
+        <span className="truncate text-[12px]">{node.name}</span>
       </div>
       {isFolder && isExpanded && (
         <FolderStatsCard stats={stats} isLoading={isStatsLoading} depth={depth} />
       )}
       {isFolder && isExpanded && node.children && (
-        <div className="relative">
-          {/* Subtle indent guide line */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-white/8"
-            style={{ left: `${depth * 14 + 18}px` }}
-          />
-          {node.children.map(child => (
+        <div>
+          {node.children.map((child, index) => (
             <TreeNode
               key={child.path}
               node={child}
               depth={depth + 1}
+              isLast={index === node.children.length - 1}
+              parentIsLast={childParentIsLast}
               onFileClick={onFileClick}
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
@@ -230,9 +260,17 @@ export default function CodeView({ entity }) {
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   const [showHidden, setShowHidden] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return parseInt(localStorage.getItem('code-sidebar-width')) || 240
+    }
+    return 240
+  })
+  const [isResizing, setIsResizing] = useState(false)
   const [projects, setProjects] = useState([])
   const [projectsFetched, setProjectsFetched] = useState(false)
   const [contextMenu, setContextMenu] = useState(null) // {x, y, node}
+  const sidebarRef = useRef(null)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
@@ -248,6 +286,34 @@ export default function CodeView({ entity }) {
       setHighlights(codeHighlights)
     }
   }, [codeHighlights])
+
+  // Sidebar resize handling
+  useEffect(() => {
+    if (!isResizing) return
+
+    const handleMouseMove = (e) => {
+      const sidebarLeft = sidebarRef.current?.getBoundingClientRect().left || 0
+      const newWidth = Math.min(400, Math.max(160, e.clientX - sidebarLeft))
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      localStorage.setItem('code-sidebar-width', sidebarWidth.toString())
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isResizing, sidebarWidth])
 
   // Fetch projects on mount - use send/listen pattern like PersonalitiesView
   useEffect(() => {
@@ -760,10 +826,22 @@ export default function CodeView({ entity }) {
     <div className="absolute inset-0 flex overflow-hidden entity-content">
       {/* File tree sidebar - liquid glass */}
       <div
-        className={`flex-shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl transition-all duration-200 ${
-          sidebarCollapsed ? 'w-10' : 'w-60'
-        }`}
+        ref={sidebarRef}
+        className={`flex-shrink-0 flex flex-col border-r border-white/8 bg-black/20 backdrop-blur-xl relative ${
+          sidebarCollapsed ? 'w-10' : ''
+        } ${isResizing ? '' : 'transition-all duration-200'}`}
+        style={sidebarCollapsed ? {} : { width: sidebarWidth }}
       >
+        {/* Resize handle */}
+        {!sidebarCollapsed && (
+          <div
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/40 transition-colors z-10"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setIsResizing(true)
+            }}
+          />
+        )}
         {/* Header */}
         <div className={`flex items-center border-b border-white/8 ${sidebarCollapsed ? 'justify-center px-0 py-2' : 'justify-between px-3 py-2'}`}>
           {!sidebarCollapsed && (
@@ -851,10 +929,11 @@ export default function CodeView({ entity }) {
                 <div className="animate-pulse">Loading...</div>
               </div>
             )}
-            {!loading && fileTree && fileTree.map(node => (
+            {!loading && fileTree && fileTree.map((node, index) => (
               <TreeNode
                 key={node.path}
                 node={node}
+                isLast={index === fileTree.length - 1}
                 onFileClick={loadFile}
                 expandedFolders={expandedFolders}
                 toggleFolder={toggleFolder}

@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('iris', {
   // External links
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   // OAuth popup for Google login
-  openAuthPopup: (url, partition) => ipcRenderer.invoke('open-auth-popup', url, partition)
+  openAuthPopup: (url, partition) => ipcRenderer.invoke('open-auth-popup', url, partition),
+  // Import Chrome's Google session
+  importChromeCookies: () => ipcRenderer.invoke('import-chrome-cookies')
 })

@@ -7,8 +7,10 @@ import {
   faXmark,
   faPlus,
   faLock,
-  faHome
+  faHome,
+  faDownload
 } from '@fortawesome/free-solid-svg-icons'
+import { faChrome } from '@fortawesome/free-brands-svg-icons'
 import { useStore } from '@/store'
 import { IconButton } from '../../_ui'
 
@@ -56,6 +58,7 @@ export default function BrowserView({ entity }) {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const containerRef = useRef(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
   const webviewRefs = useRef({})
   const nextTabId = useRef(2)
   const lastBrowserUrl = useRef(null)
@@ -149,6 +152,31 @@ export default function BrowserView({ entity }) {
     navigateTo('https://duckduckgo.com')
   }
 
+  // Import Chrome's Google session
+  const importChromeSession = async () => {
+    if (isImporting) return
+
+    setIsImporting(true)
+    try {
+      const result = await window.iris.importChromeCookies()
+
+      if (result.success) {
+        alert(`Imported ${result.imported} cookies from Chrome. Reloading...`)
+        // Reload current tab to apply new cookies
+        const webview = webviewRefs.current[activeTabId]
+        if (webview) {
+          webview.reload()
+        }
+      } else {
+        alert(`Failed to import: ${result.error}`)
+      }
+    } catch (e) {
+      alert(`Error: ${e.message}`)
+    } finally {
+      setIsImporting(false)
+    }
+  }
+
   // Add new tab
   const addTab = () => {
     const newTab = {
@@ -232,19 +260,6 @@ export default function BrowserView({ entity }) {
       ))
     }
 
-    // Intercept Google login - open in popup window instead
-    const handleWillNavigate = async (e) => {
-      const url = e.url
-      if (url.includes('accounts.google.com') || url.includes('accounts.youtube.com')) {
-        e.preventDefault()
-        // Open login in popup BrowserWindow (not blocked by Google)
-        await window.iris.openAuthPopup(url, 'persist:browser')
-        // Reload the page after login to pick up the session
-        webview.reload()
-      }
-    }
-
-    webview.addEventListener('will-navigate', handleWillNavigate)
     webview.addEventListener('page-title-updated', handleTitleUpdate)
     webview.addEventListener('did-navigate', handleNavigate)
     webview.addEventListener('did-navigate-in-page', handleNavigate)
@@ -253,7 +268,6 @@ export default function BrowserView({ entity }) {
     webview.addEventListener('did-stop-loading', handleLoadStop)
 
     return () => {
-      webview.removeEventListener('will-navigate', handleWillNavigate)
       webview.removeEventListener('page-title-updated', handleTitleUpdate)
       webview.removeEventListener('did-navigate', handleNavigate)
       webview.removeEventListener('did-navigate-in-page', handleNavigate)
@@ -313,6 +327,14 @@ export default function BrowserView({ entity }) {
             />
           </div>
         </form>
+
+        {/* Import Chrome session */}
+        <IconButton
+          icon={faChrome}
+          onClick={importChromeSession}
+          disabled={isImporting}
+          title="Import session from Chrome"
+        />
       </div>
 
       {/* Webview container */}
@@ -322,8 +344,6 @@ export default function BrowserView({ entity }) {
             key={tab.id}
             ref={(el) => el && setupWebview(el, tab.id)}
             src={tab.url}
-            partition="persist:browser"
-            useragent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
             style={{
               position: 'absolute',
               top: 0,
