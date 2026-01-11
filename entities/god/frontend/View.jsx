@@ -13,8 +13,11 @@ function hexToRgb(hex) {
 }
 
 // Approximate cell dimensions for initial sizing (before xterm renders)
-const APPROX_CELL_WIDTH = 8.4
+const APPROX_CELL_WIDTH = 9
 const APPROX_CELL_HEIGHT = 17
+
+// xterm has 4px padding on each side (see index.css .xterm)
+const XTERM_PADDING = 8
 
 // Resize polling interval (ms)
 const RESIZE_POLL_INTERVAL = 200
@@ -27,6 +30,7 @@ export default function TerminalContent({ entity, isFocused }) {
   const wsRef = useRef(null)
   const cellDimsRef = useRef(null)
   const lastSizeRef = useRef({ cols: 0, rows: 0 })
+  const lastPixelsRef = useRef({ width: 0, height: 0 })
   const resizeDebounceRef = useRef(null)
 
   const { name, displayName, color } = entity
@@ -65,12 +69,13 @@ export default function TerminalContent({ entity, isFocused }) {
   const palette = useMemo(() => generatePalette(godColor, themeTerminalSettings), [godColor, themeTerminalSettings])
 
   // Helper: calculate cols/rows from pixel dimensions
+  // Subtract xterm padding (8px total) from container size
   const calcDimensions = (width, height) => {
     const cellWidth = cellDimsRef.current?.width || APPROX_CELL_WIDTH
     const cellHeight = cellDimsRef.current?.height || APPROX_CELL_HEIGHT
     return {
-      cols: Math.floor(width / cellWidth) || 80,
-      rows: Math.floor(height / cellHeight) || 24
+      cols: Math.floor((width - XTERM_PADDING) / cellWidth) || 80,
+      rows: Math.floor((height - XTERM_PADDING) / cellHeight) || 24
     }
   }
 
@@ -101,16 +106,13 @@ export default function TerminalContent({ entity, isFocused }) {
     }
   }, [isFocused])
 
-  // Handle scroll events from App.jsx (Shift+Arrow)
+  // Handle scroll events from App.jsx (Shift+Arrow) - forward to Zellij
   useEffect(() => {
     if (!isFocused) return
 
     const handleScroll = (e) => {
       const term = termRef.current
-      if (!term) return
-
-      const buffer = term.buffer?.active
-      const base = buffer?.baseY || 0
+      if (!term || wsRef.current?.readyState !== WebSocket.OPEN) return
 
       // Determine scroll amount
       let lines = 0
@@ -121,17 +123,11 @@ export default function TerminalContent({ entity, isFocused }) {
         case 'PageDown': lines = term.rows; break
       }
 
-      if (base > 0) {
-        // Has scrollback - scroll xterm buffer
-        term.scrollLines(lines)
-        term.refresh(0, term.rows - 1)
-      } else if (wsRef.current?.readyState === WebSocket.OPEN) {
-        // No scrollback - send SGR mouse sequences to PTY for TUI apps
-        const button = lines > 0 ? 65 : 64  // 65=down, 64=up
-        const count = Math.abs(lines)
-        for (let i = 0; i < count; i++) {
-          wsRef.current.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
-        }
+      // Forward to Zellij via SGR mouse sequences
+      const button = lines > 0 ? 65 : 64
+      const count = Math.abs(lines)
+      for (let i = 0; i < count; i++) {
+        wsRef.current.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
       }
     }
 
@@ -169,7 +165,7 @@ export default function TerminalContent({ entity, isFocused }) {
       cols: initialCols,
       theme: termTheme,
       allowTransparency: true,
-      scrollback: 10000
+      scrollback: 0  // No xterm scrollback - Zellij manages history
     })
 
     term.open(containerRef.current)
@@ -282,24 +278,22 @@ export default function TerminalContent({ entity, isFocused }) {
         const height = container.offsetHeight
         if (width < 50 || height < 50) return
 
+        // Skip if pixel dimensions unchanged (most common case)
+        if (width === lastPixelsRef.current.width &&
+            height === lastPixelsRef.current.height) {
+          return
+        }
+        lastPixelsRef.current = { width, height }
+
         updateCellDimensions()
         const { cols, rows } = calcDimensions(width, height)
 
-        // Only resize if dimensions actually changed
+        // Only resize if cols/rows actually changed
         if (cols > 0 && rows > 0 &&
             (cols !== lastSizeRef.current.cols || rows !== lastSizeRef.current.rows)) {
-          const buffer = term.buffer?.active
-          const beforeBase = buffer?.baseY || 0
-          const beforeViewport = buffer?.viewportY || 0
-
           lastSizeRef.current = { cols, rows }
           term.resize(cols, rows)
-
-          // Clear xterm scrollback on resize to prevent corrupted reflow
-          // Zellij maintains the real history - xterm is just a view
-          term.clear()
-
-          console.warn(`[${godName}] Resize ${cols}x${rows} - cleared scrollback`)
+          console.warn(`[${godName}] Resize ${cols}x${rows}`)
 
           // Debounce server resize - only send after size is stable
           // This prevents rapid resize events from corrupting Zellij scrollback
@@ -367,34 +361,20 @@ export default function TerminalContent({ entity, isFocused }) {
 
     term.focus()
 
-    // Wheel handler on WINDOW to ensure we always catch events
+    // Wheel handler - always forward to Zellij (no xterm scrollback)
+    // SGR mouse format: \x1b[<button;x;yM where button is 64 (up) or 65 (down)
     const handleWheel = (e) => {
-      // Only handle if event target is inside our container
       if (!container.contains(e.target)) return
 
-      const buffer = term.buffer?.active
-      const base = buffer?.baseY || 0
-
-      console.warn(`[${godName}] wheel event: base=${base}, target=${e.target.className}`)
-
-      if (base > 0) {
-        // Has scrollback - scroll xterm buffer
-        const lines = Math.sign(e.deltaY) * Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
-        term.scrollLines(lines)
-      } else {
-        // No scrollback - send wheel as SGR mouse escape sequence to PTY for TUI apps
-        // SGR format: \x1b[<button;x;yM where button is 64 (up) or 65 (down)
-        const button = e.deltaY > 0 ? 65 : 64  // 65=down, 64=up
-        const scrollCount = Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
-        for (let i = 0; i < scrollCount; i++) {
-          wsRef.current?.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
-        }
+      const button = e.deltaY > 0 ? 65 : 64
+      const scrollCount = Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
+      for (let i = 0; i < scrollCount; i++) {
+        wsRef.current?.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
       }
       e.preventDefault()
       e.stopPropagation()
     }
     window.addEventListener('wheel', handleWheel, { capture: true, passive: false })
-    console.warn(`[${godName}] Wheel handler attached to window, container=${container.className}`)
 
     return () => {
       console.warn(`[${godName}] Terminal effect cleanup - disposing xterm`)
