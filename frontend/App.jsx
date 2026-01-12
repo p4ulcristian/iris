@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
-import LeftSidebar from './components/LeftSidebar'
-import SecondarySidebar from './components/SecondarySidebar'
+import Sidebar from './components/Sidebar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
@@ -60,88 +59,21 @@ export default function App() {
   const [summonModalOpen, setSummonModalOpen] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
-  // Sidebar responsive breakpoint
-  const SIDEBAR_BREAKPOINT = 900
+  // Sidebar state - hover expand for spawn buttons
+  const [sidebarButtonsExpanded, setSidebarButtonsExpanded] = useState(false)
 
-  // Initialize sidebar state based on window size
-  const getInitialSidebarState = () => typeof window !== 'undefined' && window.innerWidth < SIDEBAR_BREAKPOINT
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(getInitialSidebarState)
-  const [sidebarShowCards, setSidebarShowCards] = useState(() => !getInitialSidebarState())
-  const [sidebarShowIcons, setSidebarShowIcons] = useState(getInitialSidebarState)
-  const [sidebarShowButtons, setSidebarShowButtons] = useState(() => !getInitialSidebarState())
-  const [sidebarAutoMode, setSidebarAutoMode] = useState(true) // Track if user manually toggled
-  const sidebarAutoModeRef = useRef(true) // Ref for stable access in callbacks
-  const [sidebarButtonsExpanded, setSidebarButtonsExpanded] = useState(false) // Hover expand for extra buttons
+  // Sidebar width state with localStorage persistence
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('iris:sidebar-width')
+    return saved ? parseInt(saved) : 288
+  })
 
-  // Track if animation is in progress to prevent ResizeObserver interference
-  const sidebarAnimatingRef = useRef(false)
-
-  // Handle sidebar toggle - simplified
-  const handleSidebarToggle = useCallback((auto = false) => {
-    // If manual toggle, disable auto mode
-    if (!auto) {
-      setSidebarAutoMode(false)
-      sidebarAutoModeRef.current = false
-    }
-
-    // Simple toggle
-    setSidebarCollapsed(prev => {
-      const newCollapsed = !prev
-      setSidebarShowCards(!newCollapsed)
-      setSidebarShowIcons(newCollapsed)
-      setSidebarShowButtons(!newCollapsed)
-      return newCollapsed
-    })
+  const handleSidebarResize = useCallback((width) => {
+    setSidebarWidth(width)
+    localStorage.setItem('iris:sidebar-width', width.toString())
   }, [])
 
-  // Auto-collapse sidebar based on container size (works with dev tools too)
   const mainContainerRef = useRef(null)
-  const sidebarObserverRef = useRef(null)
-  const sidebarCollapsedRef = useRef(sidebarCollapsed)
-  sidebarCollapsedRef.current = sidebarCollapsed
-
-  // Track which side of breakpoint we're on to detect crossings
-  const lastBreakpointSideRef = useRef(null)
-
-  useEffect(() => {
-    if (!mainContainerRef.current) return
-
-    let resizeTimeout
-    const handleResize = (entries) => {
-      clearTimeout(resizeTimeout)
-      resizeTimeout = setTimeout(() => {
-        // Skip if animation is in progress
-        if (sidebarAnimatingRef.current) return
-
-        const width = entries[0]?.contentRect?.width || window.innerWidth
-        const shouldCollapse = width < SIDEBAR_BREAKPOINT
-
-        // Detect breakpoint crossing - re-enable auto mode when crossing
-        if (lastBreakpointSideRef.current !== null && lastBreakpointSideRef.current !== shouldCollapse) {
-          sidebarAutoModeRef.current = true
-          setSidebarAutoMode(true)
-        }
-        lastBreakpointSideRef.current = shouldCollapse
-
-        // Only auto-toggle if in auto mode
-        if (!sidebarAutoModeRef.current) return
-
-        if (shouldCollapse !== sidebarCollapsedRef.current) {
-          handleSidebarToggle(true) // true = auto toggle
-        }
-      }, 150) // Debounce
-    }
-
-    sidebarObserverRef.current = new ResizeObserver(handleResize)
-    sidebarObserverRef.current.observe(mainContainerRef.current)
-
-    return () => {
-      clearTimeout(resizeTimeout)
-      if (sidebarObserverRef.current) {
-        sidebarObserverRef.current.disconnect()
-      }
-    }
-  }, [handleSidebarToggle])
 
   // Refs for keyboard handlers (avoid stale closures)
   const tabsRef = useRef(tabs)
@@ -462,14 +394,6 @@ export default function App() {
         return
       }
 
-      // Cmd+B (Mac) / Alt+B: Toggle sidebar
-      if (isModifierPressed(e) && code === 'KeyB') {
-        e.preventDefault()
-        e.stopPropagation()
-        handleSidebarToggle()
-        return
-      }
-
       // Cmd+T (Mac) / Alt+T: New tab
       if (isModifierPressed(e) && code === 'KeyT') {
         e.preventDefault()
@@ -605,7 +529,7 @@ export default function App() {
   }, [
     handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab,
     focusedEntity, activeEntities,
-    handleSetFocus, handleSidebarToggle, send, tabs, activeTabId
+    handleSetFocus, send, tabs, activeTabId
   ])
 
   // Modifier key hold for shortcuts popup (Cmd on Mac, Alt on others)
@@ -708,8 +632,8 @@ export default function App() {
 
       {/* Main layout: sidebar + content */}
       <div ref={mainContainerRef} className="flex flex-1 min-h-0 px-3">
-        {/* Left Sidebar (Tabs + Services + Eye menu) */}
-        <LeftSidebar
+        {/* Unified Sidebar */}
+        <Sidebar
           connected={connected}
           send={send}
           tabs={tabs}
@@ -717,30 +641,16 @@ export default function App() {
           onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
           onTabClose={handleKillTab}
           onTabNew={() => send({ event: 'tab:add' })}
-          getEntitiesForTab={getEntitiesForTab}
-          sidebarCollapsed={sidebarCollapsed}
-          sidebarButtonsExpanded={sidebarButtonsExpanded}
-          setSidebarButtonsExpanded={setSidebarButtonsExpanded}
-          onSidebarToggle={handleSidebarToggle}
-          onSpawnEntity={handleSpawnEntity}
-          onOpenSummonModal={() => setSummonModalOpen(true)}
-        />
-
-        {/* Secondary Sidebar (Entity cards) */}
-        <SecondarySidebar
           allStages={allStages}
           globalActiveIdx={globalActiveIdx}
           activeEntities={activeEntities}
-          tabs={tabs}
-          activeTabId={activeTabId}
           focusedEntity={focusedEntity}
           effectiveFocusedEntity={effectiveFocusedEntity}
           godColors={godColors}
           loadStage={loadStage}
           initialLoadDone={initialLoadDone}
-          sidebarCollapsed={sidebarCollapsed}
-          sidebarShowCards={sidebarShowCards}
-          sidebarShowIcons={sidebarShowIcons}
+          sidebarButtonsExpanded={sidebarButtonsExpanded}
+          setSidebarButtonsExpanded={setSidebarButtonsExpanded}
           onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
           onEntityClose={handleKillEntity}
           onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
@@ -758,6 +668,10 @@ export default function App() {
           onCreateStageAtPosition={(entityId, sourceStageId, position) => {
             send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
           }}
+          onSpawnEntity={handleSpawnEntity}
+          onOpenSummonModal={() => setSummonModalOpen(true)}
+          width={sidebarWidth}
+          onWidthChange={handleSidebarResize}
         />
 
         {/* Main content area */}

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { useStore } from '../store'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -9,15 +9,22 @@ import {
   faXmark,
   faPlus,
   faScroll,
-  faEye,
   faPlug,
   faTerminal,
   faTrash
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import DraggableTypeButton from './DraggableTypeButton'
+import EntityGroup from './EntityGroup'
+import TileUngroupDropZone from './TileUngroupDropZone'
 import { REALM_COLORS } from '../themes'
 import { CHRONICLE_URL } from '../config'
+
+// Constants
+const LEFT_COLUMN_WIDTH = 56
+const MIN_WIDTH = 200
+const MAX_WIDTH = 500
+const WIDTH_TRANSITION_MS = 150
 
 function Spinner() {
   return (
@@ -51,7 +58,6 @@ function ChronicleButton() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
 
-  // Get chronicle status from store (pushed via WebSocket)
   const chronicleDetails = useStore(state => state.chronicleDetails)
   const status = chronicleDetails || { running: false, volume: 0, start_time: null }
 
@@ -60,7 +66,6 @@ function ChronicleButton() {
   const loadMoreRef = useRef(null)
   const prevScrollHeight = useRef(0)
 
-  // Fetch history with cursor-based pagination
   const fetchHistory = useCallback((reset = false) => {
     const params = new URLSearchParams({ count: '20', direction: 'before' })
     if (cursor && !reset) {
@@ -73,7 +78,6 @@ function ChronicleButton() {
         if (reset) {
           setLines(data.lines || [])
         } else {
-          // Prepend older lines
           setLines(prev => [...(data.lines || []), ...prev])
         }
         setCursor(data.nextCursor)
@@ -86,7 +90,6 @@ function ChronicleButton() {
       })
   }, [cursor])
 
-  // Initial load when opened
   useEffect(() => {
     if (!open) return
 
@@ -102,7 +105,6 @@ function ChronicleButton() {
         setHasMore(data.hasMore)
         setInitialLoading(false)
 
-        // Scroll to bottom after initial load
         setTimeout(() => {
           if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -116,7 +118,6 @@ function ChronicleButton() {
       })
   }, [open])
 
-  // Listen for new transcript lines via WebSocket (pushed from server)
   useEffect(() => {
     if (!open) return
 
@@ -131,14 +132,12 @@ function ChronicleButton() {
     return () => window.removeEventListener('iris:chronicle:line', handleNewLine)
   }, [open])
 
-  // IntersectionObserver for loading older entries when scrolling up
   useEffect(() => {
     if (!open || !loadMoreRef.current || loadingMore || !hasMore || initialLoading) return
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          // Save scroll height before loading
           if (scrollRef.current) {
             prevScrollHeight.current = scrollRef.current.scrollHeight
           }
@@ -154,7 +153,6 @@ function ChronicleButton() {
     return () => observer.disconnect()
   }, [open, loadingMore, hasMore, initialLoading, fetchHistory])
 
-  // Preserve scroll position when prepending content
   useEffect(() => {
     if (scrollRef.current && prevScrollHeight.current > 0 && !initialLoading) {
       const newScrollHeight = scrollRef.current.scrollHeight
@@ -166,7 +164,6 @@ function ChronicleButton() {
     }
   }, [lines, initialLoading])
 
-  // Format elapsed time
   const formatTime = (startTime) => {
     if (!startTime) return '00:00'
     const elapsed = Math.floor(Date.now() / 1000 - startTime)
@@ -175,7 +172,6 @@ function ChronicleButton() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Format relative time
   const formatRelativeTime = (timestamp) => {
     const now = new Date()
     const ts = new Date(timestamp)
@@ -187,7 +183,6 @@ function ChronicleButton() {
     return ts.toLocaleDateString()
   }
 
-  // Group lines by day
   const groupByDay = (lines) => {
     const groups = {}
     for (const line of lines) {
@@ -198,7 +193,6 @@ function ChronicleButton() {
     return groups
   }
 
-  // Format day header
   const formatDayHeader = (dateStr) => {
     const date = new Date(dateStr)
     const today = new Date()
@@ -210,7 +204,6 @@ function ChronicleButton() {
     return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     const handleClickOutside = (e) => {
@@ -223,7 +216,7 @@ function ChronicleButton() {
   }, [open])
 
   const grouped = groupByDay(lines)
-  const days = Object.keys(grouped).sort()  // oldest first (top)
+  const days = Object.keys(grouped).sort()
 
   return (
     <div className="relative" ref={menuRef}>
@@ -236,12 +229,10 @@ function ChronicleButton() {
       />
       {open && (
         <div className="absolute left-full bottom-0 ml-2 w-[400px] max-h-[60vh] liquid-glass-popup flex flex-col z-50">
-          {/* Scrollable content */}
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-3 min-h-[200px] max-h-[calc(60vh-60px)]"
           >
-            {/* Load more sentinel at top */}
             {hasMore && !initialLoading && (
               <div ref={loadMoreRef} className="py-2 text-center">
                 {loadingMore && <Spinner />}
@@ -281,7 +272,6 @@ function ChronicleButton() {
             )}
           </div>
 
-          {/* Volume bar and timer - always visible footer */}
           <div className="flex items-center gap-3 p-3 border-t border-white/10">
             <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden relative">
               <div
@@ -312,13 +302,11 @@ function LogsButton({ send }) {
   const scrollRef = useRef(null)
   const wasAtBottomRef = useRef(true)
 
-  // Fetch logs
   const fetchLogs = useCallback((type) => {
     if (!send) return
     send({ event: 'logs:read', type, lines: 200 })
   }, [send])
 
-  // Listen for log data via global WebSocket message listeners
   useEffect(() => {
     if (!open) return
 
@@ -326,7 +314,6 @@ function LogsButton({ send }) {
       try {
         const msg = JSON.parse(e.data)
         if (msg.event === 'logs:data') {
-          // Check if we're at bottom before updating
           if (scrollRef.current) {
             const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
             wasAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 50
@@ -335,7 +322,6 @@ function LogsButton({ send }) {
           setLines(prev => ({ ...prev, [msg.type]: msg.lines || [] }))
           setLoading(false)
 
-          // Auto-scroll to bottom only if we were already at bottom
           if (wasAtBottomRef.current) {
             setTimeout(() => {
               if (scrollRef.current) {
@@ -349,7 +335,6 @@ function LogsButton({ send }) {
       } catch {}
     }
 
-    // Subscribe to global WebSocket message listeners
     const messageListeners = window.__irisWsMessageListeners
     if (messageListeners) {
       messageListeners.add(handleMessage)
@@ -357,7 +342,6 @@ function LogsButton({ send }) {
     }
   }, [open])
 
-  // Initial load and polling when open
   useEffect(() => {
     if (!open) return
 
@@ -366,18 +350,16 @@ function LogsButton({ send }) {
 
     const interval = setInterval(() => {
       fetchLogs(activeTab)
-    }, 1000) // Poll every second for real-time updates
+    }, 1000)
 
     return () => clearInterval(interval)
   }, [open, activeTab, fetchLogs])
 
-  // Handle clear
   const handleClear = () => {
     if (!send) return
     send({ event: 'logs:clear', type: activeTab })
   }
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return
     const handleClickOutside = (e) => {
@@ -391,7 +373,6 @@ function LogsButton({ send }) {
 
   const currentLines = lines[activeTab] || []
 
-  // Parse log line to extract level
   const getLineLevel = (line) => {
     if (line.includes('ERROR')) return 'error'
     if (line.includes('WARN')) return 'warn'
@@ -409,7 +390,6 @@ function LogsButton({ send }) {
       />
       {open && (
         <div className="absolute left-full bottom-0 ml-2 w-[500px] max-h-[70vh] liquid-glass-popup flex flex-col z-50">
-          {/* Tabs */}
           <div className="flex border-b border-white/10">
             <button
               onClick={() => setActiveTab('backend')}
@@ -433,7 +413,6 @@ function LogsButton({ send }) {
             </button>
           </div>
 
-          {/* Log content */}
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-3 min-h-[300px] max-h-[calc(70vh-80px)] font-mono text-[10px]"
@@ -465,7 +444,6 @@ function LogsButton({ send }) {
             )}
           </div>
 
-          {/* Footer */}
           <div className="flex items-center justify-between p-2 border-t border-white/10">
             <span className="text-[10px] text-white/40">
               {currentLines.length} lines
@@ -490,14 +468,12 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
   const [isDragging, setIsDragging] = useState(false)
   const menuRef = useRef(null)
 
-  // Sync local volume from server when not dragging
   useEffect(() => {
     if (!isDragging && speakDetails?.volume !== undefined) {
       setLocalVolume(Math.round(speakDetails.volume * 100))
     }
   }, [speakDetails?.volume, isDragging])
 
-  // Close menu when clicking outside (but not while dragging slider)
   useEffect(() => {
     if (!open) return
     const handleClickOutside = (e) => {
@@ -581,7 +557,6 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
             )
           })}
 
-          {/* Volume slider for Speak service */}
           {services.speak && (
             <div className="px-3 py-2 flex items-center gap-2">
               <span className="text-[10px] text-white/40 w-6">Vol</span>
@@ -617,7 +592,8 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
   )
 }
 
-export default function LeftSidebar({
+// Left column content (tabs, services, spawn menu)
+function LeftColumn({
   connected,
   send,
   tabs,
@@ -625,12 +601,8 @@ export default function LeftSidebar({
   onTabSelect,
   onTabClose,
   onTabNew,
-  getEntitiesForTab,
-  // Eye menu props
-  sidebarCollapsed,
   sidebarButtonsExpanded,
   setSidebarButtonsExpanded,
-  onSidebarToggle,
   onSpawnEntity,
   onOpenSummonModal,
 }) {
@@ -646,11 +618,8 @@ export default function LeftSidebar({
 
   const handleServiceToggle = (service, isActive) => {
     if (!send) return
-
-    // Target state is the opposite of current (start -> true, stop -> false)
     const targetState = !isActive
     setServiceLoading(service, true, targetState)
-
     send({
       event: isActive ? 'service:stop' : 'service:start',
       service
@@ -663,14 +632,13 @@ export default function LeftSidebar({
   }
 
   return (
-    <aside className="flex flex-col items-center w-fit liquid-glass-light gap-1 z-20 overflow-visible pr-3 py-3">
+    <div className="flex flex-col items-center gap-1 py-3 px-2" style={{ width: LEFT_COLUMN_WIDTH }}>
       {/* Tabs */}
       <div className="flex flex-col items-center gap-1 overflow-visible">
         <AnimatePresence>
           {tabs?.map((tab, idx) => {
             const isActive = activeTabId === tab.id
             const realmColor = REALM_COLORS[tab.name] || '#888888'
-            // Stagger delay: only on initial load when loadStage >= 2
             const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 0.05 : 0
 
             return (
@@ -750,7 +718,7 @@ export default function LeftSidebar({
         </span>
       </div>
 
-      {/* Logs button - above Chronicle */}
+      {/* Logs button */}
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{
@@ -767,7 +735,7 @@ export default function LeftSidebar({
         <LogsButton send={send} />
       </motion.div>
 
-      {/* Chronicle preview button - above Powers */}
+      {/* Chronicle preview button */}
       {powers && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -786,7 +754,7 @@ export default function LeftSidebar({
         </motion.div>
       )}
 
-      {/* Services dropdown - only show when powers are enabled */}
+      {/* Services dropdown */}
       {powers && (
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -812,7 +780,7 @@ export default function LeftSidebar({
         </motion.div>
       )}
 
-      {/* Eye button + Spawn menu */}
+      {/* Spawn menu */}
       <motion.div
         className="relative flex flex-col items-center"
         initial={{ opacity: 0, scale: 0.8 }}
@@ -829,7 +797,7 @@ export default function LeftSidebar({
         onMouseEnter={() => setSidebarButtonsExpanded(true)}
         onMouseLeave={() => setSidebarButtonsExpanded(false)}
       >
-        {/* Spawn menu - positioned to the right of eye */}
+        {/* Spawn menu - hover to expand */}
         <AnimatePresence>
           {sidebarButtonsExpanded && (
             <motion.div
@@ -857,15 +825,231 @@ export default function LeftSidebar({
           )}
         </AnimatePresence>
 
-        {/* Eye button */}
+        {/* Spawn button */}
         <IconButton
-          icon={faEye}
+          icon={faPlus}
           size="md"
           variant="glass"
-          onClick={() => onSidebarToggle()}
-          title={sidebarCollapsed ? 'Expand sidebar (Alt+B)' : 'Collapse sidebar (Alt+B)'}
+          title="Spawn entity"
         />
       </motion.div>
+    </div>
+  )
+}
+
+// Right column content (entity cards)
+function RightColumn({
+  allStages,
+  tabs,
+  activeTabId,
+  focusedEntity,
+  onEntityClick,
+  onEntityClose,
+  onEntitySplit,
+  onMoveToTab,
+  onMoveToNewTab,
+  onReorderInStage,
+  onJoinStage,
+  onCreateStageAtPosition,
+}) {
+  return (
+    <div className="flex-1 flex flex-col overflow-visible relative pr-3">
+      <TileUngroupDropZone className="flex-1 relative pb-14">
+        {tabs.length > 0 && (
+          <div className="relative h-full">
+            {tabs.map((tab, tabIdx) => {
+              const activeTabIdx = tabs.findIndex(t => t.id === activeTabId)
+              const tabOffset = tabIdx - activeTabIdx
+              const isActiveTab = tab.id === activeTabId
+
+              const tabStages = allStages
+                ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
+                : []
+
+              return (
+                <motion.div
+                  key={tab.id}
+                  className="absolute inset-0 overflow-y-auto overflow-x-visible pt-3"
+                  initial={false}
+                  animate={{ y: `${tabOffset * 100}vh` }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                  style={{
+                    pointerEvents: isActiveTab ? 'auto' : 'none'
+                  }}
+                >
+                  {tabStages.length > 0 && (
+                    <LayoutGroup>
+                      <div className="flex flex-col gap-3 pb-16">
+                        {tabStages.map((item, stageIdx) => {
+                          const stage = item.stage || item
+                          const activeTab = tabs.find(t => t.id === tab.id)
+                          const isActiveStage = stage.id === activeTab?.activeStageId
+                          const staggerOffset = tabStages
+                            .slice(0, stageIdx)
+                            .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
+
+                          return (
+                            <EntityGroup
+                              key={stage.id}
+                              stage={stage}
+                              entities={stage.entities || []}
+                              isFocused={isActiveStage}
+                              focusedEntityId={focusedEntity}
+                              onClick={onEntityClick}
+                              onClose={onEntityClose}
+                              onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
+                              tabs={tabs}
+                              activeTabId={tab.id}
+                              onMoveToTab={onMoveToTab}
+                              onMoveToNewTab={onMoveToNewTab}
+                              onReorderInStage={onReorderInStage}
+                              onJoinStage={onJoinStage}
+                              onCreateStageAtPosition={onCreateStageAtPosition}
+                              staggerOffset={staggerOffset}
+                              stageIndex={stageIdx}
+                              totalStages={tabStages.length}
+                            />
+                          )
+                        })}
+                      </div>
+                    </LayoutGroup>
+                  )}
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </TileUngroupDropZone>
+    </div>
+  )
+}
+
+// Resize handle component
+function ResizeHandle({ onResizeStart }) {
+  return (
+    <div
+      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-white/20 transition-colors z-10"
+      onMouseDown={onResizeStart}
+      style={{ touchAction: 'none', userSelect: 'none' }}
+    />
+  )
+}
+
+// Main unified Sidebar component
+export default function Sidebar({
+  // Connection
+  connected,
+  send,
+
+  // Tab data
+  tabs,
+  activeTabId,
+  onTabSelect,
+  onTabClose,
+  onTabNew,
+
+  // Entity data
+  allStages,
+  focusedEntity,
+  loadStage,
+  initialLoadDone,
+
+  // Sidebar state
+  sidebarButtonsExpanded,
+  setSidebarButtonsExpanded,
+
+  // Entity handlers
+  onEntityClick,
+  onEntityClose,
+  onEntitySplit,
+  onMoveToTab,
+  onMoveToNewTab,
+  onReorderInStage,
+  onJoinStage,
+  onCreateStageAtPosition,
+  onSpawnEntity,
+  onOpenSummonModal,
+
+  // Resize
+  width,
+  onWidthChange,
+}) {
+  const [isDragging, setIsDragging] = useState(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(width)
+
+  // Handle resize start
+  const handleResizeStart = useCallback((e) => {
+    e.preventDefault()
+    setIsDragging(true)
+    startXRef.current = e.clientX
+    startWidthRef.current = width
+  }, [width])
+
+  // Handle resize drag
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e) => {
+      const delta = e.clientX - startXRef.current
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidthRef.current + delta))
+      onWidthChange(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, onWidthChange])
+
+  return (
+    <aside
+      className="flex liquid-glass-light z-20 overflow-visible relative"
+      style={{
+        width,
+        transition: isDragging ? 'none' : `width ${WIDTH_TRANSITION_MS}ms ease-in-out`
+      }}
+    >
+      {/* Left column */}
+      <LeftColumn
+        connected={connected}
+        send={send}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabSelect={onTabSelect}
+        onTabClose={onTabClose}
+        onTabNew={onTabNew}
+        sidebarButtonsExpanded={sidebarButtonsExpanded}
+        setSidebarButtonsExpanded={setSidebarButtonsExpanded}
+        onSpawnEntity={onSpawnEntity}
+        onOpenSummonModal={onOpenSummonModal}
+      />
+
+      {/* Right column - entity cards */}
+      <RightColumn
+        allStages={allStages}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        focusedEntity={focusedEntity}
+        onEntityClick={onEntityClick}
+        onEntityClose={onEntityClose}
+        onEntitySplit={onEntitySplit}
+        onMoveToTab={onMoveToTab}
+        onMoveToNewTab={onMoveToNewTab}
+        onReorderInStage={onReorderInStage}
+        onJoinStage={onJoinStage}
+        onCreateStageAtPosition={onCreateStageAtPosition}
+      />
+
+      {/* Resize handle */}
+      <ResizeHandle onResizeStart={handleResizeStart} />
     </aside>
   )
 }
