@@ -7,6 +7,7 @@ export {
   createEntityBase,
   addEntity,
   createStageForEntity,
+  splitIntoTile,
   finalizeSpawn,
   spawnEntity
 } from './spawn.js'

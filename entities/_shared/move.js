@@ -5,10 +5,11 @@
 
 import {
   appState, saveState, broadcastState,
-  generateStageId, getNextOrder, normalizeTabOrder,
-  findStageByEntity, deleteTabIfEmpty
+  getNextOrder, normalizeTabOrder,
+  findStageByEntity, deleteTabIfEmpty, generateStageId
 } from '../../server/state.js'
 import * as layout from '../../server/layout.js'
+import { createStageForEntity } from './spawn.js'
 
 /**
  * Remove an entity from its current stage layout.
@@ -57,16 +58,7 @@ export function moveToTab(entityId, destTabId) {
   entity.order = getNextOrder(destTabId)
 
   // Create new stage in destination
-  const destTab = appState.tabs.find(t => t.id === destTabId)
-  if (destTab) {
-    const stageId = generateStageId()
-    const tileNode = layout.createTile([entityId], entityId)
-    const newStage = { id: stageId, layout: tileNode }
-    destTab.stages = destTab.stages || []
-    destTab.stages.push(newStage)
-    destTab.activeStageId = stageId
-    appState.focusedTile = tileNode.id
-  }
+  createStageForEntity(entityId, destTabId)
 
   // Normalize and cleanup
   normalizeTabOrder(sourceTabId)

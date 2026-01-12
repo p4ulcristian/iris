@@ -12,6 +12,7 @@ import {
   generateStageId, getNextOrder, findStageByEntity, getActiveStage
 } from '../state.js'
 import * as layout from '../layout.js'
+import { splitIntoTile } from '../../entities/_shared/spawn.js'
 
 export const handlers = {
   'settings:update': (ws, data) => {
@@ -178,15 +179,8 @@ export const handlers = {
       codeEntity = appState.entities[newId]
       isNewEntity = true
 
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab) {
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([newId], newId)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-      }
+      // Split focused tile to place code viewer
+      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal' })
     }
 
     // Store pending file in entity
@@ -290,15 +284,8 @@ export const handlers = {
       mdEntity = appState.entities[newId]
       isNewEntity = true
 
-      const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-      if (tab) {
-        const stageId = generateStageId()
-        const tileNode = layout.createTile([newId], newId)
-        const newStage = { id: stageId, layout: tileNode }
-        tab.stages.push(newStage)
-        tab.activeStageId = stageId
-        appState.focusedTile = tileNode.id
-      }
+      // Split focused tile to place markdown viewer
+      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal' })
     }
 
     mdEntity.pendingFile = filePath

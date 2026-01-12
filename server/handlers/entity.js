@@ -11,6 +11,7 @@ import {
   createEntityBase,
   addEntity,
   createStageForEntity,
+  splitIntoTile,
   finalizeSpawn
 } from '../../entities/_shared/index.js'
 
@@ -24,6 +25,9 @@ export const handlers = {
   // Spawn a view entity (browser, git, history, linear, settings)
   'entity:spawn': (ws, data) => {
     const type = data.type
+    const mode = data.mode || 'split'  // 'split' (default) or 'stage'
+    const direction = data.direction || 'horizontal'
+
     const entityTypeInfo = getEntityType(type)
     if (!entityTypeInfo.label || type === 'god' || type === 'terminal') {
       // Use god:spawn or terminal:spawn for those
@@ -43,7 +47,14 @@ export const handlers = {
       }
     })
     addEntity(entityId, entity)
-    createStageForEntity(entityId)
+
+    // Split into current tile by default, or create new stage if requested
+    if (mode === 'stage') {
+      createStageForEntity(entityId)
+    } else {
+      splitIntoTile(entityId, appState.activeTabId, { direction })
+    }
+
     finalizeSpawn(entityId)
   },
 

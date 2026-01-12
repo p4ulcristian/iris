@@ -7,13 +7,13 @@ import fs from 'fs'
 import { SERVICES, ZELLIJ_BIN, ZELLIJ_CONFIG_DIR } from '../config.js'
 import {
   appState, saveState, broadcastState,
-  generateStageId, getNextOrder
+  getNextOrder
 } from '../state.js'
 import { startService, stopService, startChronicle, stopChronicle } from '../services.js'
 import { createTerminalSession } from '../gods.js'
 import { getSessionName } from '../gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback } from '../pty.js'
-import * as layout from '../layout.js'
+import { splitIntoTile } from '../../entities/_shared/spawn.js'
 
 export const handlers = {
   'service:start': (ws, data, projectRoot) => {
@@ -87,16 +87,8 @@ export const handlers = {
           mcpGod: targetGodName
         }
 
-        // Create a new stage for this entity
-        const tab = appState.tabs.find(t => t.id === appState.activeTabId)
-        if (tab) {
-          const stageId = generateStageId()
-          const tileNode = layout.createTile([actualTerminalId], actualTerminalId)
-          const newStage = { id: stageId, layout: tileNode }
-          tab.stages.push(newStage)
-          tab.activeStageId = stageId
-          appState.focusedTile = tileNode.id
-        }
+        // Split focused tile to place terminal beside current entity
+        splitIntoTile(actualTerminalId, appState.activeTabId, { direction: 'horizontal' })
 
         appState.focusedEntity = actualTerminalId
         saveState()

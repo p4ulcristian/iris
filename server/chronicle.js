@@ -6,6 +6,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createLogger } from './logger.js'
+import { appState } from './state.js'
+import { PANTHEON } from './config.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const log = createLogger('chronicle')
@@ -17,6 +19,10 @@ let broadcastFn = null
 let watcher = null
 let currentFile = null
 let lastSize = 0
+
+// God mention response cooldowns
+const responseCooldowns = new Map()
+const COOLDOWN_MS = 5000
 
 export function setBroadcast(fn) {
   broadcastFn = fn
@@ -92,7 +98,117 @@ function readNewLines() {
     if (parsed && broadcastFn) {
       log.log(`New line: ${parsed.text.slice(0, 50)}...`)
       broadcastFn('chronicle:line', { line: parsed })
+      handleGodMentions(parsed)
     }
+  }
+}
+
+/**
+ * Check if transcript mentions any god names and trigger voice response.
+ */
+function handleGodMentions(line) {
+  const startTime = performance.now()
+  const { text } = line
+  if (!text) return
+
+  // Filter out echo: if text contains "here", it's likely our own TTS response
+  if (/\bhere\b/i.test(text)) return
+
+  // Check all gods in the pantheon
+  for (const [name, config] of Object.entries(PANTHEON)) {
+    const pattern = new RegExp(`\\b${name}\\b`, 'i')
+    if (!pattern.test(text)) continue
+
+    // Check cooldown
+    const lastResponse = responseCooldowns.get(name) || 0
+    if (Date.now() - lastResponse < COOLDOWN_MS) continue
+
+    // Respond!
+    responseCooldowns.set(name, Date.now())
+    const detectTime = performance.now() - startTime
+    respondAsGod(name, config.voice, detectTime)
+  }
+}
+
+/**
+ * Make a god respond with voice, then listen for a command.
+ */
+async function respondAsGod(name, voice, detectTime) {
+  const displayName = name.charAt(0).toUpperCase() + name.slice(1)
+  const greeting = `Hey, ${displayName} listening!`
+
+  try {
+    const fetchStart = performance.now()
+
+    // Step 1: Say greeting
+    await fetch('http://127.0.0.1:8765/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: greeting, voice })
+    })
+
+    const speakTime = performance.now() - fetchStart
+    log.log(`⏱ ${name} greeting | detect: ${detectTime.toFixed(1)}ms | speak: ${speakTime.toFixed(1)}ms`)
+
+    // Step 2: Wait for TTS to finish (approximate based on text length)
+    const waitTime = Math.max(1500, greeting.length * 80)  // ~80ms per char
+    await new Promise(r => setTimeout(r, waitTime))
+
+    // Step 3: Listen for user speech (VAD-based)
+    log.log(`${name}: listening for command...`)
+    const listenStart = performance.now()
+
+    const listenRes = await fetch('http://127.0.0.1:8766/listen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+
+    const listenData = await listenRes.json()
+    const listenTime = performance.now() - listenStart
+
+    if (listenData.text) {
+      log.log(`⏱ ${name} heard: "${listenData.text}" | listen: ${listenTime.toFixed(1)}ms`)
+
+      // Step 4: Find the god entity and send input
+      const godEntity = findGodEntity(name)
+      if (godEntity) {
+        await sendToGod(godEntity.id, listenData.text)
+        log.log(`${name}: sent command to terminal`)
+      } else {
+        log.log(`${name}: no active god entity found, logging only`)
+      }
+    } else {
+      log.log(`${name}: no speech detected | listen: ${listenTime.toFixed(1)}ms`)
+    }
+
+  } catch (err) {
+    log.error(`Failed to respond as ${name}:`, err)
+  }
+}
+
+/**
+ * Find an active god entity by base name.
+ */
+function findGodEntity(baseName) {
+  const lowerName = baseName.toLowerCase()
+  return Object.values(appState.entities).find(e =>
+    e.type === 'god' &&
+    e.id.toLowerCase().replace(/-\d+$/, '') === lowerName
+  )
+}
+
+/**
+ * Send text input to a god's terminal.
+ */
+async function sendToGod(godId, text) {
+  try {
+    await fetch('http://127.0.0.1:9999/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ god: godId, text })
+    })
+  } catch (err) {
+    log.error(`Failed to send to ${godId}:`, err)
   }
 }
 

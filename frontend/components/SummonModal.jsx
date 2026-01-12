@@ -111,7 +111,8 @@ export default function SummonModal({
     const god = selectedGod || allGods[0]
     if (!god) return
     const name = god.charAt(0).toUpperCase() + god.slice(1)
-    onSummon(name, task.trim(), selectedPersonality, selectedProject, permissionMode)
+    // Pass the event so onSummon can detect modifier keys (Shift=vertical, Ctrl=stage)
+    onSummon(name, task.trim(), selectedPersonality, selectedProject, permissionMode, e)
   }
 
   if (!isOpen) return null

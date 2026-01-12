@@ -16,6 +16,7 @@ import {
   createEntityBase,
   addEntity,
   createStageForEntity,
+  splitIntoTile,
   finalizeSpawn
 } from '../../entities/_shared/index.js'
 
@@ -41,9 +42,18 @@ function createGenericEntity(entityType, tabId) {
 
 export const handlers = {
   'layout:init': (ws, data, projectRoot) => {
-    const { tabId, entityId, entityType } = data
+    const { tabId, entityId, entityType, mode = 'split', direction = 'horizontal' } = data
     const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
     if (!tab) return
+
+    // Helper to place entity based on mode
+    const placeEntity = (entityId, tabId) => {
+      if (mode === 'stage') {
+        createStageForEntity(entityId, tabId)
+      } else {
+        splitIntoTile(entityId, tabId, { direction })
+      }
+    }
 
     let targetEntityId = entityId
     if (entityType && !entityId) {
@@ -78,7 +88,7 @@ export const handlers = {
             }
           })
           addEntity(entityId, entity)
-          createStageForEntity(entityId)
+          placeEntity(entityId, tab.id)
           finalizeSpawn(entityId)
         }
         return
@@ -90,22 +100,22 @@ export const handlers = {
             extra: { color: terminal.color }
           })
           addEntity(terminal.name, entity)
-          createStageForEntity(terminal.name)
+          placeEntity(terminal.name, tab.id)
           finalizeSpawn(terminal.name)
         }
         return
       } else {
         // Generic entity
         targetEntityId = createGenericEntity(entityType, appState.activeTabId)
-        createStageForEntity(targetEntityId)
+        placeEntity(targetEntityId, tab.id)
         finalizeSpawn(targetEntityId)
         return
       }
     }
 
-    // If moving existing entity, create a new stage for it
+    // If moving existing entity, place based on mode
     if (targetEntityId) {
-      createStageForEntity(targetEntityId, tab.id)
+      placeEntity(targetEntityId, tab.id)
       finalizeSpawn(targetEntityId)
     } else {
       saveState()
@@ -113,7 +123,7 @@ export const handlers = {
     }
   },
 
-  'layout:split': (ws, data) => {
+  'layout:split': (ws, data, projectRoot) => {
     const { tabId, tileId, paneId, direction, position, entityId, entityType } = data
     const targetTileId = tileId || paneId
     const tab = appState.tabs.find(t => t.id === (tabId || appState.activeTabId))
@@ -133,7 +143,60 @@ export const handlers = {
     // Create or get the entity to place in new tile
     let targetEntityId = entityId
     if (entityType && !entityId) {
-      targetEntityId = createGenericEntity(entityType, tab.id)
+      // Handle god/terminal spawns properly (need Zellij session, colors, etc.)
+      if (entityType === 'god') {
+        // Pick from unused gods first, then random if all taken
+        const pantheonNames = Object.keys(PANTHEON)
+        const usedBaseNames = new Set(
+          Object.keys(appState.entities)
+            .filter(id => appState.entities[id].type === 'god')
+            .map(id => getBaseGodName(id))
+        )
+        const available = pantheonNames.filter(n => !usedBaseNames.has(n))
+        const baseName = available.length > 0
+          ? available[Math.floor(Math.random() * available.length)]
+          : pantheonNames[Math.floor(Math.random() * pantheonNames.length)] || 'zeus'
+        const godEntityId = generateGodId(baseName)
+        const displayName = getGodDisplayName(godEntityId)
+
+        clearOutputBuffer(godEntityId)
+        const god = createGodSession(godEntityId, '', projectRoot, {
+          startPrompt: appState.settings?.startPrompt,
+          userName: appState.settings?.userName
+        })
+        if (god && !god.exists) {
+          const entity = createEntityBase(godEntityId, 'god', {
+            name: displayName,
+            tabId: tab.id,
+            extra: {
+              mission: null,
+              sessionId: god.sessionId || null,
+              project: projectRoot,
+              readyState: 'working'
+            }
+          })
+          addEntity(godEntityId, entity)
+          targetEntityId = godEntityId
+        } else {
+          return // God creation failed or already exists
+        }
+      } else if (entityType === 'terminal') {
+        const terminal = createTerminalSession({}, projectRoot)
+        if (terminal && !terminal.exists) {
+          const entity = createEntityBase(terminal.name, 'terminal', {
+            name: terminal.displayName || terminal.name,
+            tabId: tab.id,
+            extra: { color: terminal.color }
+          })
+          addEntity(terminal.name, entity)
+          targetEntityId = terminal.name
+        } else {
+          return // Terminal creation failed or already exists
+        }
+      } else {
+        // Generic entity (browser, settings, etc.)
+        targetEntityId = createGenericEntity(entityType, tab.id)
+      }
     }
 
     // If moving an existing entity, remove it from its current stage first
@@ -354,6 +417,10 @@ export const handlers = {
       : findStageByEntity(tab, entityId)
     if (!sourceStage?.layout) return
 
+    // Capture sibling to focus before removal (if source has multiple entities)
+    const sourceEntityIds = layout.getAllEntityIds(sourceStage.layout)
+    const siblingToFocus = sourceEntityIds.find(id => id !== entityId)
+
     // Remove entity from source stage's layout
     sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
 
@@ -368,10 +435,15 @@ export const handlers = {
     const newStage = { id: newStageId, layout: tileNode }
     tab.stages.push(newStage)
 
-    // Switch to the new stage and focus the entity
-    tab.activeStageId = newStageId
-    appState.focusedTile = tileNode.id
-    appState.focusedEntity = entityId
+    // Keep focus on source stage if it still has entities, else focus the dragged entity
+    if (siblingToFocus && sourceStage.layout) {
+      appState.focusedEntity = siblingToFocus
+      // activeStageId stays on source
+    } else {
+      tab.activeStageId = newStageId
+      appState.focusedTile = tileNode.id
+      appState.focusedEntity = entityId
+    }
 
     saveState()
     broadcastState()
@@ -424,6 +496,10 @@ export const handlers = {
     const targetStage = tab.stages.find(s => s.id === targetStageId)
     if (!sourceStage?.layout || !targetStage?.layout) return
 
+    // Capture sibling to focus before removal (if source has multiple entities)
+    const sourceEntityIds = layout.getAllEntityIds(sourceStage.layout)
+    const siblingToFocus = sourceEntityIds.find(id => id !== entityId)
+
     // Remove entity from source stage
     sourceStage.layout = layout.removeEntityFromLayout(sourceStage.layout, entityId)
 
@@ -458,9 +534,14 @@ export const handlers = {
       targetStage.layout = layout.addEntityToTile(targetStage.layout, firstTile.id, entityId)
     }
 
-    // Switch to target stage
-    tab.activeStageId = targetStageId
-    appState.focusedEntity = entityId
+    // Keep focus on source stage if it still has entities, else focus the target
+    if (siblingToFocus && sourceStage.layout) {
+      appState.focusedEntity = siblingToFocus
+      // activeStageId stays on source
+    } else {
+      tab.activeStageId = targetStageId
+      appState.focusedEntity = entityId
+    }
 
     saveState()
     broadcastState()
@@ -478,6 +559,10 @@ export const handlers = {
     const sourceStage = sourceStageId
       ? tab.stages.find(s => s.id === sourceStageId)
       : findStageByEntity(tab, entityId)
+
+    // Capture sibling to focus before removal (if source has multiple entities)
+    const sourceEntityIds = sourceStage?.layout ? layout.getAllEntityIds(sourceStage.layout) : []
+    const siblingToFocus = sourceEntityIds.find(id => id !== entityId)
 
     // Get source stage's sorted position
     const sortedStages = [...tab.stages].sort((a, b) => {
@@ -539,10 +624,15 @@ export const handlers = {
       })
     })
 
-    // Switch to the new stage
-    tab.activeStageId = newStageId
-    appState.focusedTile = tileNode.id
-    appState.focusedEntity = entityId
+    // Keep focus on source stage if it still has entities, else focus the new stage
+    if (siblingToFocus && sourceStage?.layout) {
+      appState.focusedEntity = siblingToFocus
+      // activeStageId stays on source
+    } else {
+      tab.activeStageId = newStageId
+      appState.focusedTile = tileNode.id
+      appState.focusedEntity = entityId
+    }
 
     saveState()
     broadcastState()

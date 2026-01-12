@@ -247,26 +247,39 @@ export default function App() {
 
   // Summon a new god (with specific name)
   // Server handles all state - no optimistic UI needed
-  const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null, permissionMode) => {
+  // mode: 'split' (default) or 'stage', direction: 'horizontal' (default) or 'vertical'
+  const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null, permissionMode, event = null) => {
+    // Detect modifier keys if event provided
+    const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
+    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
+
     send({
       event: 'god:spawn',
       name,
       task,
       personality,
       permissionMode,
-      project
+      project,
+      mode,
+      direction
     })
   }, [send])
 
   // Spawn a random god (server picks unused first, then numbers)
-  const handleSpawnRandomGod = useCallback(() => {
-    send({ event: 'god:spawn', task: '' })
+  const handleSpawnRandomGod = useCallback((event = null) => {
+    const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
+    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
+    send({ event: 'god:spawn', task: '', mode, direction })
   }, [send])
 
   // Spawn a raw terminal (no Claude)
-  const handleSpawnTerminal = useCallback(() => {
+  const handleSpawnTerminal = useCallback((event = null) => {
+    const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
+    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
     send({
-      event: 'terminal:spawn'
+      event: 'terminal:spawn',
+      mode,
+      direction
     })
   }, [send])
 
@@ -288,8 +301,14 @@ export default function App() {
   }, [send])
 
   // Spawn a view entity
-  const handleSpawnEntity = useCallback((type, data = {}) => {
-    send({ event: 'entity:spawn', type, ...data })
+  // mode: 'split' (default) or 'stage'
+  // direction: 'horizontal' (default) or 'vertical'
+  const handleSpawnEntity = useCallback((type, data = {}, event = null) => {
+    // Detect modifier keys if event provided
+    const mode = event?.ctrlKey || event?.metaKey ? 'stage' : (data.mode || 'split')
+    const direction = event?.shiftKey ? 'vertical' : (data.direction || 'horizontal')
+
+    send({ event: 'entity:spawn', type, ...data, mode, direction })
   }, [send])
 
   // Kill current tab (with confirmation if not empty)
@@ -906,8 +925,8 @@ export default function App() {
       {/* Summon modal */}
       <SummonModal
         isOpen={summonModalOpen}
-        onSummon={(name, task, personality, project, permissionMode) => {
-          handleSummonGod(name, task, personality, project, permissionMode)
+        onSummon={(name, task, personality, project, permissionMode, event) => {
+          handleSummonGod(name, task, personality, project, permissionMode, event)
           setSummonModalOpen(false)
         }}
         onCancel={() => setSummonModalOpen(false)}

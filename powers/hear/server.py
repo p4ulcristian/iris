@@ -296,6 +296,149 @@ def transcribe():
         os.unlink(temp_path)
 
 
+@app.route('/listen', methods=['POST'])
+def listen():
+    """Listen until VAD detects silence, then return transcription.
+
+    This is a blocking call that:
+    1. Pauses chronicle (if running)
+    2. Mutes TTS
+    3. Records until speech is detected, then until silence
+    4. Transcribes
+    5. Resumes chronicle and unmutes TTS
+    6. Returns the transcribed text
+    """
+    if not is_ready:
+        return jsonify({"error": "STT model not ready"}), 503
+
+    import numpy as np
+    import sounddevice as sd
+    import resampy
+    from vad import VAD, SAMPLE_RATE as VAD_SAMPLE_RATE, CHUNK_SIZE as VAD_CHUNK_SIZE
+    from audio import get_input_device
+
+    # Config
+    SILENCE_THRESHOLD = 1.5  # seconds of silence to end
+    MAX_LISTEN_TIME = 30  # max seconds to listen
+    MIN_SPEECH_TIME = 0.3  # min seconds of speech to transcribe
+
+    # Pause chronicle during listen
+    was_chronicle_running = chronicle and chronicle.running
+    if chronicle:
+        chronicle.pause()
+
+    # Mute TTS
+    try:
+        http_requests.post(f"{SPEAK_SERVER}/mute", timeout=1)
+    except Exception as e:
+        logger.debug(f"Failed to mute speak: {e}")
+
+    try:
+        # Setup
+        vad = VAD()
+        device, native_rate = get_input_device()
+        need_resample = native_rate != VAD_SAMPLE_RATE
+        record_chunk = int(0.1 * native_rate)  # 100ms chunks
+
+        audio_buffer = []
+        all_audio = []
+        vad_buffer = np.array([], dtype=np.float32)
+        silence_start = None
+        has_speech = False
+        start_time = __import__('time').time()
+
+        def audio_callback(indata, frames, time_info, status):
+            audio_buffer.append(indata.copy())
+
+        logger.info("Listen: waiting for speech...")
+
+        with sd.InputStream(
+            samplerate=native_rate,
+            channels=1,
+            dtype=np.float32,
+            blocksize=record_chunk,
+            device=device,
+            callback=audio_callback
+        ):
+            while True:
+                import time
+                elapsed = time.time() - start_time
+
+                # Timeout
+                if elapsed > MAX_LISTEN_TIME:
+                    logger.info("Listen: timeout reached")
+                    break
+
+                if not audio_buffer:
+                    time.sleep(0.01)
+                    continue
+
+                # Process audio
+                audio = np.concatenate(audio_buffer, axis=0).flatten()
+                audio_buffer.clear()
+
+                # Resample for VAD
+                if need_resample:
+                    audio_vad = resampy.resample(audio, native_rate, VAD_SAMPLE_RATE)
+                else:
+                    audio_vad = audio
+
+                all_audio.append(audio_vad)
+                vad_buffer = np.concatenate([vad_buffer, audio_vad])
+
+                # Check VAD
+                while len(vad_buffer) >= VAD_CHUNK_SIZE:
+                    chunk = vad_buffer[:VAD_CHUNK_SIZE]
+                    vad_buffer = vad_buffer[VAD_CHUNK_SIZE:]
+
+                    speech_prob = vad.get_speech_prob(chunk)
+
+                    if speech_prob > 0.5:
+                        if not has_speech:
+                            logger.info("Listen: speech detected")
+                        has_speech = True
+                        silence_start = None
+                    else:
+                        if has_speech and silence_start is None:
+                            silence_start = time.time()
+
+                # Check if should stop (had speech, now silence)
+                if has_speech and silence_start:
+                    silence_duration = time.time() - silence_start
+                    if silence_duration > SILENCE_THRESHOLD:
+                        logger.info(f"Listen: silence detected ({silence_duration:.1f}s)")
+                        break
+
+        # Transcribe
+        if all_audio and has_speech:
+            full_audio = np.concatenate(all_audio)
+            duration = len(full_audio) / VAD_SAMPLE_RATE
+
+            if duration >= MIN_SPEECH_TIME:
+                logger.info(f"Listen: transcribing {duration:.1f}s of audio...")
+                text = stt_model.transcribe(full_audio)
+                logger.info(f"Listen: transcription: {text}")
+            else:
+                logger.info(f"Listen: audio too short ({duration:.1f}s)")
+                text = ""
+        else:
+            logger.info("Listen: no speech detected")
+            text = ""
+
+        return jsonify({"text": text, "status": "ok"})
+
+    finally:
+        # Unmute TTS
+        try:
+            http_requests.post(f"{SPEAK_SERVER}/unmute", timeout=1)
+        except Exception as e:
+            logger.debug(f"Failed to unmute speak: {e}")
+
+        # Resume chronicle
+        if chronicle:
+            chronicle.resume()
+
+
 # Chronicle routes
 
 @app.route('/chronicle/start', methods=['POST'])

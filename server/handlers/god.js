@@ -16,6 +16,7 @@ import {
   createEntityBase,
   addEntity,
   createStageForEntity,
+  splitIntoTile,
   finalizeSpawn,
   removeEntity,
   moveToTab,
@@ -24,11 +25,24 @@ import {
   getRandomRealmName
 } from '../../entities/_shared/index.js'
 
+// Helper to place entity based on mode
+function placeEntity(entityId, tabId, mode, direction) {
+  if (mode === 'stage') {
+    createStageForEntity(entityId, tabId)
+  } else {
+    splitIntoTile(entityId, tabId, { direction })
+  }
+}
+
 export const handlers = {
   'god:spawn': (ws, data, projectRoot) => {
     const spawnStart = Date.now()
     const T = () => `T+${Date.now() - spawnStart}ms`
     console.log(`[god:spawn] ${T()} Received:`, data)
+
+    // Spawn mode: 'split' (default) or 'stage'
+    const mode = data.mode || 'split'
+    const direction = data.direction || 'horizontal'
 
     // If no name provided, pick from unused gods first, then random if all taken
     let baseName = data.name?.toLowerCase()
@@ -73,8 +87,8 @@ export const handlers = {
       readyState: 'spawning'
     }
 
-    // Create stage for this entity
-    createStageForEntity(entityId)
+    // Place entity based on mode (split by default, or new stage)
+    placeEntity(entityId, appState.activeTabId, mode, direction)
     appState.focusedEntity = entityId
     saveState()
     console.log(`[god:spawn] ${T()} Added spawning entity, broadcasting...`)
@@ -115,6 +129,10 @@ export const handlers = {
   },
 
   'terminal:spawn': (ws, data, projectRoot) => {
+    // Spawn mode: 'split' (default) or 'stage'
+    const mode = data.mode || 'split'
+    const direction = data.direction || 'horizontal'
+
     if (data.name) {
       clearOutputBuffer(data.name)
     }
@@ -131,7 +149,7 @@ export const handlers = {
         extra: { color: terminal.color }
       })
       addEntity(terminal.name, entity)
-      createStageForEntity(terminal.name)
+      placeEntity(terminal.name, appState.activeTabId, mode, direction)
       finalizeSpawn(terminal.name)
     } else if (terminal?.exists) {
       ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))

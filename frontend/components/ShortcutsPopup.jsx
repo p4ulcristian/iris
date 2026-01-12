@@ -136,7 +136,7 @@ export default function ShortcutsPopup({ isOpen, onSpawnEntity, onOpenSummonModa
                         key={type}
                         type={type}
                         label={entity.label}
-                        onClick={() => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type)}
+                        onClick={(e) => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type, {}, e)}
                       />
                     )
                   })}

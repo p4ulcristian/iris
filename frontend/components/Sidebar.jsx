@@ -758,8 +758,8 @@ function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
             <div key={type} className="flex-shrink-0 w-16 aspect-square">
               <DraggableTypeButton
                 entityType={type}
-                title={entity.label}
-                onClick={isGod ? onOpenSummonModal : () => onSpawnEntity(type)}
+                title={`${entity.label} (Shift: vertical, Ctrl: new stage)`}
+                onClick={isGod ? onOpenSummonModal : (e) => onSpawnEntity(type, {}, e)}
                 showLabel
               />
             </div>
