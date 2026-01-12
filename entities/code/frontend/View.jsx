@@ -111,19 +111,18 @@ function FolderStatsCard({ stats, isLoading, depth }) {
 
 // Tree branch connector for L-shaped indent guides
 function TreeBranch({ depth, isLast, parentIsLast = [] }) {
-  console.log('[TreeBranch]', { depth, isLast, parentIsLast })
   if (depth === 0) return null
 
   return (
-    <div className="flex bg-red-500/20">
+    <div className="flex">
       {/* Continuation lines from ancestors */}
       {parentIsLast.slice(0, -1).map((wasLast, i) => (
-        <div key={i} className="w-4 h-6 flex justify-center border border-blue-500/50">
+        <div key={i} className="w-4 h-6 flex justify-center">
           {!wasLast && <div className="w-0.5 h-full bg-white/60" />}
         </div>
       ))}
       {/* Current branch connector: ├── or └── */}
-      <div className="w-4 h-6 relative border border-green-500/50">
+      <div className="w-4 h-6 relative">
         {/* Vertical line */}
         <div className={`absolute left-1/2 -translate-x-1/2 w-0.5 bg-white/60 ${isLast ? 'top-0 h-1/2' : 'h-full'}`} />
         {/* Horizontal line */}

@@ -19,7 +19,7 @@ export const ptyProcesses = new Map()
 const outputBuffers = new Map()
 const MAX_BUFFER_SIZE = 100000 // ~100KB per terminal
 
-function getZellijScrollback(godName) {
+export function getZellijScrollback(godName) {
   const sessionName = getSessionName(godName)
   const tmpFile = path.join(os.tmpdir(), `iris-scrollback-${sanitizeName(godName)}-${Date.now()}.txt`)
 

@@ -145,6 +145,20 @@ server.tool(
 );
 
 server.tool(
+  "peek_terminal",
+  "View recent terminal output from a terminal.",
+  {
+    terminal_name: z.string().describe("The terminal to peek at (e.g., 'Terminal 1')"),
+    lines: z.number().default(50).describe("Number of lines to retrieve")
+  },
+  async ({ terminal_name, lines }) => {
+    const result = await apiPost("peek-terminal", { terminal: terminal_name, lines });
+    if (result.error) return fail(`Failed to peek: ${result.error}`);
+    return ok(result.output || "No output");
+  }
+);
+
+server.tool(
   "push_to_god",
   "Send text input to a god's terminal.",
   {
@@ -155,6 +169,20 @@ server.tool(
     const result = await apiPost("push", { god: god_name, text });
     if (result.error) return fail(`Failed to push: ${result.error}`);
     return ok(`Sent to ${god_name}: ${text}`);
+  }
+);
+
+server.tool(
+  "push_to_terminal",
+  "Send text input to a terminal.",
+  {
+    terminal_name: z.string().describe("The terminal to send input to (e.g., 'Terminal 1')"),
+    text: z.string().describe("Text to send (will be followed by Enter)")
+  },
+  async ({ terminal_name, text }) => {
+    const result = await apiPost("push-terminal", { terminal: terminal_name, text });
+    if (result.error) return fail(`Failed to push: ${result.error}`);
+    return ok(`Sent to ${terminal_name}: ${text}`);
   }
 );
 

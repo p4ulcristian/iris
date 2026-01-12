@@ -12,7 +12,7 @@
  */
 
 import { appState, saveState, broadcastState } from './state.js'
-import { getOutputBuffer } from './pty.js'
+import { getOutputBuffer, getZellijScrollback } from './pty.js'
 import { allHandlers as handlers } from './handlers/index.js'
 
 // Parse JSON body from request
@@ -258,6 +258,44 @@ export function setupApi() {
       return true
     }
 
+    // POST /api/peek-terminal - Get terminal's output
+    if (req.method === 'POST' && url.pathname === '/api/peek-terminal') {
+      const { terminal, lines = 50 } = await parseJson(req)
+      if (!terminal) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Missing terminal name' }))
+        return true
+      }
+      try {
+        // Find terminal entity by display name
+        const entity = Object.values(appState.entities).find(
+          e => e.type === 'terminal' && e.name === terminal
+        )
+        if (!entity) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: `Terminal "${terminal}" not found` }))
+          return true
+        }
+        // Use entity.id as buffer key (sanitized name like "Terminal-1")
+        // Fall back to Zellij scrollback if buffer is empty
+        let output = getOutputBuffer(entity.id, lines)
+        if (!output) {
+          const scrollback = getZellijScrollback(entity.id)
+          if (scrollback) {
+            const allLines = scrollback.split('\n')
+            const startIdx = Math.max(0, allLines.length - lines)
+            output = allLines.slice(startIdx).join('\n')
+          }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ output: output || '' }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+      return true
+    }
+
     // POST /api/spawn - Spawn a new god (delegates to handler)
     if (req.method === 'POST' && url.pathname === '/api/spawn') {
       const data = await parseJson(req)
@@ -301,6 +339,36 @@ export function setupApi() {
         // Import sendToPty dynamically
         const { sendToPty } = await import('./pty.js')
         sendToPty(god, text + '\r')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+      return true
+    }
+
+    // POST /api/push-terminal - Send input to terminal
+    if (req.method === 'POST' && url.pathname === '/api/push-terminal') {
+      const { terminal, text } = await parseJson(req)
+      if (!terminal || !text) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Missing terminal or text' }))
+        return true
+      }
+
+      try {
+        // Find terminal entity by display name
+        const entity = Object.values(appState.entities).find(
+          e => e.type === 'terminal' && e.name === terminal
+        )
+        if (!entity) {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: `Terminal "${terminal}" not found` }))
+          return true
+        }
+        const { sendToPty } = await import('./pty.js')
+        sendToPty(entity.id, text + '\r')
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true }))
       } catch (e) {
