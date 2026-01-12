@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 import { motion } from 'framer-motion'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
@@ -19,7 +19,7 @@ import DropIndicator from './DropIndicator'
  *
  * staggerOffset: The number of entities that come before this group (for stagger animation)
  */
-export default function EntityGroup({
+export default memo(function EntityGroup({
   stage,
   entities,
   isFocused,
@@ -137,12 +137,12 @@ export default function EntityGroup({
       </div>
     </motion.div>
   )
-}
+})
 
 /**
  * EntityCardDropTarget - Wraps EntityCard with drop target behavior
  */
-function EntityCardDropTarget({
+const EntityCardDropTarget = memo(function EntityCardDropTarget({
   entity,
   entityIndex,
   stageId,
@@ -185,9 +185,8 @@ function EntityCardDropTarget({
         if (source.data.entityId === entity.id) return false
         return true
       },
-      onDragEnter: ({ self, source }) => {
+      onDragEnter: ({ self }) => {
         const edge = extractClosestEdge(self.data)
-        console.log('[dragEnter] on:', entity.id, 'from:', source.data.entityId, 'stageId:', stageId)
         setDropState({ isDraggedOver: true, closestEdge: edge })
       },
       onDrag: ({ self }) => {
@@ -203,20 +202,16 @@ function EntityCardDropTarget({
         const { entityId: draggedEntityId, stageId: sourceStageId } = source.data
         const edge = extractClosestEdge(self.data)
 
-        console.log('[drop] sourceStageId:', sourceStageId, 'targetStageId:', stageId, 'isSoloStage:', isSoloStage, 'edge:', edge)
         if (sourceStageId === stageId) {
           // Same stage: reorder within
           let targetIndex = entityIndex
           if (edge === 'bottom') {
             targetIndex = entityIndex + 1
           }
-          console.log('[client reorder] dragged:', draggedEntityId, 'dropped on:', entity.id, 'edge:', edge, 'entityIndex:', entityIndex, 'targetIndex:', targetIndex)
           onReorderInStage?.(stageId, draggedEntityId, targetIndex)
         } else if (isSoloStage) {
           // Different stage, target is solo: create new stage at position (reorder stages)
-          // Drop above = insert at stageIndex, drop below = insert at stageIndex + 1
           const position = edge === 'top' ? stageIndex : stageIndex + 1
-          console.log('[client create-at-position] dragged:', draggedEntityId, 'position:', position)
           onCreateStageAtPosition?.(draggedEntityId, sourceStageId, position)
         } else {
           // Different stage, target is multi-entity: join this stage
@@ -224,7 +219,6 @@ function EntityCardDropTarget({
           if (edge === 'bottom') {
             targetIndex = entityIndex + 1
           }
-          console.log('[client join] dragged:', draggedEntityId, 'targetStage:', stageId, 'targetIndex:', targetIndex)
           onJoinStage?.(draggedEntityId, sourceStageId, stageId, targetIndex)
         }
       }
@@ -271,4 +265,4 @@ function EntityCardDropTarget({
       />
     </motion.div>
   )
-}
+})

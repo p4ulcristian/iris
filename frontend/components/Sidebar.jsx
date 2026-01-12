@@ -659,7 +659,7 @@ function EntityCardsSection({
   onCreateStageAtPosition,
 }) {
   return (
-    <TileUngroupDropZone className="flex-1 overflow-y-auto overflow-x-visible relative">
+    <TileUngroupDropZone className="flex-1 overflow-hidden relative">
       {tabs.length > 0 && (
         <div className="relative h-full">
           {tabs.map((tab, tabIdx) => {
@@ -676,7 +676,7 @@ function EntityCardsSection({
                 key={tab.id}
                 className="absolute inset-0 overflow-y-auto overflow-x-visible p-3"
                 initial={false}
-                animate={{ y: `${tabOffset * 100}vh` }}
+                animate={{ x: `${tabOffset * 100}%` }}
                 transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                 style={{
                   pointerEvents: isActiveTab ? 'auto' : 'none'

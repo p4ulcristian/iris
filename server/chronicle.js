@@ -3,6 +3,7 @@
  */
 
 import fs from 'fs'
+import fsp from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createLogger } from './logger.js'
@@ -19,10 +20,17 @@ let broadcastFn = null
 let watcher = null
 let currentFile = null
 let lastSize = 0
+let readPending = false  // Debounce flag for file reads
 
 // God mention response cooldowns
 const responseCooldowns = new Map()
 const COOLDOWN_MS = 5000
+
+// Pre-compiled RegExp patterns for god names (performance optimization)
+const godPatterns = new Map()
+for (const name of Object.keys(PANTHEON)) {
+  godPatterns.set(name, new RegExp(`\\b${name}\\b`, 'i'))
+}
 
 export function setBroadcast(fn) {
   broadcastFn = fn
@@ -64,42 +72,61 @@ function parseLine(line, fileDate) {
   }
 }
 
-function readNewLines() {
-  const todayFile = getTodayFile()
+async function readNewLines() {
+  // Debounce: skip if already processing
+  if (readPending) return
+  readPending = true
 
-  // Check if file changed
-  if (currentFile !== todayFile) {
-    currentFile = todayFile
-    lastSize = 0
-  }
+  try {
+    const todayFile = getTodayFile()
 
-  if (!fs.existsSync(todayFile)) return
-
-  const stats = fs.statSync(todayFile)
-  if (stats.size <= lastSize) return
-
-  // Read new content
-  const fd = fs.openSync(todayFile, 'r')
-  const buffer = Buffer.alloc(stats.size - lastSize)
-  fs.readSync(fd, buffer, 0, buffer.length, lastSize)
-  fs.closeSync(fd)
-
-  lastSize = stats.size
-
-  // Parse and broadcast new lines
-  const newContent = buffer.toString('utf8')
-  const lines = newContent.split('\n').filter(l => l.trim())
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  for (const line of lines) {
-    const parsed = parseLine(line, today)
-    if (parsed && broadcastFn) {
-      log.log(`New line: ${parsed.text.slice(0, 50)}...`)
-      broadcastFn('chronicle:line', { line: parsed })
-      handleGodMentions(parsed)
+    // Check if file changed
+    if (currentFile !== todayFile) {
+      currentFile = todayFile
+      lastSize = 0
     }
+
+    // Check if file exists
+    try {
+      await fsp.access(todayFile)
+    } catch {
+      readPending = false
+      return
+    }
+
+    const stats = await fsp.stat(todayFile)
+    if (stats.size <= lastSize) {
+      readPending = false
+      return
+    }
+
+    // Read new content using async file handle
+    const fh = await fsp.open(todayFile, 'r')
+    const buffer = Buffer.alloc(stats.size - lastSize)
+    await fh.read(buffer, 0, buffer.length, lastSize)
+    await fh.close()
+
+    lastSize = stats.size
+
+    // Parse and broadcast new lines
+    const newContent = buffer.toString('utf8')
+    const lines = newContent.split('\n').filter(l => l.trim())
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (const line of lines) {
+      const parsed = parseLine(line, today)
+      if (parsed && broadcastFn) {
+        log.log(`New line: ${parsed.text.slice(0, 50)}...`)
+        broadcastFn('chronicle:line', { line: parsed })
+        handleGodMentions(parsed)
+      }
+    }
+  } catch (err) {
+    log.error('Error reading transcript:', err)
+  } finally {
+    readPending = false
   }
 }
 
@@ -114,10 +141,10 @@ function handleGodMentions(line) {
   // Filter out echo: if text contains "here", it's likely our own TTS response
   if (/\bhere\b/i.test(text)) return
 
-  // Check all gods in the pantheon
+  // Check all gods in the pantheon using pre-compiled patterns
   for (const [name, config] of Object.entries(PANTHEON)) {
-    const pattern = new RegExp(`\\b${name}\\b`, 'i')
-    if (!pattern.test(text)) continue
+    const pattern = godPatterns.get(name)
+    if (!pattern || !pattern.test(text)) continue
 
     // Check cooldown
     const lastResponse = responseCooldowns.get(name) || 0

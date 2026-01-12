@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { useShallow } from 'zustand/react/shallow'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
 import Sidebar from './components/Sidebar'
@@ -29,31 +30,44 @@ import { setupGlobalErrorHandlers } from './utils/error-reporter'
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
 
-  // Get state and actions from store
-  const tabs = useStore(s => s.tabs)
-  const activeTabId = useStore(s => s.activeTabId)
-  const entities = useStore(s => s.entities)
-  const focusedEntity = useStore(s => s.focusedEntity)
-  const focusedTile = useStore(s => s.focusedTile)
-  const layoutMode = useStore(s => s.layoutMode)
-  const initialLoadDone = useStore(s => s.initialLoadDone)
-  const theme = useStore(s => s.theme)
-  const godColors = useStore(s => s.godColors)
-  const getActiveLayout = useStore(s => s.getActiveLayout)
+  // Get state from store - grouped selector with shallow comparison
+  const {
+    tabs, activeTabId, entities, focusedEntity, focusedTile,
+    layoutMode, initialLoadDone, theme, godColors, loadStage
+  } = useStore(useShallow(s => ({
+    tabs: s.tabs,
+    activeTabId: s.activeTabId,
+    entities: s.entities,
+    focusedEntity: s.focusedEntity,
+    focusedTile: s.focusedTile,
+    layoutMode: s.layoutMode,
+    initialLoadDone: s.initialLoadDone,
+    theme: s.theme,
+    godColors: s.godColors,
+    loadStage: s.loadStage
+  })))
 
-  // Actions
-  const setConnected = useStore(s => s.setConnected)
-  const setInitialLoadDone = useStore(s => s.setInitialLoadDone)
-  const getActiveEntities = useStore(s => s.getActiveEntities)
-  const getActiveGods = useStore(s => s.getActiveGods)
-  const getEntitiesForTab = useStore(s => s.getEntitiesForTab)
-  const getGodsForTab = useStore(s => s.getGodsForTab)
-  const getAllGodNames = useStore(s => s.getAllGodNames)
-  const getAllGods = useStore(s => s.getAllGods)
-  const getAllEntities = useStore(s => s.getAllEntities)
-  const syncState = useStore(s => s.syncState)
-  const triggerStagedReveal = useStore(s => s.triggerStagedReveal)
-  const loadStage = useStore(s => s.loadStage)
+  // Get actions from store - these are stable references, single selector
+  const actions = useStore(useShallow(s => ({
+    setConnected: s.setConnected,
+    setInitialLoadDone: s.setInitialLoadDone,
+    getActiveEntities: s.getActiveEntities,
+    getActiveGods: s.getActiveGods,
+    getEntitiesForTab: s.getEntitiesForTab,
+    getGodsForTab: s.getGodsForTab,
+    getAllGodNames: s.getAllGodNames,
+    getAllGods: s.getAllGods,
+    getAllEntities: s.getAllEntities,
+    syncState: s.syncState,
+    triggerStagedReveal: s.triggerStagedReveal,
+    getActiveLayout: s.getActiveLayout
+  })))
+
+  const {
+    setConnected, setInitialLoadDone, getActiveEntities, getActiveGods,
+    getEntitiesForTab, getGodsForTab, getAllGodNames, getAllGods,
+    getAllEntities, syncState, triggerStagedReveal, getActiveLayout
+  } = actions
 
   const [confirmModal, setConfirmModal] = useState(null)
   const [summonModalOpen, setSummonModalOpen] = useState(false)
@@ -72,11 +86,14 @@ export default function App() {
 
   const mainContainerRef = useRef(null)
 
-  // Refs for keyboard handlers (avoid stale closures)
+  // Refs for keyboard handlers (avoid stale closures and re-binding)
   const tabsRef = useRef(tabs)
   const activeTabIdRef = useRef(activeTabId)
+  const focusedEntityRef = useRef(focusedEntity)
+  const activeEntitiesRef = useRef([])
   useEffect(() => { tabsRef.current = tabs }, [tabs])
   useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
+  useEffect(() => { focusedEntityRef.current = focusedEntity }, [focusedEntity])
 
 
   // Update connection status in store
@@ -167,6 +184,9 @@ export default function App() {
       .filter(e => e.tabId === activeTabId && (e.type === 'god' || e.type === 'terminal'))
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   }, [entities, activeTabId])
+
+  // Keep refs in sync for keyboard handlers
+  useEffect(() => { activeEntitiesRef.current = activeEntities }, [activeEntities])
 
   // Helper: collect all entity IDs from a layout tree
   const collectEntityIds = useCallback((node) => {
@@ -422,10 +442,12 @@ export default function App() {
       if (isModifierPressed(e) && code === 'KeyK') {
         e.preventDefault()
         e.stopPropagation()
-        if (focusedEntity) {
-          handleKillEntity(focusedEntity)
-        } else if (activeEntities.length === 1) {
-          handleKillEntity(activeEntities[0].id)
+        const focused = focusedEntityRef.current
+        const entities = activeEntitiesRef.current
+        if (focused) {
+          handleKillEntity(focused)
+        } else if (entities.length === 1) {
+          handleKillEntity(entities[0].id)
         }
         return
       }
@@ -458,9 +480,13 @@ export default function App() {
       if (isModifierPressed(e) && code === 'Comma') {
         e.preventDefault()
         e.stopPropagation()
-        const idx = tabs.findIndex(t => t.id === activeTabId)
-        const prevIdx = (idx - 1 + tabs.length) % tabs.length
-        send({ event: 'tab:select', tabId: tabs[prevIdx].id })
+        const t = tabsRef.current
+        const a = activeTabIdRef.current
+        if (t?.length > 0) {
+          const idx = t.findIndex(x => x.id === a)
+          const prevIdx = (idx - 1 + t.length) % t.length
+          send({ event: 'tab:select', tabId: t[prevIdx].id })
+        }
         return
       }
 
@@ -468,27 +494,32 @@ export default function App() {
       if (isModifierPressed(e) && code === 'Period') {
         e.preventDefault()
         e.stopPropagation()
-        const idx = tabs.findIndex(t => t.id === activeTabId)
-        const nextIdx = (idx + 1) % tabs.length
-        send({ event: 'tab:select', tabId: tabs[nextIdx].id })
+        const t = tabsRef.current
+        const a = activeTabIdRef.current
+        if (t?.length > 0) {
+          const idx = t.findIndex(x => x.id === a)
+          const nextIdx = (idx + 1) % t.length
+          send({ event: 'tab:select', tabId: t[nextIdx].id })
+        }
         return
       }
 
       // Cmd+1-9 (Mac) / Alt+1-9: Go to tab
       if (isModifierPressed(e) && code.startsWith('Digit')) {
         const num = parseInt(code.charAt(5))
-        if (num >= 1 && num <= 9) {
+        const t = tabsRef.current
+        if (num >= 1 && num <= 9 && t?.length > 0) {
           e.preventDefault()
           e.stopPropagation()
-          if (num <= tabs.length) {
-            send({ event: 'tab:select', tabId: tabs[num - 1].id })
+          if (num <= t.length) {
+            send({ event: 'tab:select', tabId: t[num - 1].id })
           }
           return
         }
       }
 
       // Escape: Clear focus (only when terminal isn't focused - let Escape pass through to terminal apps)
-      if (e.key === 'Escape' && focusedEntity) {
+      if (e.key === 'Escape' && focusedEntityRef.current) {
         const isTerminalFocused = document.activeElement?.closest('.entity-content')
         if (!isTerminalFocused) {
           handleSetFocus(null)
@@ -542,11 +573,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [
-    handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab,
-    focusedEntity, activeEntities,
-    handleSetFocus, send, tabs, activeTabId
-  ])
+  }, [handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, handleSetFocus, send])
 
   // Modifier key hold for shortcuts popup (Cmd on Mac, Alt on others)
   useEffect(() => {
@@ -706,7 +733,7 @@ export default function App() {
                             key={item.stageId || `empty-${item.tabId}`}
                             className={`absolute inset-0 stage py-3 ${offset !== 0 ? 'stage-offscreen' : ''}`}
                             initial={false}
-                            animate={{ y: `${offset * 100}%` }}
+                            animate={{ x: `${offset * 100}%` }}
                             transition={{ type: 'spring', stiffness: 350, damping: 32 }}
                             style={{ pointerEvents: isActive ? 'auto' : 'none' }}
                           >

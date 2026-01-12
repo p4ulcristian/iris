@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { motion } from 'framer-motion'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
@@ -23,7 +23,7 @@ function formatElapsed(ms) {
 }
 
 
-export default function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false, stageId = null, entityIndex = 0 }) {
+export default memo(function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false, stageId = null, entityIndex = 0 }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
@@ -106,17 +106,12 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
 
   // Fetch git branch when entity has a project
   useEffect(() => {
-    console.log('[EntityCard] project for', name, ':', project)
     if (!project) return
 
     const ws = window.__irisWs
-    if (!ws) {
-      console.log('[EntityCard] No WebSocket available')
-      return
-    }
+    if (!ws) return
 
     // Request git status for this project
-    console.log('[EntityCard] Requesting git status for:', project)
     ws.send(JSON.stringify({ event: 'git:status', project }))
 
     // Listen for response
@@ -362,4 +357,4 @@ export default function EntityCard({ entity, isActive, onClick, onClose, onSplit
       </div>
     </motion.div>
   )
-}
+})

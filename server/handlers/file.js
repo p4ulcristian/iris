@@ -51,7 +51,7 @@ async function readDirectoryTree(dirPath, maxDepth = 3, currentDepth = 0, showHi
       }
     }
   } catch (err) {
-    console.error('Error reading directory:', err)
+    // Error reading directory
   }
 
   return node
@@ -122,13 +122,10 @@ export const handlers = {
     const dirPath = data.path || process.env.HOME
     const showHidden = data.showHidden || false
     const maxDepth = data.maxDepth || 3
-    console.log('[file:list] Request:', { id, dirPath, showHidden })
 
     readDirectoryTree(dirPath, maxDepth, 0, showHidden).then(tree => {
-      console.log('[file:list] Sending response with id:', id)
       ws.send(JSON.stringify({ id, event: 'file:list', ok: true, tree }))
     }).catch(err => {
-      console.error('[file:list] Error:', err)
       ws.send(JSON.stringify({ id, event: 'file:list', ok: false, error: err.message }))
     })
   },
@@ -209,19 +206,15 @@ export const handlers = {
   'file:read': (ws, data) => {
     const { id } = data
     const filePath = data.path
-    console.log('[file:read] Request:', { id, filePath })
 
     if (!filePath) {
-      console.log('[file:read] Missing path')
       ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: 'Missing path parameter' }))
       return
     }
 
     fs.promises.readFile(filePath, 'utf-8').then(content => {
-      console.log('[file:read] Success, sending response with id:', id)
       ws.send(JSON.stringify({ id, event: 'file:read', ok: true, content }))
     }).catch(err => {
-      console.log('[file:read] Error:', err.message)
       ws.send(JSON.stringify({ id, event: 'file:read', ok: false, error: err.message }))
     })
   },
@@ -246,10 +239,8 @@ export const handlers = {
   'file:delete': (ws, data) => {
     const { id } = data
     const targetPath = data.path
-    console.log('[file:delete] Request:', { id, targetPath })
 
     if (!targetPath) {
-      console.log('[file:delete] Missing path')
       ws.send(JSON.stringify({ id, event: 'file:delete', ok: false, error: 'Missing path parameter' }))
       return
     }
@@ -257,23 +248,18 @@ export const handlers = {
     // Safety check: Don't allow deleting root or home directories
     const normalizedPath = path.normalize(targetPath)
     if (normalizedPath === '/' || normalizedPath === process.env.HOME) {
-      console.log('[file:delete] Refusing to delete root or home directory')
       ws.send(JSON.stringify({ id, event: 'file:delete', ok: false, error: 'Cannot delete root or home directory' }))
       return
     }
 
     fs.promises.stat(targetPath).then(async stats => {
       if (stats.isDirectory()) {
-        // Delete directory recursively
         await fs.promises.rm(targetPath, { recursive: true, force: true })
       } else {
-        // Delete file
         await fs.promises.unlink(targetPath)
       }
-      console.log('[file:delete] Success:', targetPath)
       ws.send(JSON.stringify({ id, event: 'file:delete', ok: true }))
     }).catch(err => {
-      console.log('[file:delete] Error:', err.message)
       ws.send(JSON.stringify({ id, event: 'file:delete', ok: false, error: err.message }))
     })
   },

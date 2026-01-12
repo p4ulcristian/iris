@@ -4,6 +4,20 @@ import os from 'os'
 import { execSync } from 'child_process'
 import { getSessionName, sanitizeName, sessionExists } from './gods.js'
 import { ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
+import { appState, saveState, broadcastState } from './state.js'
+
+// Parse OSC title sequences from terminal output
+// Format: \x1b]0;title\x07 or \x1b]2;title\x07 (or \x1b\\ instead of \x07)
+const OSC_TITLE_REGEX = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
+
+function parseOscTitle(data) {
+  const matches = [...data.matchAll(OSC_TITLE_REGEX)]
+  if (matches.length > 0) {
+    // Return the last title found (most recent)
+    return matches[matches.length - 1][2]
+  }
+  return null
+}
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
 function ptyLog(msg) {
@@ -168,6 +182,14 @@ function attachPtyInternal(godName, ws, cols, rows, sessionName, T) {
 
           // Store in buffer for peek
           appendToBuffer(godName, dataStr)
+
+          // Check for OSC title sequences and update entity title
+          const oscTitle = parseOscTitle(dataStr)
+          if (oscTitle && appState.entities[godName]) {
+            appState.entities[godName].title = oscTitle
+            saveState()
+            broadcastState()
+          }
 
           const msg = JSON.stringify({ event: 'pty:output', godName, data: dataStr })
           entry.clients.forEach(client => {

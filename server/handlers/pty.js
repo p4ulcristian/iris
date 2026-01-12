@@ -15,24 +15,26 @@ import { getSessionName } from '../gods.js'
 import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback } from '../pty.js'
 import { splitIntoTile } from '../../entities/_shared/spawn.js'
 
+// Extract readable command title from shell command
+function getCommandTitle(command) {
+  const cleaned = command.trim()
+  const parts = cleaned.split(/\s+/).slice(0, 3)
+  const title = parts.join(' ')
+  return title.length > 40 ? title.slice(0, 37) + '...' : title
+}
+
 export const handlers = {
   'service:start': (ws, data, projectRoot) => {
     const service = data.service
-    console.log('[service:start] Received:', { service, projectRoot, hasService: !!SERVICES[service] })
     if (service === 'chronicle') {
-      // Chronicle is a mode within hear, not a separate service
       startChronicle()
     } else if (service && SERVICES[service]) {
-      console.log('[service:start] Starting service:', service)
       startService(service, projectRoot)
-    } else {
-      console.log('[service:start] Unknown service or missing config:', service)
     }
   },
 
   'service:stop': (ws, data) => {
     const service = data.service
-    console.log('[service:stop] Received:', { service })
     if (service === 'chronicle') {
       stopChronicle()
     } else if (service && SERVICES[service]) {
@@ -118,7 +120,6 @@ export const handlers = {
         })
         return true
       } catch (e) {
-        console.error('Failed to send to zellij:', e.message)
         return false
       }
     }
@@ -149,6 +150,13 @@ export const handlers = {
 
         const success = sendToZellij(actualCommand)
 
+        // Update terminal title with the command
+        if (success && appState.entities[actualTerminalId]) {
+          appState.entities[actualTerminalId].title = getCommandTitle(command)
+          saveState()
+          broadcastState()
+        }
+
         if (!success) {
           ws.send(JSON.stringify({
             event: 'mcp:run:response',
@@ -160,14 +168,26 @@ export const handlers = {
           return
         }
 
-        // Poll for exit file (150 attempts * 200ms = 30s max)
-        let attempts = 0
-        const maxAttempts = 150
-        const pollInterval = setInterval(() => {
-          attempts++
+        // Watch for exit file using fs.watchFile (more efficient than polling)
+        const timeout = setTimeout(() => {
+          fs.unwatchFile(exitFile)
+          try { fs.unlinkSync(outputFile) } catch {}
+          try { fs.unlinkSync(exitFile) } catch {}
 
-          if (fs.existsSync(exitFile)) {
-            clearInterval(pollInterval)
+          ws.send(JSON.stringify({
+            event: 'mcp:run:response',
+            requestId,
+            terminalId: actualTerminalId,
+            godName: targetGodName,
+            output: '(Command timed out - may still be running in Iris terminal)'
+          }))
+        }, 30000) // 30s timeout
+
+        const handleFileChange = (curr) => {
+          // File exists when size > 0
+          if (curr.size > 0) {
+            clearTimeout(timeout)
+            fs.unwatchFile(exitFile)
 
             // Small delay to let buffer flush before reading
             const readDelay = raw ? 500 : 0
@@ -182,15 +202,12 @@ export const handlers = {
                 if (raw) {
                   // Raw mode: parse output between markers from Zellij scrollback
                   const buffer = getZellijScrollback(actualTerminalId) || ''
-                  // Find markers at start of line (after newline) to avoid matching command echo
                   const startIdx = buffer.indexOf('\n' + startMarker)
                   const endIdx = buffer.indexOf('\n' + endMarker)
                   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-                    // Extract content between markers (skip marker lines)
                     const content = buffer.slice(startIdx + 1 + startMarker.length, endIdx)
                     output = content.trim()
                   } else {
-                    // Fallback: couldn't find markers
                     output = '(Could not parse output)'
                   }
                 } else {
@@ -201,7 +218,7 @@ export const handlers = {
                   }
                 }
               } catch (e) {
-                console.error('Error reading output:', e.message)
+                // Error reading output
               }
 
               if (output.length > 10000) {
@@ -217,24 +234,11 @@ export const handlers = {
                 output: output || '(No output)'
               }))
             }, readDelay)
-            return
           }
+        }
 
-          if (attempts >= maxAttempts) {
-            clearInterval(pollInterval)
-
-            try { fs.unlinkSync(outputFile) } catch {}
-            try { fs.unlinkSync(exitFile) } catch {}
-
-            ws.send(JSON.stringify({
-              event: 'mcp:run:response',
-              requestId,
-              terminalId: actualTerminalId,
-              godName: targetGodName,
-              output: '(Command timed out - may still be running in Iris terminal)'
-            }))
-          }
-        }, 200)
+        // Watch with 500ms poll interval (more efficient than 200ms)
+        fs.watchFile(exitFile, { interval: 500 }, handleFileChange)
       }, 100)
     }, initDelay)
   },

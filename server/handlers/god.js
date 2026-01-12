@@ -36,10 +36,6 @@ function placeEntity(entityId, tabId, mode, direction) {
 
 export const handlers = {
   'god:spawn': (ws, data, projectRoot) => {
-    const spawnStart = Date.now()
-    const T = () => `T+${Date.now() - spawnStart}ms`
-    console.log(`[god:spawn] ${T()} Received:`, data)
-
     // Spawn mode: 'split' (default) or 'stage'
     const mode = data.mode || 'split'
     const direction = data.direction || 'horizontal'
@@ -62,7 +58,6 @@ export const handlers = {
     // Generate unique entity ID (zeus, zeus-2, zeus-3, etc.)
     const entityId = generateGodId(baseName)
     const displayName = getGodDisplayName(entityId)
-    console.log(`[god:spawn] ${T()} Base: ${baseName}, EntityID: ${entityId}, Display: ${displayName}`)
 
     // Determine working directory - use selected project path if provided
     let workingDir = projectRoot
@@ -91,12 +86,10 @@ export const handlers = {
     placeEntity(entityId, appState.activeTabId, mode, direction)
     appState.focusedEntity = entityId
     saveState()
-    console.log(`[god:spawn] ${T()} Added spawning entity, broadcasting...`)
     broadcastState()
 
     // STEP 2: Create the zellij session
     clearOutputBuffer(entityId)
-    console.log(`[god:spawn] ${T()} Calling createGodSession`)
     let god
     try {
       god = createGodSession(entityId, data.task, workingDir, {
@@ -106,13 +99,11 @@ export const handlers = {
         permissionMode: data.permissionMode
       })
     } catch (err) {
-      console.error(`[god:spawn] ${T()} createGodSession threw:`, err)
+      // Session creation failed
     }
-    console.log(`[god:spawn] ${T()} createGodSession returned:`, god ? 'success' : 'null')
 
     // STEP 3: Update state based on result
     if (!god) {
-      console.error('[god:spawn] FAILED - createGodSession returned null')
       appState.entities[entityId].readyState = 'failed'
       appState.entities[entityId].status = 'Session failed to start'
       saveState()
@@ -124,7 +115,6 @@ export const handlers = {
     appState.entities[entityId].readyState = 'working'
     appState.entities[entityId].sessionId = god.sessionId || null
     saveState()
-    console.log('[god:spawn] SUCCESS - broadcasting final state')
     broadcastState()
   },
 
@@ -269,9 +259,8 @@ export const handlers = {
   'history:list': (ws, data, projectRoot) => {
     listSessions(projectRoot, data.limit || 20, data.offset || 0).then(sessions => {
       ws.send(JSON.stringify({ event: 'history:list', sessions }))
-    }).catch(err => {
-      console.error('Failed to list sessions:', err)
-      ws.send(JSON.stringify({ event: 'history:list', sessions: [], error: err.message }))
+    }).catch(() => {
+      ws.send(JSON.stringify({ event: 'history:list', sessions: [], error: 'Failed to list sessions' }))
     })
   },
 

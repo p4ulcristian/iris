@@ -232,9 +232,6 @@ export const handlers = {
 
   'code:files:sync': (ws, data) => {
     const { entityId, openFiles, activeFilePath, rootPath } = data
-    const logLine = `[${new Date().toISOString()}] [code:files:sync] entityId=${entityId} rootPath=${rootPath} activeFilePath=${activeFilePath}\n`
-    fs.appendFileSync(path.join(LOGS_DIR, 'code-sync.log'), logLine)
-
     if (!entityId || !appState.entities[entityId]) return
 
     appState.entities[entityId].openFiles = openFiles || []
@@ -324,7 +321,6 @@ export const handlers = {
     ].filter(Boolean).join('\n') + '\n'
 
     fs.appendFileSync(logFile, logEntry)
-    console.error('[Frontend Error]', error.message, error.source ? `(${error.source})` : '')
   },
 
   // Log viewer - get log lines with tail-like pagination
@@ -349,7 +345,6 @@ export const handlers = {
         total: allLines.length
       }))
     } catch (err) {
-      console.error('[logs:read] Error:', err)
       ws.send(JSON.stringify({ event: 'logs:data', type, lines: [], error: err.message }))
     }
   },
@@ -365,7 +360,7 @@ export const handlers = {
       }
       ws.send(JSON.stringify({ event: 'logs:cleared', type }))
     } catch (err) {
-      console.error('[logs:clear] Error:', err)
+      // Error clearing logs
     }
   },
 
@@ -398,8 +393,8 @@ export const handlers = {
       })
     })
 
-    req.on('error', (err) => {
-      console.error('[speak:volume] Error:', err.message)
+    req.on('error', () => {
+      // Error setting volume
     })
     req.on('timeout', () => req.destroy())
     req.write(postData)
