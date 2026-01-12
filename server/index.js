@@ -23,6 +23,29 @@ const log = createLogger('server')
 // Clear log on startup
 clearLog()
 
+// Kill any stale server processes holding our ports
+function cleanupStalePorts() {
+  const ports = [WS_PORT, OAUTH_PORT]
+  for (const port of ports) {
+    try {
+      // Find process holding the port (works on Linux and macOS)
+      const cmd = process.platform === 'darwin'
+        ? `lsof -ti:${port}`
+        : `ss -tlnp 2>/dev/null | grep ':${port}' | sed -n 's/.*pid=\\([0-9]*\\).*/\\1/p'`
+      const pid = execSync(cmd, { encoding: 'utf-8' }).trim()
+      if (pid && pid !== String(process.pid)) {
+        log.log(`Killing stale process ${pid} on port ${port}`)
+        try {
+          process.kill(Number(pid), 'SIGKILL')
+        } catch {}
+      }
+    } catch {
+      // No process on port - that's fine
+    }
+  }
+}
+cleanupStalePorts()
+
 // In dev: use iris project root. In production: use home directory
 const isDev = process.env.NODE_ENV === 'development' || __dirname.includes('server')
 const projectRoot = isDev ? path.join(__dirname, '..') : os.homedir()

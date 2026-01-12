@@ -9,9 +9,6 @@
  *     - push_to_god: Send input to god's terminal
  *     - list_entities: List all active entities
  *
- *   Terminal:
- *     - run_terminal: Run command in terminal
- *
  *   UI:
  *     - set_title: Set god's title (auto-detects god from GOD_NAME env)
  *     - set_ready: Set god's ready state (auto-detects god from GOD_NAME env)
@@ -22,17 +19,13 @@
  *     - open_markdown: Open markdown file
  *
  *   Voice:
- *     - say: Speak text via TTS
+ *     - speak: Speak text via TTS
  *     - greet: Time-aware greeting
- *
- *   Git:
- *     - git_push: Commit and push staged changes
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { execSync } from "child_process";
 import { resolve } from "path";
 
 const API_BASE = "http://127.0.0.1:9998/api";
@@ -187,6 +180,25 @@ server.tool(
 );
 
 server.tool(
+  "run_terminal",
+  "Run command in visible terminal, wait for output. Creates terminal if needed.",
+  {
+    command: z.string().describe("Shell command to execute"),
+    god_name: z.string().optional().describe("God name for terminal (default: Hermes)"),
+    raw: z.boolean().default(true).describe("Clean terminal output (default: true). Set false for wrapped mode with file capture.")
+  },
+  async ({ command, god_name, raw }) => {
+    const god = god_name || GOD_NAME || "Hermes";
+    const result = await apiPost("run", { god, command, raw }, 40000); // 40s timeout
+
+    if (result.error) return fail(`Command failed: ${result.error}`);
+
+    const output = result.output || "(no output)";
+    return ok(`Exit ${result.exitCode ?? "?"}\n${output}`);
+  }
+);
+
+server.tool(
   "list_entities",
   "List all active entities (gods, terminals, browsers, etc.) in Iris.",
   {},
@@ -201,25 +213,6 @@ server.tool(
       `- ${e.name || "Unknown"} (${e.type || "entity"}): ${e.readyState || "unknown"}`
     );
     return ok(lines.join("\n"));
-  }
-);
-
-// =============================================================================
-// Terminal
-// =============================================================================
-
-server.tool(
-  "run_terminal",
-  "Run a command in a god's dedicated terminal tab in Iris.",
-  {
-    command: z.string().describe("The shell command to execute"),
-    god_name: z.string().default("Hermes").describe("Which god's terminal to use"),
-    timeout: z.number().default(60000).describe("Command timeout in ms (default 60s)")
-  },
-  async ({ command, god_name, timeout }) => {
-    const result = await apiPost("run", { god: god_name, command }, timeout);
-    if (result.error) return fail(`Failed to run: ${result.error}`);
-    return ok(result.output || "Command executed");
   }
 );
 
@@ -376,8 +369,8 @@ server.tool(
 // =============================================================================
 
 server.tool(
-  "say",
-  "Speak text aloud via TTS. Supports paralinguistic tags like [sigh], [laugh], [gasp].",
+  "speak",
+  "Speak aloud. Use liberally for status updates. Supports [sigh], [laugh], [gasp].",
   {
     text: z.string().describe("The text to speak"),
     voice: z.string().optional().describe("Optional voice name (defaults to god name)"),
@@ -424,130 +417,6 @@ server.tool(
     const result = await apiPost("say", data);
     if (result.error) return fail(`Failed to greet: ${result.error}`);
     return ok(greeting);
-  }
-);
-
-// =============================================================================
-// Git
-// =============================================================================
-
-function detectModule(filePaths) {
-  const patterns = {
-    "features/flex/": "Flex",
-    "features/auth/": "Auth",
-    "features/": (p) => {
-      const match = p.match(/features\/([^/]+)/);
-      return match ? match[1].charAt(0).toUpperCase() + match[1].slice(1) : "Features";
-    },
-    "brain/": "Brain",
-    "app/server/": "Server",
-    "app/src/": "Frontend",
-    "app/mcp/": "MCP",
-    "app/": "App",
-  };
-
-  const counts = {};
-
-  for (const path of filePaths) {
-    for (const [pattern, module] of Object.entries(patterns)) {
-      if (path.includes(pattern)) {
-        const moduleName = typeof module === "function" ? module(path) : module;
-        counts[moduleName] = (counts[moduleName] || 0) + 1;
-        break;
-      }
-    }
-  }
-
-  if (Object.keys(counts).length === 0) return "Core";
-  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-}
-
-function generateCommitMessage(diffStat, issueId) {
-  const filePaths = [];
-  for (const line of diffStat.split("\n")) {
-    if (line.includes("|")) {
-      const path = line.split("|")[0].trim();
-      if (path) filePaths.push(path);
-    }
-  }
-
-  const module = detectModule(filePaths);
-  const prefix = issueId ? `[${issueId} | ${module}]` : `[${module}]`;
-
-  let description;
-  if (filePaths.length === 1) {
-    const fileName = filePaths[0].split("/").pop();
-    description = `Update ${fileName}`;
-  } else if (filePaths.every(p => p.toLowerCase().includes("test"))) {
-    description = "Update tests";
-  } else if (filePaths.every(p => p.endsWith(".md"))) {
-    description = "Update documentation";
-  } else if (filePaths.every(p => /\.(yaml|json|toml)$/.test(p))) {
-    description = "Update configuration";
-  } else {
-    description = `Update ${module.toLowerCase()}`;
-  }
-
-  let header = `${prefix} ${description}`;
-  if (header.length > 50) {
-    const maxLen = Math.max(10, 50 - prefix.length - 4);
-    description = description.slice(0, maxLen) + "...";
-    header = `${prefix} ${description}`;
-  }
-
-  const bodyLines = filePaths.slice(0, 10).map(p => `- ${p.split("/").pop()}`);
-  if (filePaths.length > 10) {
-    bodyLines.push(`- ... and ${filePaths.length - 10} more files`);
-  }
-
-  return `${header}\n\n${bodyLines.join("\n")}`;
-}
-
-server.tool(
-  "git_push",
-  "Commit staged changes and push to remote with auto-generated message.",
-  {
-    issue_id: z.string().optional().describe("Optional issue ID (e.g., 'IRO-123')"),
-    cwd: z.string().optional().describe("Working directory (defaults to process cwd)")
-  },
-  async ({ issue_id, cwd }) => {
-    const execOpts = { encoding: "utf-8", cwd: cwd || process.cwd() };
-
-    try {
-      // Check for staged changes
-      let diffStat;
-      try {
-        diffStat = execSync("git diff --cached --stat", execOpts);
-      } catch {
-        return fail("Failed to run git diff");
-      }
-
-      if (!diffStat.trim()) return fail("No staged changes to commit");
-
-      // Generate commit message
-      const commitMsg = generateCommitMessage(diffStat, issue_id);
-
-      // Commit
-      try {
-        execSync(`git commit -m ${JSON.stringify(commitMsg)}`, execOpts);
-      } catch (e) {
-        return fail(`Commit failed: ${e.message}`);
-      }
-
-      // Get commit hash
-      const commitHash = execSync("git rev-parse HEAD", execOpts).trim().slice(0, 7);
-
-      // Push
-      try {
-        execSync("git push", execOpts);
-      } catch (e) {
-        return fail(`Committed ${commitHash} but push failed: ${e.message}`);
-      }
-
-      return ok(`Committed ${commitHash} and pushed`);
-    } catch (e) {
-      return fail(`Error: ${e.message}`);
-    }
   }
 );
 

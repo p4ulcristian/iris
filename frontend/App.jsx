@@ -59,9 +59,6 @@ export default function App() {
   const [summonModalOpen, setSummonModalOpen] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
 
-  // Sidebar state - hover expand for spawn buttons
-  const [sidebarButtonsExpanded, setSidebarButtonsExpanded] = useState(false)
-
   // Sidebar width state with localStorage persistence
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('iris:sidebar-width')
@@ -631,7 +628,7 @@ export default function App() {
       </div>
 
       {/* Main layout: sidebar + content */}
-      <div ref={mainContainerRef} className="flex flex-1 min-h-0 px-3">
+      <div ref={mainContainerRef} className="flex flex-1 min-h-0 pr-3">
         {/* Unified Sidebar */}
         <Sidebar
           connected={connected}
@@ -649,8 +646,6 @@ export default function App() {
           godColors={godColors}
           loadStage={loadStage}
           initialLoadDone={initialLoadDone}
-          sidebarButtonsExpanded={sidebarButtonsExpanded}
-          setSidebarButtonsExpanded={setSidebarButtonsExpanded}
           onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
           onEntityClose={handleKillEntity}
           onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}

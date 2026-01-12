@@ -21,32 +21,13 @@ import { REALM_COLORS } from '../themes'
 import { CHRONICLE_URL } from '../config'
 
 // Constants
-const LEFT_COLUMN_WIDTH = 56
-const MIN_WIDTH = 200
-const MAX_WIDTH = 500
+const MIN_WIDTH = 50
+const MAX_WIDTH = 1000
 const WIDTH_TRANSITION_MS = 150
 
 function Spinner() {
   return (
     <span className="inline-block w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-  )
-}
-
-function SystemTime() {
-  const [time, setTime] = useState(new Date())
-
-  useEffect(() => {
-    const interval = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const hours = time.getHours().toString().padStart(2, '0')
-  const minutes = time.getMinutes().toString().padStart(2, '0')
-
-  return (
-    <span className="text-white/20 text-[10px] font-mono mt-1">
-      {hours}:{minutes}
-    </span>
   )
 }
 
@@ -172,17 +153,6 @@ function ChronicleButton() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  const formatRelativeTime = (timestamp) => {
-    const now = new Date()
-    const ts = new Date(timestamp)
-    const diff = Math.floor((now - ts) / 1000)
-
-    if (diff < 60) return 'just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return ts.toLocaleDateString()
-  }
-
   const groupByDay = (lines) => {
     const groups = {}
     for (const line of lines) {
@@ -223,7 +193,7 @@ function ChronicleButton() {
       <IconButton
         icon={faScroll}
         size="md"
-        variant="glass"
+        variant="ghost"
         onClick={() => setOpen(!open)}
         title="Chronicle preview"
       />
@@ -384,7 +354,7 @@ function LogsButton({ send }) {
       <IconButton
         icon={faTerminal}
         size="md"
-        variant="glass"
+        variant="ghost"
         onClick={() => setOpen(!open)}
         title="System logs"
       />
@@ -499,7 +469,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="btn btn-glass btn-icon btn-icon-md"
+        className="btn btn-ghost btn-icon btn-icon-md"
         title={`Services (${activeCount}/${serviceList.length})`}
       >
         <FontAwesomeIcon
@@ -592,29 +562,221 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
   )
 }
 
-// Left column content (tabs, services, spawn menu)
-function LeftColumn({
-  connected,
-  send,
+// Tabs section at top
+function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loadStage, initialLoadDone }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 p-3 border-b border-white/10">
+      <AnimatePresence>
+        {tabs?.map((tab, idx) => {
+          const isActive = activeTabId === tab.id
+          const realmColor = REALM_COLORS[tab.name] || '#888888'
+          const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 0.05 : 0
+
+          return (
+            <motion.button
+              key={tab.id}
+              onClick={() => onTabSelect(tab.id)}
+              className="group relative btn btn-icon btn-icon-md btn-glass"
+              style={isActive ? {
+                background: `linear-gradient(135deg, ${realmColor}33 0%, ${realmColor}1a 100%)`,
+                borderColor: `${realmColor}40`,
+                boxShadow: `0 0 12px ${realmColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
+              } : undefined}
+              title={`${tab.name} (Alt+${idx + 1})`}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{
+                opacity: loadStage >= 2 ? 1 : 0,
+                scale: loadStage >= 2 ? 1 : 0.8
+              }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{
+                type: 'spring',
+                stiffness: 400,
+                damping: 25,
+                delay: staggerDelay
+              }}
+            >
+              <FontAwesomeIcon
+                icon={faCircle}
+                style={{ color: realmColor }}
+                className="text-[10px]"
+              />
+              {tabs.length > 1 && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onTabClose(tab.id)
+                  }}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
+                >
+                  <FontAwesomeIcon icon={faXmark} />
+                </span>
+              )}
+            </motion.button>
+          )
+        })}
+      </AnimatePresence>
+
+      {/* Add tab button */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{
+          opacity: loadStage >= 2 ? 1 : 0,
+          scale: loadStage >= 2 ? 1 : 0.8
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 400,
+          damping: 25,
+          delay: (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 0.05 : 0
+        }}
+      >
+        <IconButton
+          icon={faPlus}
+          size="md"
+          variant="ghost"
+          onClick={onTabNew}
+          title="New tab (Alt+N)"
+        />
+      </motion.div>
+    </div>
+  )
+}
+
+// Entity cards section (scrollable middle)
+function EntityCardsSection({
+  allStages,
   tabs,
   activeTabId,
-  onTabSelect,
-  onTabClose,
-  onTabNew,
-  sidebarButtonsExpanded,
-  setSidebarButtonsExpanded,
-  onSpawnEntity,
-  onOpenSummonModal,
+  focusedEntity,
+  onEntityClick,
+  onEntityClose,
+  onEntitySplit,
+  onMoveToTab,
+  onMoveToNewTab,
+  onReorderInStage,
+  onJoinStage,
+  onCreateStageAtPosition,
 }) {
+  return (
+    <TileUngroupDropZone className="flex-1 overflow-y-auto overflow-x-visible relative">
+      {tabs.length > 0 && (
+        <div className="relative h-full">
+          {tabs.map((tab, tabIdx) => {
+            const activeTabIdx = tabs.findIndex(t => t.id === activeTabId)
+            const tabOffset = tabIdx - activeTabIdx
+            const isActiveTab = tab.id === activeTabId
+
+            const tabStages = allStages
+              ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
+              : []
+
+            return (
+              <motion.div
+                key={tab.id}
+                className="absolute inset-0 overflow-y-auto overflow-x-visible p-3"
+                initial={false}
+                animate={{ y: `${tabOffset * 100}vh` }}
+                transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                style={{
+                  pointerEvents: isActiveTab ? 'auto' : 'none'
+                }}
+              >
+                {tabStages.length > 0 && (
+                  <LayoutGroup>
+                    <div className="flex flex-col gap-3">
+                      {tabStages.map((item, stageIdx) => {
+                        const stage = item.stage || item
+                        const activeTab = tabs.find(t => t.id === tab.id)
+                        const isActiveStage = stage.id === activeTab?.activeStageId
+                        const staggerOffset = tabStages
+                          .slice(0, stageIdx)
+                          .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
+
+                        return (
+                          <EntityGroup
+                            key={stage.id}
+                            stage={stage}
+                            entities={stage.entities || []}
+                            isFocused={isActiveStage}
+                            focusedEntityId={focusedEntity}
+                            onClick={onEntityClick}
+                            onClose={onEntityClose}
+                            onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
+                            tabs={tabs}
+                            activeTabId={tab.id}
+                            onMoveToTab={onMoveToTab}
+                            onMoveToNewTab={onMoveToNewTab}
+                            onReorderInStage={onReorderInStage}
+                            onJoinStage={onJoinStage}
+                            onCreateStageAtPosition={onCreateStageAtPosition}
+                            staggerOffset={staggerOffset}
+                            stageIndex={stageIdx}
+                            totalStages={tabStages.length}
+                          />
+                        )
+                      })}
+                    </div>
+                  </LayoutGroup>
+                )}
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+    </TileUngroupDropZone>
+  )
+}
+
+// Spawn row section (horizontal scroll via vertical wheel)
+function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
+  const entityRegistry = useStore(s => s.entityRegistry)
+  const scrollRef = useRef(null)
+
+  // Convert vertical scroll to horizontal
+  const handleWheel = useCallback((e) => {
+    if (!scrollRef.current) return
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault()
+      scrollRef.current.scrollLeft += e.deltaY
+    }
+  }, [])
+
+  return (
+    <div className="border-t border-white/10 py-3">
+      <div
+        ref={scrollRef}
+        onWheel={handleWheel}
+        className="flex gap-2 overflow-x-auto px-3 scrollbar-hide"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {entityRegistry._order?.map(type => {
+          const entity = entityRegistry[type]
+          if (!entity) return null
+          const isGod = type === 'god'
+          return (
+            <div key={type} className="flex-shrink-0 w-16 aspect-square">
+              <DraggableTypeButton
+                entityType={type}
+                title={entity.label}
+                onClick={isGod ? onOpenSummonModal : () => onSpawnEntity(type)}
+                showLabel
+              />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// Bottom menu section (services only)
+function BottomMenu({ connected, send }) {
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
   const speakDetails = useStore(s => s.speakDetails)
   const powers = useStore(s => s.settings?.powers ?? true)
-  const loadStage = useStore(s => s.loadStage)
-  const initialLoadDone = useStore(s => s.initialLoadDone)
-  const version = useStore(s => s.version)
-  const entityRegistry = useStore(s => s.entityRegistry)
 
   const handleServiceToggle = (service, isActive) => {
     if (!send) return
@@ -632,143 +794,10 @@ function LeftColumn({
   }
 
   return (
-    <div className="flex flex-col items-center gap-1 py-3 px-2" style={{ width: LEFT_COLUMN_WIDTH }}>
-      {/* Tabs */}
-      <div className="flex flex-col items-center gap-1 overflow-visible">
-        <AnimatePresence>
-          {tabs?.map((tab, idx) => {
-            const isActive = activeTabId === tab.id
-            const realmColor = REALM_COLORS[tab.name] || '#888888'
-            const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 0.05 : 0
-
-            return (
-              <motion.button
-                key={tab.id}
-                onClick={() => onTabSelect(tab.id)}
-                className="group relative btn btn-icon btn-icon-md btn-glass"
-                style={isActive ? {
-                  background: `linear-gradient(135deg, ${realmColor}33 0%, ${realmColor}1a 100%)`,
-                  borderColor: `${realmColor}40`,
-                  boxShadow: `0 0 12px ${realmColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
-                } : undefined}
-                title={`${tab.name} (Alt+${idx + 1})`}
-                initial={{ opacity: 0, x: -20, scale: 0.8 }}
-                animate={{
-                  opacity: loadStage >= 2 ? 1 : 0,
-                  x: loadStage >= 2 ? 0 : -20,
-                  scale: loadStage >= 2 ? 1 : 0.8
-                }}
-                exit={{ opacity: 0, x: -20, scale: 0.8 }}
-                transition={{
-                  type: 'spring',
-                  stiffness: 400,
-                  damping: 25,
-                  delay: staggerDelay
-                }}
-              >
-                <FontAwesomeIcon
-                  icon={faCircle}
-                  style={{ color: realmColor }}
-                  className="text-[10px]"
-                />
-                {tabs.length > 1 && (
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onTabClose(tab.id)
-                    }}
-                    className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
-                  >
-                    <FontAwesomeIcon icon={faXmark} />
-                  </span>
-                )}
-              </motion.button>
-            )
-          })}
-        </AnimatePresence>
-
-        {/* Add tab button */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{
-            opacity: loadStage >= 2 ? 1 : 0,
-            scale: loadStage >= 2 ? 1 : 0.8
-          }}
-          transition={{
-            type: 'spring',
-            stiffness: 400,
-            damping: 25,
-            delay: (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 0.05 : 0
-          }}
-        >
-          <IconButton
-            icon={faPlus}
-            size="md"
-            variant="ghost"
-            onClick={onTabNew}
-            title="New tab (Alt+N)"
-          />
-        </motion.div>
-      </div>
-
-      {/* IRIS branding */}
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-white/50 text-sm font-mono font-bold tracking-wider" style={{ writingMode: 'vertical-lr', transform: 'rotate(180deg)', whiteSpace: 'nowrap' }}>
-          IRIS {version && `- ${version}`}
-        </span>
-      </div>
-
-      {/* Logs button */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{
-          opacity: loadStage >= 2 ? 1 : 0,
-          scale: loadStage >= 2 ? 1 : 0.8
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 400,
-          damping: 25,
-          delay: (!initialLoadDone || loadStage < 5) ? 0.10 : 0
-        }}
-      >
-        <LogsButton send={send} />
-      </motion.div>
-
-      {/* Chronicle preview button */}
-      {powers && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{
-            opacity: loadStage >= 2 ? 1 : 0,
-            scale: loadStage >= 2 ? 1 : 0.8
-          }}
-          transition={{
-            type: 'spring',
-            stiffness: 400,
-            damping: 25,
-            delay: (!initialLoadDone || loadStage < 5) ? 0.12 : 0
-          }}
-        >
-          <ChronicleButton />
-        </motion.div>
-      )}
-
-      {/* Services dropdown */}
-      {powers && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{
-            opacity: loadStage >= 2 ? 1 : 0,
-            scale: loadStage >= 2 ? 1 : 0.8
-          }}
-          transition={{
-            type: 'spring',
-            stiffness: 400,
-            damping: 25,
-            delay: (!initialLoadDone || loadStage < 5) ? 0.15 : 0
-          }}
-        >
+    <div className="border-t border-white/10 py-3 pr-3">
+      <div className="flex items-center justify-center gap-1">
+        {/* Services status */}
+        {powers && (
           <ServicesDropdown
             connected={connected}
             services={services}
@@ -777,188 +806,47 @@ function LeftColumn({
             speakDetails={speakDetails}
             onVolumeChange={handleVolumeChange}
           />
-        </motion.div>
-      )}
-
-      {/* Spawn menu */}
-      <motion.div
-        className="relative flex flex-col items-center"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{
-          opacity: loadStage >= 5 ? 1 : 0,
-          scale: loadStage >= 5 ? 1 : 0.8
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 400,
-          damping: 25,
-          delay: (!initialLoadDone || loadStage < 5) ? 0.2 : 0
-        }}
-        onMouseEnter={() => setSidebarButtonsExpanded(true)}
-        onMouseLeave={() => setSidebarButtonsExpanded(false)}
-      >
-        {/* Spawn menu - hover to expand */}
-        <AnimatePresence>
-          {sidebarButtonsExpanded && (
-            <motion.div
-              className="absolute left-full bottom-0 ml-2 flex flex-wrap gap-1.5 items-center p-2 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 z-50 max-w-[280px]"
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -20, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-            >
-              {entityRegistry._order?.map(type => {
-                const entity = entityRegistry[type]
-                if (!entity) return null
-                const isGod = type === 'god'
-                return (
-                  <DraggableTypeButton
-                    key={type}
-                    entityType={type}
-                    title={`${entity.label} - drag to split`}
-                    onClick={isGod ? onOpenSummonModal : () => onSpawnEntity(type)}
-                    size={isGod ? 'large' : 'medium'}
-                  />
-                )
-              })}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Spawn button */}
-        <IconButton
-          icon={faPlus}
-          size="md"
-          variant="glass"
-          title="Spawn entity"
-        />
-      </motion.div>
-    </div>
-  )
-}
-
-// Right column content (entity cards)
-function RightColumn({
-  allStages,
-  tabs,
-  activeTabId,
-  focusedEntity,
-  onEntityClick,
-  onEntityClose,
-  onEntitySplit,
-  onMoveToTab,
-  onMoveToNewTab,
-  onReorderInStage,
-  onJoinStage,
-  onCreateStageAtPosition,
-}) {
-  return (
-    <div className="flex-1 flex flex-col overflow-visible relative pr-3">
-      <TileUngroupDropZone className="flex-1 relative pb-14">
-        {tabs.length > 0 && (
-          <div className="relative h-full">
-            {tabs.map((tab, tabIdx) => {
-              const activeTabIdx = tabs.findIndex(t => t.id === activeTabId)
-              const tabOffset = tabIdx - activeTabIdx
-              const isActiveTab = tab.id === activeTabId
-
-              const tabStages = allStages
-                ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
-                : []
-
-              return (
-                <motion.div
-                  key={tab.id}
-                  className="absolute inset-0 overflow-y-auto overflow-x-visible pt-3"
-                  initial={false}
-                  animate={{ y: `${tabOffset * 100}vh` }}
-                  transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                  style={{
-                    pointerEvents: isActiveTab ? 'auto' : 'none'
-                  }}
-                >
-                  {tabStages.length > 0 && (
-                    <LayoutGroup>
-                      <div className="flex flex-col gap-3 pb-16">
-                        {tabStages.map((item, stageIdx) => {
-                          const stage = item.stage || item
-                          const activeTab = tabs.find(t => t.id === tab.id)
-                          const isActiveStage = stage.id === activeTab?.activeStageId
-                          const staggerOffset = tabStages
-                            .slice(0, stageIdx)
-                            .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
-
-                          return (
-                            <EntityGroup
-                              key={stage.id}
-                              stage={stage}
-                              entities={stage.entities || []}
-                              isFocused={isActiveStage}
-                              focusedEntityId={focusedEntity}
-                              onClick={onEntityClick}
-                              onClose={onEntityClose}
-                              onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
-                              tabs={tabs}
-                              activeTabId={tab.id}
-                              onMoveToTab={onMoveToTab}
-                              onMoveToNewTab={onMoveToNewTab}
-                              onReorderInStage={onReorderInStage}
-                              onJoinStage={onJoinStage}
-                              onCreateStageAtPosition={onCreateStageAtPosition}
-                              staggerOffset={staggerOffset}
-                              stageIndex={stageIdx}
-                              totalStages={tabStages.length}
-                            />
-                          )
-                        })}
-                      </div>
-                    </LayoutGroup>
-                  )}
-                </motion.div>
-              )
-            })}
-          </div>
         )}
-      </TileUngroupDropZone>
+
+        {/* Logs */}
+        <LogsButton send={send} />
+
+        {/* Chronicle */}
+        {powers && <ChronicleButton />}
+      </div>
     </div>
   )
 }
 
-// Resize handle component
+// Resize handle
 function ResizeHandle({ onResizeStart }) {
   return (
-    <div
-      className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-white/20 transition-colors z-10"
-      onMouseDown={onResizeStart}
-      style={{ touchAction: 'none', userSelect: 'none' }}
-    />
+    <>
+      {/* Left edge line (visual only) */}
+      <div className="absolute left-0 top-0 bottom-0 w-1" />
+      {/* Right edge resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-white/20 transition-colors z-10"
+        onMouseDown={onResizeStart}
+        style={{ touchAction: 'none', userSelect: 'none' }}
+      />
+    </>
   )
 }
 
-// Main unified Sidebar component
+// Main Sidebar component
 export default function Sidebar({
-  // Connection
   connected,
   send,
-
-  // Tab data
   tabs,
   activeTabId,
   onTabSelect,
   onTabClose,
   onTabNew,
-
-  // Entity data
   allStages,
   focusedEntity,
   loadStage,
   initialLoadDone,
-
-  // Sidebar state
-  sidebarButtonsExpanded,
-  setSidebarButtonsExpanded,
-
-  // Entity handlers
   onEntityClick,
   onEntityClose,
   onEntitySplit,
@@ -969,8 +857,6 @@ export default function Sidebar({
   onCreateStageAtPosition,
   onSpawnEntity,
   onOpenSummonModal,
-
-  // Resize
   width,
   onWidthChange,
 }) {
@@ -978,7 +864,6 @@ export default function Sidebar({
   const startXRef = useRef(0)
   const startWidthRef = useRef(width)
 
-  // Handle resize start
   const handleResizeStart = useCallback((e) => {
     e.preventDefault()
     setIsDragging(true)
@@ -986,7 +871,6 @@ export default function Sidebar({
     startWidthRef.current = width
   }, [width])
 
-  // Handle resize drag
   useEffect(() => {
     if (!isDragging) return
 
@@ -1011,29 +895,25 @@ export default function Sidebar({
 
   return (
     <aside
-      className="flex liquid-glass-light z-20 overflow-visible relative"
+      className="flex flex-col liquid-glass-light z-20 overflow-visible relative"
       style={{
         width,
         transition: isDragging ? 'none' : `width ${WIDTH_TRANSITION_MS}ms ease-in-out`
       }}
     >
-      {/* Left column */}
-      <LeftColumn
-        connected={connected}
-        send={send}
+      {/* Tabs at top */}
+      <TabsSection
         tabs={tabs}
         activeTabId={activeTabId}
         onTabSelect={onTabSelect}
         onTabClose={onTabClose}
         onTabNew={onTabNew}
-        sidebarButtonsExpanded={sidebarButtonsExpanded}
-        setSidebarButtonsExpanded={setSidebarButtonsExpanded}
-        onSpawnEntity={onSpawnEntity}
-        onOpenSummonModal={onOpenSummonModal}
+        loadStage={loadStage}
+        initialLoadDone={initialLoadDone}
       />
 
-      {/* Right column - entity cards */}
-      <RightColumn
+      {/* Entity cards in middle (scrollable) */}
+      <EntityCardsSection
         allStages={allStages}
         tabs={tabs}
         activeTabId={activeTabId}
@@ -1047,6 +927,15 @@ export default function Sidebar({
         onJoinStage={onJoinStage}
         onCreateStageAtPosition={onCreateStageAtPosition}
       />
+
+      {/* Spawn row */}
+      <SpawnRow
+        onSpawnEntity={onSpawnEntity}
+        onOpenSummonModal={onOpenSummonModal}
+      />
+
+      {/* Bottom menu (services) */}
+      <BottomMenu connected={connected} send={send} />
 
       {/* Resize handle */}
       <ResizeHandle onResizeStart={handleResizeStart} />

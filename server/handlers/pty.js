@@ -12,7 +12,7 @@ import {
 import { startService, stopService, startChronicle, stopChronicle } from '../services.js'
 import { createTerminalSession } from '../gods.js'
 import { getSessionName } from '../gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer } from '../pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback } from '../pty.js'
 import * as layout from '../layout.js'
 
 export const handlers = {
@@ -42,7 +42,7 @@ export const handlers = {
 
   // MCP Integration - run commands in god terminals
   'mcp:run': (ws, data, projectRoot) => {
-    const { requestId, godName, terminalName, command } = data
+    const { requestId, godName, terminalName, command, raw } = data
     if (!requestId || !command) {
       ws.send(JSON.stringify({
         event: 'mcp:run:response',
@@ -135,18 +135,27 @@ export const handlers = {
     // New terminals need ~3s for Zellij + shell to fully initialize
     const initDelay = terminal ? 100 : 3000
     setTimeout(() => {
-      // First send Ctrl+C to clear any stuck input
-      try {
-        execSync(`"${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" -s "${sessionName}" action write 3`, {
-          timeout: 1000,
-          stdio: 'pipe'
-        })
-      } catch {}
+      // Send Ctrl+C to clear any stuck input (skip in raw mode for cleaner output)
+      if (!raw) {
+        try {
+          execSync(`"${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" -s "${sessionName}" action write 3`, {
+            timeout: 1000,
+            stdio: 'pipe'
+          })
+        } catch {}
+      }
 
-      // Small delay after Ctrl+C
+      // Small delay before command
       setTimeout(() => {
-        const wrappedCommand = `( ${command} ) > "${outputFile}" 2>&1; cat "${outputFile}"; echo $? > "${exitFile}"`
-        const success = sendToZellij(wrappedCommand)
+        // Raw mode: clean terminal output with markers for parsing
+        // Wrapped mode: captures stdout/stderr to file (uglier but more reliable)
+        const startMarker = `__IRIS_START_${requestId}__`
+        const endMarker = `__IRIS_END_${requestId}__`
+        const actualCommand = raw
+          ? `echo ${startMarker}; ${command}; echo ${endMarker}; echo $? > "${exitFile}"`
+          : `( ${command} ) > "${outputFile}" 2>&1; cat "${outputFile}"; echo $? > "${exitFile}"`
+
+        const success = sendToZellij(actualCommand)
 
         if (!success) {
           ws.send(JSON.stringify({
@@ -159,7 +168,7 @@ export const handlers = {
           return
         }
 
-        // Poll for output file (150 attempts * 200ms = 30s max)
+        // Poll for exit file (150 attempts * 200ms = 30s max)
         let attempts = 0
         const maxAttempts = 150
         const pollInterval = setInterval(() => {
@@ -168,32 +177,54 @@ export const handlers = {
           if (fs.existsSync(exitFile)) {
             clearInterval(pollInterval)
 
-            let output = ''
-            let exitCode = '0'
+            // Small delay to let buffer flush before reading
+            const readDelay = raw ? 500 : 0
+            setTimeout(() => {
+              let output = ''
+              let exitCode = '0'
 
-            try {
-              if (fs.existsSync(outputFile)) {
-                output = fs.readFileSync(outputFile, 'utf-8').trim()
-                fs.unlinkSync(outputFile)
+              try {
+                exitCode = fs.readFileSync(exitFile, 'utf-8').trim()
+                fs.unlinkSync(exitFile)
+
+                if (raw) {
+                  // Raw mode: parse output between markers from Zellij scrollback
+                  const buffer = getZellijScrollback(actualTerminalId) || ''
+                  // Find markers at start of line (after newline) to avoid matching command echo
+                  const startIdx = buffer.indexOf('\n' + startMarker)
+                  const endIdx = buffer.indexOf('\n' + endMarker)
+                  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                    // Extract content between markers (skip marker lines)
+                    const content = buffer.slice(startIdx + 1 + startMarker.length, endIdx)
+                    output = content.trim()
+                  } else {
+                    // Fallback: couldn't find markers
+                    output = '(Could not parse output)'
+                  }
+                } else {
+                  // Wrapped mode: read from output file
+                  if (fs.existsSync(outputFile)) {
+                    output = fs.readFileSync(outputFile, 'utf-8').trim()
+                    fs.unlinkSync(outputFile)
+                  }
+                }
+              } catch (e) {
+                console.error('Error reading output:', e.message)
               }
-              exitCode = fs.readFileSync(exitFile, 'utf-8').trim()
-              fs.unlinkSync(exitFile)
-            } catch (e) {
-              console.error('Error reading output files:', e.message)
-            }
 
-            if (output.length > 10000) {
-              output = output.slice(0, 10000) + '\n... (truncated)'
-            }
+              if (output.length > 10000) {
+                output = output.slice(0, 10000) + '\n... (truncated)'
+              }
 
-            ws.send(JSON.stringify({
-              event: 'mcp:run:response',
-              requestId,
-              terminalId: actualTerminalId,
-              godName: targetGodName,
-              exitCode: parseInt(exitCode) || 0,
-              output: output || '(No output)'
-            }))
+              ws.send(JSON.stringify({
+                event: 'mcp:run:response',
+                requestId,
+                terminalId: actualTerminalId,
+                godName: targetGodName,
+                exitCode: parseInt(exitCode) || 0,
+                output: output || '(No output)'
+              }))
+            }, readDelay)
             return
           }
 

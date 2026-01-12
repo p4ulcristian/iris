@@ -379,8 +379,9 @@ export function setupApi() {
     }
 
     // POST /api/run - Run command in terminal (uses mcp:run handler)
+    // Options: god (terminal owner), command, raw (clean output mode)
     if (req.method === 'POST' && url.pathname === '/api/run') {
-      const { god, command } = await parseJson(req)
+      const { god, command, raw } = await parseJson(req)
       if (!command) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Missing command' }))
@@ -405,7 +406,8 @@ export function setupApi() {
         handlers['mcp:run'](mockWs, {
           requestId,
           godName: god || 'Hermes',
-          command
+          command,
+          raw: !!raw
         }, process.cwd())
 
         // Wait for response (up to 35s for command timeout + buffer)
