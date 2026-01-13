@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import TileCard from './TileCard'
 import DropIndicator from './DropIndicator'
 import { renderEntityView } from './EntityRenderer'
@@ -25,9 +26,67 @@ export default function Tile({
   globalFocusedEntity
 }) {
   const { send, connected } = useWebSocket(WS_URL)
-  const ref = useRef(null)
+  const ref = useRef(null)  // Original tile position
+  const portalRef = useRef(null)  // Portal element for maximized view
   const [dropState, setDropState] = useState({ isDraggedOver: false, closestEdge: null, isRearrange: false })
   const [isDragging, setIsDragging] = useState(false)
+
+  // FLIP animation for maximize/restore
+  const prevMaximizedRef = useRef(isMaximized)
+  const firstRectRef = useRef(null)
+
+  // Capture "First" position before render
+  // When maximizing: capture from original tile
+  // When restoring: capture from portal
+  if (prevMaximizedRef.current !== isMaximized) {
+    const sourceEl = prevMaximizedRef.current ? portalRef.current : ref.current
+    if (sourceEl) {
+      firstRectRef.current = sourceEl.getBoundingClientRect()
+    }
+  }
+
+  // FLIP: animate after DOM update
+  useLayoutEffect(() => {
+    // Target element is the one we're animating TO
+    const targetEl = isMaximized ? portalRef.current : ref.current
+    if (!targetEl || !firstRectRef.current) {
+      prevMaximizedRef.current = isMaximized
+      return
+    }
+
+    if (prevMaximizedRef.current !== isMaximized) {
+      const first = firstRectRef.current
+      const last = targetEl.getBoundingClientRect()
+
+      // Calculate the transform to go from "last" back to "first"
+      const deltaX = first.left - last.left
+      const deltaY = first.top - last.top
+      const scaleX = first.width / last.width
+      const scaleY = first.height / last.height
+
+      // Apply inverted transform (no transition yet)
+      targetEl.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(${scaleX}, ${scaleY})`
+      targetEl.style.transformOrigin = 'top left'
+
+      // Force reflow
+      targetEl.offsetHeight
+
+      // Add transition and animate to final position
+      targetEl.classList.add('tile-flip-animate')
+      targetEl.style.transform = ''
+
+      // Clean up after animation
+      const cleanup = () => {
+        targetEl.classList.remove('tile-flip-animate')
+        targetEl.style.transformOrigin = ''
+      }
+      targetEl.addEventListener('transitionend', cleanup, { once: true })
+
+      // Update ref
+      prevMaximizedRef.current = isMaximized
+      firstRectRef.current = null
+    }
+  }, [isMaximized])
 
   // Alt key state from global store
   const isAltHeld = useStore(s => s.isAltHeld)
@@ -236,7 +295,7 @@ export default function Tile({
     return `${prefix} ${direction}`
   }
 
-  // Build tile classes
+  // Build tile classes (for non-maximized state)
   const tileClasses = [
     'relative h-full w-full overflow-hidden',
     isChapter ? 'border-2 border-white/20 rounded-2xl' : '',
@@ -244,30 +303,20 @@ export default function Tile({
     isAltHeld && tileEntity ? 'cursor-grab' : ''
   ].filter(Boolean).join(' ')
 
-  return (
-    <div
-      ref={ref}
-      data-tile-id={tileId}
-      className={tileClasses}
-      style={{ viewTransitionName: `tile-${tileId}` }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* Empty tile state */}
-      {!tileEntity && (
+  // Render tile content (shared between normal and maximized views)
+  const renderTileContent = () => {
+    if (!tileEntity) {
+      return (
         <div className="h-full flex flex-col items-center justify-center gap-3 text-text-secondary liquid-glass-god rounded-2xl">
           <p className="text-base">Empty tile</p>
           <p className="text-sm opacity-70">Drop an entity here</p>
         </div>
-      )}
+      )
+    }
 
-      {/* Spawning entity placeholder */}
-      {tileEntity && tileEntity.readyState === 'spawning' && (
-        <TileCard
-          entity={tileEntity}
-          isFocused={isFocused}
-          onClick={() => {}}
-        >
+    if (tileEntity.readyState === 'spawning') {
+      return (
+        <TileCard entity={tileEntity} isFocused={isFocused} onClick={() => {}}>
           <div className="h-full flex flex-col items-center justify-center gap-4 spawning-pulse">
             <div
               className="w-16 h-16 rounded-full opacity-60"
@@ -284,15 +333,12 @@ export default function Tile({
             </div>
           </div>
         </TileCard>
-      )}
+      )
+    }
 
-      {/* Failed entity placeholder */}
-      {tileEntity && tileEntity.readyState === 'failed' && (
-        <TileCard
-          entity={tileEntity}
-          isFocused={isFocused}
-          onClick={() => {}}
-        >
+    if (tileEntity.readyState === 'failed') {
+      return (
+        <TileCard entity={tileEntity} isFocused={isFocused} onClick={() => {}}>
           <div className="h-full flex flex-col items-center justify-center gap-4">
             <div className="w-16 h-16 rounded-full opacity-60 flex items-center justify-center text-red-400 text-3xl">
               ✕
@@ -305,20 +351,64 @@ export default function Tile({
             </div>
           </div>
         </TileCard>
-      )}
+      )
+    }
 
-      {/* Entity display - single entity per tile */}
-      {tileEntity && tileEntity.readyState !== 'spawning' && tileEntity.readyState !== 'failed' && (
-        <TileCard
-          entity={tileEntity}
-          isFocused={isFocused}
-          onClick={() => {}}
+    return (
+      <TileCard entity={tileEntity} isFocused={isFocused} onClick={() => {}}>
+        {renderEntityContent(tileEntity)}
+      </TileCard>
+    )
+  }
+
+  // When maximized, render content through portal to escape transformed containers
+  if (isMaximized) {
+    return (
+      <>
+        {/* Placeholder in original position (for layout and FLIP source) */}
+        <div
+          ref={ref}
+          data-tile-id={tileId}
+          className={tileClasses}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
-          {renderEntityContent(tileEntity)}
-        </TileCard>
-      )}
+          {/* Empty placeholder - content is in portal */}
+          <div className="h-full rounded-xl bg-white/5 border border-white/10" />
+          <DropIndicator
+            variant="half"
+            position={dropState.closestEdge}
+            label={getDropLabel()}
+            visible={dropState.isDraggedOver}
+          />
+        </div>
 
-      {/* Drop indicator overlay */}
+        {/* Maximized content via portal (escapes transformed ancestors) */}
+        {createPortal(
+          <div
+            ref={portalRef}
+            className="tile-maximized-portal"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
+            {renderTileContent()}
+          </div>,
+          document.body
+        )}
+      </>
+    )
+  }
+
+  // Normal (non-maximized) render
+  return (
+    <div
+      ref={ref}
+      data-tile-id={tileId}
+      className={tileClasses}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {renderTileContent()}
       <DropIndicator
         variant="half"
         position={dropState.closestEdge}

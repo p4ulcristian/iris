@@ -56,29 +56,12 @@ export default function Surface({
     )
   }
 
-  // Maximized mode: render only the maximized tile at full size
-  if (maximizedTile && depth === 0) {
-    const maxTile = findTileInLayout(node, maximizedTile)
-    if (maxTile) {
-      return (
-        <Tile
-          tileId={maxTile.id}
-          entityId={maxTile.entityId}
-          entityIds={maxTile.entityIds}
-          focusedEntityId={maxTile.focusedEntityId}
-          isFocused={true}
-          isChapter={false}
-          isMaximized={true}
-          entities={entities}
-          tabId={tabId}
-          globalFocusedEntity={focusedEntity}
-        />
-      )
-    }
-  }
+  // Maximized mode is now handled via CSS in Tile component
+  // We render the full layout and let the maximized tile expand via CSS
 
   // Tile node - render the Tile component
   if (node.type === 'tile') {
+    const isMaximized = maximizedTile === node.id
     return (
       <Tile
         tileId={node.id}
@@ -87,6 +70,7 @@ export default function Surface({
         focusedEntityId={node.focusedEntityId}  // Legacy support
         isFocused={focusedTile === node.id}
         isChapter={depth > 0}  // Has parent split = is a chapter
+        isMaximized={isMaximized}
         entities={entities}
         tabId={tabId}
         globalFocusedEntity={focusedEntity}

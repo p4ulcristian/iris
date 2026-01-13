@@ -34,16 +34,22 @@
   --sidebar-icon-size: 48px;
 }
 
-/* View Transitions for tile maximize/restore */
-::view-transition-group(*) {
-  animation-duration: 200ms;
-  animation-timing-function: ease-out;
+/* Maximized tile portal - positioned fixed at body level to escape transforms */
+.tile-maximized-portal {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  left: calc(var(--sidebar-width, 288px) + 12px);
+  z-index: 9000;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  overflow: hidden;
 }
 
-::view-transition-old(*),
-::view-transition-new(*) {
-  animation-duration: 200ms;
-  animation-timing-function: ease-out;
+/* FLIP animation - applied via JS */
+.tile-flip-animate {
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Frameless window resize handles */

@@ -179,6 +179,11 @@ export default function App() {
     localStorage.setItem('iris:sidebar-width', width.toString())
   }, [])
 
+  // Sync sidebar width to CSS variable for maximized tiles
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`)
+  }, [sidebarWidth])
+
   const mainContainerRef = useRef(null)
 
 
@@ -537,12 +542,7 @@ export default function App() {
           (isModifierPressed(e) && code === 'KeyF')) {
         e.preventDefault()
         e.stopPropagation()
-        const doToggle = () => send({ event: 'layout:toggle-maximize' })
-        if (document.startViewTransition) {
-          document.startViewTransition(doToggle)
-        } else {
-          doToggle()
-        }
+        send({ event: 'layout:toggle-maximize' })
         return
       }
 
