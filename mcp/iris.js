@@ -18,6 +18,10 @@
  *     - clear_highlights: Clear code highlights
  *     - open_markdown: Open markdown file
  *
+ *   File Operations (visual alternatives to Claude built-ins):
+ *     - iris_read: Read file AND show in code viewer
+ *     - iris_edit: Edit file AND show changes in code viewer
+ *
  *   Voice:
  *     - speak: Speak text via TTS
  *     - greet: Time-aware greeting
@@ -27,8 +31,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { resolve } from "path";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 
-const API_BASE = "http://127.0.0.1:9998/api";
+// API port from env or default to 4244 (oauth server hosts the API)
+const API_PORT = process.env.IRIS_API_PORT || 4244;
+const API_BASE = `http://127.0.0.1:${API_PORT}/api`;
 
 // Get god name from environment (set by Iris when spawning gods)
 const GOD_NAME = process.env.GOD_NAME;
@@ -181,7 +188,7 @@ server.tool(
 
 server.tool(
   "run_terminal",
-  "Run command in visible terminal, wait for output. Creates terminal if needed.",
+  "Run command in visible terminal, wait for output. Creates terminal if needed. Returns a run_id that can be used with peek_run to get output later.",
   {
     command: z.string().describe("Shell command to execute"),
     god_name: z.string().optional().describe("God name for terminal (default: Hermes)"),
@@ -191,10 +198,36 @@ server.tool(
     const god = god_name || GOD_NAME || "Hermes";
     const result = await apiPost("run", { god, command, raw }, 40000); // 40s timeout
 
-    if (result.error) return fail(`Command failed: ${result.error}`);
+    if (result.error) {
+      const runId = result.runId ? `\nrun_id: ${result.runId}` : "";
+      return fail(`Command failed: ${result.error}${runId}`);
+    }
 
     const output = result.output || "(no output)";
+    const runId = result.runId || "unknown";
+    const status = result.status || "completed";
+
+    if (status === "timeout") {
+      return ok(`Timed out (run_id: ${runId})\nUse peek_run("${runId}") to check output\n\nPartial output:\n${output}`);
+    }
+
     return ok(`Exit ${result.exitCode ?? "?"}\n${output}`);
+  }
+);
+
+server.tool(
+  "peek_run",
+  "Get output from a specific command run by its run_id. Use this after run_terminal times out to see what was captured.",
+  {
+    run_id: z.string().describe("The run_id returned by run_terminal"),
+    lines: z.number().optional().describe("Number of lines to retrieve (default: all)")
+  },
+  async ({ run_id, lines }) => {
+    const result = await apiPost("peek-run", { run_id, lines });
+    if (result.error) return fail(`Failed to peek run: ${result.error}`);
+
+    const status = result.status || "unknown";
+    return ok(`[${status}]\n${result.output || "(no output)"}`);
   }
 );
 
@@ -271,7 +304,7 @@ server.tool(
       normalizedUrl = `https://${url}`;
     }
 
-    const result = await apiPost("browse", { url: normalizedUrl });
+    const result = await apiPost("browse", { url: normalizedUrl, god_name: GOD_NAME });
     if (result.error) return fail(`Failed to open browser: ${result.error}`);
     return ok(`Opened browser: ${normalizedUrl}`);
   }
@@ -287,7 +320,7 @@ server.tool(
   },
   async ({ path, line, project }) => {
     const absPath = resolvePath(path);
-    const data = { path: absPath };
+    const data = { path: absPath, god_name: GOD_NAME };
     if (line) data.line = line;
     if (project) data.project = project;
 
@@ -358,9 +391,149 @@ server.tool(
   },
   async ({ path }) => {
     const absPath = resolvePath(path);
-    const result = await apiPost("md", { path: absPath });
+    const result = await apiPost("md", { path: absPath, god_name: GOD_NAME });
     if (result.error) return fail(`Failed to open markdown: ${result.error}`);
     return ok(`Opened: ${path}`);
+  }
+);
+
+// =============================================================================
+// File Operations (Visual alternatives to Claude's built-in tools)
+// =============================================================================
+
+server.tool(
+  "iris_read",
+  "Read a file AND display it in the Iris code viewer. Use this instead of the built-in Read tool for visual feedback.",
+  {
+    path: z.string().describe("Path to the file (relative or absolute)"),
+    line: z.number().optional().describe("Line number to jump to and highlight"),
+    highlight_lines: z.string().optional().describe("Lines to highlight (e.g., '10-20', '5,10,15')")
+  },
+  async ({ path, line, highlight_lines }) => {
+    const absPath = resolvePath(path);
+
+    // Check file exists
+    if (!existsSync(absPath)) {
+      return fail(`File not found: ${absPath}`);
+    }
+
+    // Read file contents
+    let contents;
+    try {
+      contents = readFileSync(absPath, "utf-8");
+    } catch (e) {
+      return fail(`Failed to read file: ${e.message}`);
+    }
+
+    // Open in code viewer
+    const codeData = { path: absPath, god_name: GOD_NAME };
+    if (line) codeData.line = line;
+    await apiPost("code", codeData);
+
+    // Add highlights if specified
+    if (highlight_lines) {
+      const highlights = [];
+      for (const part of highlight_lines.split(",")) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.includes("-")) {
+          const [startStr, endStr] = trimmed.split("-");
+          const start = parseInt(startStr, 10);
+          const end = parseInt(endStr, 10);
+          if (!isNaN(start) && !isNaN(end)) {
+            highlights.push({ line: start, endLine: end, color: "yellow" });
+          }
+        } else {
+          const ln = parseInt(trimmed, 10);
+          if (!isNaN(ln)) {
+            highlights.push({ line: ln, endLine: ln, color: "yellow" });
+          }
+        }
+      }
+      if (highlights.length > 0) {
+        await apiPost("code/highlight", { path: absPath, highlights });
+      }
+    } else if (line) {
+      // Highlight the target line
+      await apiPost("code/highlight", {
+        path: absPath,
+        highlights: [{ line, endLine: line, color: "yellow" }]
+      });
+    }
+
+    // Return contents with line numbers (like Claude's Read tool)
+    const lines = contents.split("\n");
+    const numbered = lines.map((ln, i) => `${String(i + 1).padStart(6)}→${ln}`).join("\n");
+
+    return ok(numbered);
+  }
+);
+
+server.tool(
+  "iris_edit",
+  "Edit a file with visual diff in Iris code viewer. Use this instead of the built-in Edit tool to see changes.",
+  {
+    path: z.string().describe("Path to the file (relative or absolute)"),
+    old_string: z.string().describe("The exact text to replace"),
+    new_string: z.string().describe("The replacement text"),
+    replace_all: z.boolean().default(false).describe("Replace all occurrences (default: false)")
+  },
+  async ({ path, old_string, new_string, replace_all }) => {
+    const absPath = resolvePath(path);
+
+    // Check file exists
+    if (!existsSync(absPath)) {
+      return fail(`File not found: ${absPath}`);
+    }
+
+    // Read current contents
+    let contents;
+    try {
+      contents = readFileSync(absPath, "utf-8");
+    } catch (e) {
+      return fail(`Failed to read file: ${e.message}`);
+    }
+
+    // Check if old_string exists
+    if (!contents.includes(old_string)) {
+      return fail(`old_string not found in file. Make sure it matches exactly.`);
+    }
+
+    // Count occurrences
+    const occurrences = contents.split(old_string).length - 1;
+    if (occurrences > 1 && !replace_all) {
+      return fail(`Found ${occurrences} occurrences of old_string. Use replace_all=true or provide more context to make it unique.`);
+    }
+
+    // Apply edit
+    const newContents = replace_all
+      ? contents.split(old_string).join(new_string)
+      : contents.replace(old_string, new_string);
+
+    // Write file
+    try {
+      writeFileSync(absPath, newContents, "utf-8");
+    } catch (e) {
+      return fail(`Failed to write file: ${e.message}`);
+    }
+
+    // Open file in code viewer with diff mode (will use git to get original)
+    await apiPost("code", { path: absPath, diff: true, god_name: GOD_NAME });
+
+    // Find first changed line for the message
+    const oldLines = contents.split("\n");
+    const newLines = newContents.split("\n");
+    let firstChangedLine = 1;
+    for (let i = 0; i < Math.min(oldLines.length, newLines.length); i++) {
+      if (oldLines[i] !== newLines[i]) {
+        firstChangedLine = i + 1;
+        break;
+      }
+    }
+
+    const replacedCount = replace_all ? occurrences : 1;
+    return ok(`Edited ${absPath}\nReplaced ${replacedCount} occurrence(s) starting at line ${firstChangedLine}\nDiff view opened in code viewer.`);
   }
 );
 

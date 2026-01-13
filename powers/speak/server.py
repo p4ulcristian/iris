@@ -79,8 +79,10 @@ except ImportError as e:
             pass
 
 
-# Config
-PORT = 8765
+# Config - port from ports.json
+import json
+PORTS = json.loads((Path(__file__).parent.parent.parent / 'ports.json').read_text())
+PORT = PORTS['speak']
 MAX_QUEUE_SIZE = 30
 QUEUE_STATE_FILE = Path("/tmp/iris/speak-queue")
 MESSAGE_DISPLAY_TIME = 5.0

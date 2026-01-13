@@ -19,6 +19,7 @@ export default function Tile({
   focusedEntityId,  // Legacy: kept for backwards compat
   isFocused,
   isChapter = false,  // True when tile has a parent split (is part of a chapter)
+  isMaximized = false,  // True when this tile is in maximized (fullscreen) mode
   entities,
   tabId,
   globalFocusedEntity
@@ -62,12 +63,21 @@ export default function Tile({
   const tileEntityId = entityId || (entityIds && entityIds[0]) || null
   const tileEntity = tileEntityId ? entities[tileEntityId] : null
 
-  // Handle clicking on the tile to focus it (skip when Alt is held for dragging)
-  const handleTileClick = useCallback(() => {
+  // Handle mouse entering tile - send hover for kill targeting, focus for visual state
+  const handleMouseEnter = useCallback(() => {
+    // Always send hover for accurate kill targeting (server tracks this)
+    send({ event: 'tile:hover', entityId: tileEntityId })
+
+    // Send focus event (existing behavior, skipped if already focused or Alt held)
     if (!isFocused && !isAltHeld) {
       send({ event: 'tile:focus', tileId })
     }
-  }, [send, tileId, isFocused, isAltHeld])
+  }, [send, tileId, tileEntityId, isFocused, isAltHeld])
+
+  // Handle mouse leaving tile - clear hover state
+  const handleMouseLeave = useCallback(() => {
+    send({ event: 'tile:hover', entityId: null })
+  }, [send])
 
   // Calculate which half the cursor is in based on position relative to element center
   const calculateHalf = (input, element) => {
@@ -239,7 +249,9 @@ export default function Tile({
       ref={ref}
       data-tile-id={tileId}
       className={tileClasses}
-      onMouseEnter={handleTileClick}
+      style={{ viewTransitionName: `tile-${tileId}` }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Empty tile state */}
       {!tileEntity && (

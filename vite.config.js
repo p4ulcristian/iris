@@ -2,11 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import ports from './ports.json'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   root: 'frontend',
   base: './',
+  define: {
+    __PORTS__: JSON.stringify(ports)
+  },
   build: {
     outDir: '../dist-vite',
     emptyOutDir: true,
@@ -19,7 +23,7 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173,
+    port: ports.vite,
     host: true  // Allow network access (for phone)
   }
 })

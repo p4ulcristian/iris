@@ -34,6 +34,18 @@
   --sidebar-icon-size: 48px;
 }
 
+/* View Transitions for tile maximize/restore */
+::view-transition-group(*) {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+}
+
 /* Frameless window resize handles */
 .resize-handle {
   position: fixed;
@@ -531,6 +543,14 @@ body.alt-held .entity-content {
 .btn-icon-md { width: 2rem; height: 2rem; }
 .btn-icon-lg { width: 2.5rem; height: 2.5rem; }
 
+/* Sidebar icons: always 48px for touch targets */
+.sidebar-tabs .btn-icon,
+.sidebar-tabs .btn-icon-md,
+.sidebar-header .btn-icon {
+  width: var(--sidebar-icon-size);
+  height: var(--sidebar-icon-size);
+}
+
 /* Color: Danger */
 .btn-danger {
   --btn-color: #ef4444;
@@ -991,10 +1011,6 @@ body.alt-held .entity-content {
     justify-content: center !important;
   }
 
-  .sidebar-icon {
-    font-size: 1.25rem !important;
-  }
-
   /* Entity groups: minimal style */
   .entity-group {
     padding: 0 !important;
@@ -1003,19 +1019,8 @@ body.alt-held .entity-content {
     border-radius: 12px !important;
   }
 
-  /* Tabs: grow to 48px squares, centered */
+  /* Tabs: centered in narrow mode */
   .sidebar-tabs {
     justify-content: center !important;
-  }
-
-  .sidebar-tabs .btn-icon-md {
-    width: var(--sidebar-icon-size) !important;
-    height: var(--sidebar-icon-size) !important;
-  }
-
-  /* Spawn buttons: shrink to 48px squares */
-  .sidebar-spawn-btn {
-    width: var(--sidebar-icon-size) !important;
-    height: var(--sidebar-icon-size) !important;
   }
 }

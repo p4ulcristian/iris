@@ -67,6 +67,11 @@ export const handlers = {
     handlers['pane:focus'](ws, data)
   },
 
+  'tile:hover': (ws, data) => {
+    // Track hovered entity for accurate kill targeting (no persist, no broadcast)
+    appState.hoveredEntity = data.entityId || null
+  },
+
   'pane:focus': (ws, data) => {  // Legacy alias
     const tileId = data.tileId || data.paneId
     if (!tileId) return
@@ -94,6 +99,13 @@ export const handlers = {
 
   'focus:prev': (ws, data) => {
     handleFocusNavigation('prev')
+  },
+
+  'focus:clear': (ws) => {
+    appState.focusedEntity = null
+    appState.focusedTile = null
+    saveState()
+    broadcastState()
   },
 
   'gods:reorder': (ws, data) => {
@@ -152,7 +164,7 @@ export const handlers = {
 
   // Code viewer management
   'code:open': (ws, data) => {
-    const { filePath, line, entityId, forceNew } = data
+    const { filePath, line, entityId, forceNew, diff, relativeToEntity } = data
     if (!filePath) return
 
     let codeEntity = entityId ? appState.entities[entityId] : null
@@ -180,12 +192,13 @@ export const handlers = {
       isNewEntity = true
 
       // Split focused tile to place code viewer
-      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal' })
+      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal', relativeToEntity })
     }
 
     // Store pending file in entity
     codeEntity.pendingFile = filePath
     codeEntity.pendingLine = line || 1
+    codeEntity.pendingDiff = diff || false
 
     appState.focusedEntity = codeEntity.id
     saveState()
@@ -196,7 +209,8 @@ export const handlers = {
       broadcast('code:file:open', {
         entityId: codeEntity.id,
         filePath,
-        line: line || 1
+        line: line || 1,
+        diff: diff || false
       })
     }
   },
@@ -230,6 +244,28 @@ export const handlers = {
     broadcastState()
   },
 
+  // Show diff in code viewer
+  'code:diff': (ws, data) => {
+    const { filePath, original, modified, entityId } = data
+    if (!filePath || original === undefined || modified === undefined) return
+
+    // Find a code entity to show the diff in
+    let codeEntity = entityId ? appState.entities[entityId] : null
+    if (!codeEntity) {
+      codeEntity = Object.values(appState.entities).find(
+        e => e.type === 'code' && e.tabId === appState.activeTabId
+      )
+    }
+
+    // Broadcast diff event to frontend
+    broadcast('code:diff', {
+      entityId: codeEntity?.id,
+      filePath,
+      original,
+      modified
+    })
+  },
+
   'code:files:sync': (ws, data) => {
     const { entityId, openFiles, activeFilePath, rootPath, expandedFolders } = data
     if (!entityId || !appState.entities[entityId]) return
@@ -255,7 +291,7 @@ export const handlers = {
 
   // Markdown viewer management
   'md:open': (ws, data) => {
-    const { filePath, entityId, forceNew } = data
+    const { filePath, entityId, forceNew, relativeToEntity } = data
     if (!filePath) return
 
     let mdEntity = entityId ? appState.entities[entityId] : null
@@ -283,7 +319,7 @@ export const handlers = {
       isNewEntity = true
 
       // Split focused tile to place markdown viewer
-      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal' })
+      splitIntoTile(newId, appState.activeTabId, { direction: 'horizontal', relativeToEntity })
     }
 
     mdEntity.pendingFile = filePath

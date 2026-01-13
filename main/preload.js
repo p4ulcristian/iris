@@ -1,7 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
+const ports = require('../ports.json')
 
 contextBridge.exposeInMainWorld('iris', {
-  wsUrl: 'ws://localhost:9999',
+  wsUrl: `ws://localhost:${ports.ws}`,
   // Window controls
   windowControl: (action) => ipcRenderer.send('window-control', action),
   isFullscreen: () => ipcRenderer.invoke('window-is-fullscreen'),

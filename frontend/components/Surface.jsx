@@ -5,6 +5,21 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
 
 /**
+ * Find a tile by ID in the layout tree
+ */
+function findTileInLayout(node, tileId) {
+  if (!node) return null
+  if (node.type === 'tile' && node.id === tileId) return node
+  if (node.type === 'split') {
+    for (const child of node.children) {
+      const found = findTileInLayout(child, tileId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+/**
  * Surface - Recursively renders a layout tree
  *
  * Layout nodes are either:
@@ -19,7 +34,8 @@ export default function Surface({
   depth = 0,
   entities,
   focusedTile,
-  focusedEntity
+  focusedEntity,
+  maximizedTile
 }) {
   const { send } = useWebSocket(WS_URL)
 
@@ -38,6 +54,27 @@ export default function Surface({
         </p>
       </div>
     )
+  }
+
+  // Maximized mode: render only the maximized tile at full size
+  if (maximizedTile && depth === 0) {
+    const maxTile = findTileInLayout(node, maximizedTile)
+    if (maxTile) {
+      return (
+        <Tile
+          tileId={maxTile.id}
+          entityId={maxTile.entityId}
+          entityIds={maxTile.entityIds}
+          focusedEntityId={maxTile.focusedEntityId}
+          isFocused={true}
+          isChapter={false}
+          isMaximized={true}
+          entities={entities}
+          tabId={tabId}
+          globalFocusedEntity={focusedEntity}
+        />
+      )
+    }
   }
 
   // Tile node - render the Tile component
@@ -87,6 +124,7 @@ export default function Surface({
             entities={entities}
             focusedTile={focusedTile}
             focusedEntity={focusedEntity}
+            maximizedTile={maximizedTile}
           />
         </div>
 
@@ -114,6 +152,7 @@ export default function Surface({
             entities={entities}
             focusedTile={focusedTile}
             focusedEntity={focusedEntity}
+            maximizedTile={maximizedTile}
           />
         </div>
       </div>

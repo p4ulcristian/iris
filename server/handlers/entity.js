@@ -52,7 +52,10 @@ export const handlers = {
     if (mode === 'stage') {
       createStageForEntity(entityId)
     } else {
-      splitIntoTile(entityId, appState.activeTabId, { direction })
+      splitIntoTile(entityId, appState.activeTabId, {
+        direction,
+        relativeToEntity: data.relativeToEntity
+      })
     }
 
     finalizeSpawn(entityId)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import Editor from '@monaco-editor/react'
+import Editor, { DiffEditor } from '@monaco-editor/react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faFolder,
@@ -17,7 +17,8 @@ import {
   faTrash,
   faFileLines,
   faCode,
-  faDatabase
+  faDatabase,
+  faCodeCompare
 } from '@fortawesome/free-solid-svg-icons'
 import { useStore } from '@/store'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -223,32 +224,40 @@ function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileCl
 }
 
 // Editor tab component
-function EditorTab({ file, isActive, onClick, onClose }) {
+function EditorTab({ file, isActive, onClick, onClose, index, rootPath }) {
+  const relativePath = rootPath && file.path.startsWith(rootPath) 
+    ? file.path.slice(rootPath.length + 1) 
+    : file.path
   return (
     <div
       onClick={onClick}
+      title={relativePath}
+      style={{ width: 160, minWidth: 160, maxWidth: 160 }}
       className={`
-        group flex items-center gap-2 px-3 py-2 min-w-0 max-w-52
-        cursor-pointer transition-all duration-150 rounded-t-lg mx-0.5
+        group flex items-center gap-2 px-2 py-1.5 shrink-0
+        cursor-pointer transition-all duration-150 rounded mx-0.5
         ${isActive
-          ? 'bg-white/10 text-white border-b-2 border-accent/60'
-          : 'bg-white/5 hover:bg-white/8 text-white/70 border-b-2 border-transparent'
+          ? 'bg-white/15 text-white'
+          : 'bg-white/5 hover:bg-white/10 text-white/70'
         }
       `}
     >
-      <FileIcon filename={file.name} size={14} />
-      <span className="truncate text-[13px]">
+      <FileIcon filename={file.name} size={14} className="flex-shrink-0" />
+      <span className="truncate text-[12px] flex-1 min-w-0">
         {file.name}
       </span>
       {file.modified && (
         <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse flex-shrink-0" title="Unsaved changes" />
       )}
+      <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white/50 flex-shrink-0">
+        {index}
+      </span>
       <button
         onClick={(e) => {
           e.stopPropagation()
           onClose(file.path)
         }}
-        className="ml-auto opacity-0 group-hover:opacity-100 p-1 hover:bg-white/15 rounded-full transition-all"
+        className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center flex-shrink-0"
       >
         <FontAwesomeIcon icon={faXmark} className="w-2.5 h-2.5 text-white/50 hover:text-white/80" />
       </button>
@@ -281,6 +290,8 @@ export default function CodeView({ entity }) {
   const [projects, setProjects] = useState([])
   const [projectsFetched, setProjectsFetched] = useState(false)
   const [contextMenu, setContextMenu] = useState(null) // {x, y, node}
+  const [diffView, setDiffView] = useState(null) // {original, modified, filePath, language}
+  const [fileDiffModes, setFileDiffModes] = useState({}) // {filePath: boolean} - tracks which files are in diff mode
   const sidebarRef = useRef(null)
   const editorRef = useRef(null)
   const monacoRef = useRef(null)
@@ -289,6 +300,7 @@ export default function CodeView({ entity }) {
   const pendingExpandedFolders = useRef(null) // Used to restore expanded folders after tree loads
   const openFilesRef = useRef(openFiles) // Always-current ref for callbacks
   openFilesRef.current = openFiles
+  const tabsScrollRef = useRef(null)
 
   const { send, request } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
@@ -424,6 +436,9 @@ export default function CodeView({ entity }) {
     send({ event: 'file:list', path: rootPath, showHidden })
   }, [send, rootPath, expandedFolders, showHidden])
 
+  // Max file size: 500KB to prevent freezing
+  const MAX_FILE_SIZE = 500 * 1024
+
   // Load file content
   const loadFile = useCallback(async (node, retries = 3) => {
     // Set active immediately for instant UI feedback
@@ -438,6 +453,16 @@ export default function CodeView({ entity }) {
     try {
       const response = await request('file:read', { path: node.path })
       if (response.ok) {
+        // Check file size - skip if too large
+        if (response.content && response.content.length > MAX_FILE_SIZE) {
+          console.warn(`[CodeView] File too large (${formatSize(response.content.length)}), skipping:`, node.path)
+          setOpenFiles(prev => [...prev, {
+            path: node.path,
+            name: node.name,
+            content: `// File too large to display (${formatSize(response.content.length)})\n// Max size: ${formatSize(MAX_FILE_SIZE)}\n// Path: ${node.path}`
+          }])
+          return
+        }
         setOpenFiles(prev => [...prev, {
           path: node.path,
           name: node.name,
@@ -472,10 +497,31 @@ export default function CodeView({ entity }) {
       try {
         const response = await request('file:read', { path })
         if (response.ok) {
-          setOpenFiles([{ path, name, content: response.content }])
+          // Add to open files if not already open, otherwise just activate
+          setOpenFiles(prev => {
+            const exists = prev.some(f => f.path === path)
+            if (exists) return prev
+            return [...prev, { path, name, content: response.content }]
+          })
           setCodeActiveFile(entityId, path)
-          // Jump to line if specified
-          if (entity.pendingLine) {
+
+          // If diff mode, fetch git original and show diff
+          if (entity.pendingDiff) {
+            try {
+              const gitRes = await request('git:show', { path, ref: 'HEAD' })
+              if (gitRes.ok) {
+                setDiffView({
+                  original: gitRes.content,
+                  modified: response.content,
+                  filePath: path,
+                  language: getLanguage(name)
+                })
+              }
+            } catch (err) {
+              console.error('Failed to load git diff:', err)
+            }
+          } else if (entity.pendingLine) {
+            // Jump to line if specified (only if not showing diff)
             setTimeout(() => {
               editorRef.current?.revealLineInCenter(entity.pendingLine)
               editorRef.current?.setPosition({ lineNumber: entity.pendingLine, column: 1 })
@@ -499,11 +545,11 @@ export default function CodeView({ entity }) {
     }
 
     tryLoadFile()
-  }, [entity?.pendingFile, entity?.pendingLine, loadDirectory, pendingFileHandled, request])
+  }, [entity?.pendingFile, entity?.pendingLine, entity?.pendingDiff, loadDirectory, pendingFileHandled, request, setCodeActiveFile, entityId])
 
   // Listen for file open events (from gods)
   useEffect(() => {
-    const handleCodeOpen = (event) => {
+    const handleCodeOpen = async (event) => {
       const data = event.detail
       if (!data) return
 
@@ -512,8 +558,29 @@ export default function CodeView({ entity }) {
 
       // Load the file
       loadFile({ path: data.filePath, name: data.filePath.split('/').pop() })
-      // Jump to line if specified
-      if (data.line && editorRef.current) {
+
+      // If diff mode, fetch git original and show diff
+      if (data.diff) {
+        try {
+          // Get current file content (modified)
+          const currentRes = await request('file:read', { path: data.filePath })
+          // Get git HEAD version (original)
+          const gitRes = await request('git:show', { path: data.filePath, ref: 'HEAD' })
+
+          if (currentRes.ok && gitRes.ok) {
+            const fileName = data.filePath.split('/').pop()
+            setDiffView({
+              original: gitRes.content,
+              modified: currentRes.content,
+              filePath: data.filePath,
+              language: getLanguage(fileName)
+            })
+          }
+        } catch (err) {
+          console.error('Failed to load diff:', err)
+        }
+      } else if (data.line && editorRef.current) {
+        // Jump to line if specified
         setTimeout(() => {
           editorRef.current?.revealLineInCenter(data.line)
           editorRef.current?.setPosition({ lineNumber: data.line, column: 1 })
@@ -523,8 +590,9 @@ export default function CodeView({ entity }) {
 
     window.addEventListener('iris:code:open', handleCodeOpen)
     return () => window.removeEventListener('iris:code:open', handleCodeOpen)
-  }, [entityId, loadFile])
+  }, [entityId, loadFile, request])
 
+  
   // Helper to update children in the tree (tree is an array of nodes)
   const updateTreeChildren = useCallback((tree, targetPath, children) => {
     if (!tree || !Array.isArray(tree)) return tree
@@ -597,6 +665,41 @@ export default function CodeView({ entity }) {
       }
     }
   }, [fileTree, findNode, loadFolderChildren, expandedFolders, loadedStats, showHidden, request])
+
+  // Load diff for a file
+  const loadDiffForFile = useCallback(async (filePath) => {
+    try {
+      const currentRes = await request('file:read', { path: filePath })
+      const gitRes = await request('git:show', { path: filePath, ref: 'HEAD' })
+      
+      if (currentRes.ok && gitRes.ok) {
+        const fileName = filePath.split('/').pop()
+        setDiffView({
+          original: gitRes.content,
+          modified: currentRes.content,
+          filePath: filePath,
+          language: getLanguage(fileName)
+        })
+        setFileDiffModes(prev => ({ ...prev, [filePath]: true }))
+      }
+    } catch (err) {
+      console.error('Failed to load diff:', err)
+    }
+  }, [request])
+
+  // Toggle diff mode for current file
+  const toggleDiffMode = useCallback(async () => {
+    if (!activeFilePath) return
+    
+    if (diffView && diffView.filePath === activeFilePath) {
+      // Currently in diff view - switch to normal
+      setDiffView(null)
+      setFileDiffModes(prev => ({ ...prev, [activeFilePath]: false }))
+    } else {
+      // Currently in normal view - switch to diff
+      await loadDiffForFile(activeFilePath)
+    }
+  }, [activeFilePath, diffView, loadDiffForFile])
 
   // Close file tab
   const closeFile = useCallback((path) => {
@@ -763,6 +866,22 @@ export default function CodeView({ entity }) {
   useEffect(() => {
     console.log('[CodeView] rootPath changed to:', rootPath)
   }, [rootPath])
+
+  // Tab scroll: convert vertical wheel to horizontal (needs non-passive listener)
+  useEffect(() => {
+    const el = tabsScrollRef.current
+    if (!el) return
+    
+    const handleWheel = (e) => {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault()
+        el.scrollLeft += e.deltaY
+      }
+    }
+    
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [openFiles.length])
 
   // Apply decorations for highlights
   useEffect(() => {
@@ -1022,23 +1141,85 @@ export default function CodeView({ entity }) {
       <div className="flex-1 flex flex-col min-w-0 bg-black/30">
         {/* Tab bar */}
         {openFiles.length > 0 && (
-          <div className="flex-shrink-0 flex items-end pt-1.5 px-1 border-b border-white/8 bg-black/20 overflow-x-auto scrollbar-none">
-            {openFiles.map(file => (
-              <EditorTab
-                key={file.path}
-                file={file}
-                isActive={file.path === activeFilePath}
-                onClick={() => setCodeActiveFile(entityId, file.path)}
-                onClose={closeFile}
-              />
-            ))}
+          <div className="flex-shrink-0 h-11 relative border-b border-white/8 bg-black/20">
+            <div 
+              ref={tabsScrollRef}
+              className="absolute inset-0 flex items-center px-1 overflow-x-auto"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {openFiles.map((file, idx) => (
+                <EditorTab
+                  key={`${file.path}-${idx}`}
+                  file={file}
+                  index={idx + 1}
+                  rootPath={rootPath}
+                  isActive={file.path === activeFilePath}
+                  onClick={async () => {
+                    setCodeActiveFile(entityId, file.path)
+                    // Restore diff mode if this file was in diff mode
+                    if (fileDiffModes[file.path]) {
+                      await loadDiffForFile(file.path)
+                    } else {
+                      setDiffView(null)
+                    }
+                  }}
+                  onClose={closeFile}
+                />
+              ))}
+            </div>
           </div>
         )}
 
         {/* Editor */}
         <div className="flex-1 relative">
-          {activeFile ? (
-            <div className="absolute inset-0">
+          {diffView ? (
+            // Diff view mode
+            <div className="absolute inset-0 flex flex-col">
+              <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/10">
+                <span className="text-sm text-white/70">
+                  Diff: <span className="text-white/90">{diffView.filePath.split('/').pop()}</span>
+                </span>
+                <button
+                  onClick={toggleDiffMode}
+                  className="flex items-center gap-2 px-3 py-1 text-xs bg-white/10 hover:bg-white/20 rounded transition-colors"
+                >
+                  <FontAwesomeIcon icon={faCodeCompare} className="w-3 h-3" />
+                  Close Diff
+                </button>
+              </div>
+              <div className="flex-1">
+                <DiffEditor
+                  width="100%"
+                  height="100%"
+                  language={diffView.language}
+                  original={diffView.original}
+                  modified={diffView.modified}
+                  theme="vs-dark"
+                  options={{
+                    readOnly: true,
+                    renderSideBySide: true,
+                    minimap: { enabled: false },
+                    fontSize: 13,
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true
+                  }}
+                />
+              </div>
+            </div>
+          ) : activeFile ? (
+            <div className="absolute inset-0 flex flex-col">
+              {/* Editor toolbar with diff toggle */}
+              <div className="flex items-center justify-end px-3 py-1.5 bg-black/20 border-b border-white/5">
+                <button
+                  onClick={toggleDiffMode}
+                  className="flex items-center gap-2 px-2.5 py-1 text-xs text-white/60 hover:text-white/90 hover:bg-white/10 rounded transition-colors"
+                  title="Show git diff"
+                >
+                  <FontAwesomeIcon icon={faCodeCompare} className="w-3 h-3" />
+                  <span>Diff</span>
+                </button>
+              </div>
+              <div className="flex-1 relative">
               <Editor
                 width="100%"
                 height="100%"
@@ -1062,6 +1243,7 @@ export default function CodeView({ entity }) {
                   wordWrap: 'on'
                 }}
               />
+              </div>
             </div>
           ) : (
             <div className="h-full flex items-center justify-center">

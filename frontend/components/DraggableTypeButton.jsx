@@ -51,7 +51,7 @@ export default function DraggableTypeButton({
         ref={ref}
         onClick={onClick}
         className={`
-          w-full h-full flex flex-col items-center justify-center gap-1 p-2 rounded-lg
+          w-full h-full flex flex-col items-center justify-center gap-0.5 p-1 rounded-lg
           btn-glass cursor-grab active:cursor-grabbing
           hover:bg-white/10 transition-all
           ${isDragging ? 'opacity-50' : ''}
@@ -59,7 +59,7 @@ export default function DraggableTypeButton({
         style={{ touchAction: 'none' }}
         title={title}
       >
-        <EntityIcon type={entityType} size="large" />
+        <EntityIcon type={entityType} size="medium" />
         <span className="text-[10px] text-white/60 truncate w-full text-center">{entityConfig?.label || entityType}</span>
       </button>
     )

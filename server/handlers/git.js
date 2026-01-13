@@ -497,4 +497,26 @@ export const handlers = {
       ws.send(JSON.stringify({ event: 'git:error', project, error: err.message }))
     })
   },
+
+  // Get file content at a specific git ref (for diff view)
+  'git:show': (ws, data) => {
+    const { id, path: filePath, ref } = data
+    if (!filePath) {
+      ws.send(JSON.stringify({ id, event: 'git:show', ok: false, error: 'Missing path' }))
+      return
+    }
+
+    git.getFileAtRef(filePath, ref || 'HEAD').then(content => {
+      ws.send(JSON.stringify({
+        id,
+        event: 'git:show',
+        ok: true,
+        path: filePath,
+        ref: ref || 'HEAD',
+        content
+      }))
+    }).catch(err => {
+      ws.send(JSON.stringify({ id, event: 'git:show', ok: false, path: filePath, error: err.message }))
+    })
+  },
 }

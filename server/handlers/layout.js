@@ -637,4 +637,16 @@ export const handlers = {
     saveState()
     broadcastState()
   },
+
+  'layout:toggle-maximize': (ws, data) => {
+    // Use provided tileId or fall back to server's focused tile
+    const tileId = data.tileId || appState.focusedTile
+    if (!tileId) return
+
+    // Toggle: if already maximized, clear; else set
+    appState.maximizedTile = appState.maximizedTile === tileId ? null : tileId
+
+    saveState()
+    broadcastState()
+  },
 }

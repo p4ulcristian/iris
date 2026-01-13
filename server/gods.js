@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import crypto from 'crypto'
 import { execSync, spawnSync } from 'child_process'
-import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN, DEFAULT_PERMISSION_MODE } from './config.js'
+import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN, DEFAULT_PERMISSION_MODE, OAUTH_PORT } from './config.js'
 import { createLogger } from './logger.js'
 import { getBaseGodName } from './state.js'
 
@@ -260,6 +260,7 @@ export function createGodSession(name, task = '', projectRoot, options = {}) {
       COLORTERM: 'truecolor',
       GOD_NAME: name,
       IRIS_HOME: IRIS_ROOT,
+      IRIS_API_PORT: String(OAUTH_PORT),
       // Pass content via env vars - avoids all escaping issues
       IRIS_SESSION_ID: resumeSessionId || sessionId,
       IRIS_RESUME: resumeSessionId ? '1' : '',

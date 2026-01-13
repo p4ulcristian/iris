@@ -30,6 +30,7 @@ const createShortcuts = (mod) => [
   {
     title: 'Window',
     items: [
+      { keys: ['Ctrl', 'F'], action: 'Maximize pane' },
       { keys: [mod, 'F'], action: 'Fullscreen' },
       { keys: [mod, 'B'], action: 'Toggle sidebar' },
       { keys: [mod, 'D'], action: 'Dev panel' },

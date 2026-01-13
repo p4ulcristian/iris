@@ -62,6 +62,17 @@ export function removeEntity(entityId) {
     updateFocusAfterKill(tabId, order, stageSiblings)
   }
 
+  // Clear maximized state if the maximized tile was removed
+  if (appState.maximizedTile) {
+    const tab = appState.tabs.find(t => t.id === tabId)
+    const tileExists = tab?.stages.some(s =>
+      s.layout && layout.findTile(s.layout, appState.maximizedTile)
+    )
+    if (!tileExists) {
+      appState.maximizedTile = null
+    }
+  }
+
   return { entity, tabId }
 }
 

@@ -2,11 +2,16 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
+import ports from '../ports.json' with { type: 'json' }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export const WS_PORT = 9999
-export const OAUTH_PORT = 9998
+// Ports - source of truth is ports.json
+export const VITE_PORT = ports.vite
+export const WS_PORT = ports.ws
+export const OAUTH_PORT = ports.oauth
+export const SPEAK_PORT = ports.speak
+export const HEAR_PORT = ports.hear
 
 // Cross-platform data directory
 function getDataDir() {
@@ -130,8 +135,8 @@ function getMcpServersDir() {
 export const MCP_SERVERS_DIR = getMcpServersDir()
 
 export const SERVICES = {
-  speak: { port: 8765, name: 'Speak', icon: '🔊', script: 'powers/speak/server.py' },
-  hear: { port: 8766, name: 'Hear', icon: '👂', script: 'powers/hear/server.py' }
+  speak: { port: SPEAK_PORT, name: 'Speak', icon: '🔊', script: 'powers/speak/server.py' },
+  hear: { port: HEAR_PORT, name: 'Hear', icon: '👂', script: 'powers/hear/server.py' }
 }
 
 // Pantheon configuration

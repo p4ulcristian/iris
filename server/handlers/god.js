@@ -172,6 +172,16 @@ export const handlers = {
     broadcastState()
   },
 
+  // Kill hovered entity (server determines target - avoids client-side race condition)
+  'entity:kill-hovered': (ws, data) => {
+    // Prefer hovered (what mouse is on), fall back to focused
+    const entityId = appState.hoveredEntity || appState.focusedEntity
+    if (!entityId) return
+
+    // Delegate to existing kill handler
+    handlers['entity:kill'](ws, { entityId })
+  },
+
   'god:list': (ws) => {
     const gods = listGodSockets()
     ws.send(JSON.stringify({ event: 'god:list', gods }))

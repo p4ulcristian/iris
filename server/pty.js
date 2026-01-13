@@ -173,6 +173,61 @@ export const ptyProcesses = new Map()
 const outputBuffers = new Map()
 const MAX_BUFFER_SIZE = 100000 // ~100KB per terminal
 
+// Run tracking - isolated output per command run
+// run_id -> { output, started, status, terminalId }
+const runBuffers = new Map()
+const MAX_RUN_BUFFER_SIZE = 50000 // 50KB per run
+const RUN_BUFFER_TTL = 300000 // 5 minutes
+
+export function createRun(runId, terminalId) {
+  runBuffers.set(runId, {
+    output: '',
+    started: Date.now(),
+    status: 'running',
+    terminalId
+  })
+  // Clean up old runs
+  const now = Date.now()
+  for (const [id, run] of runBuffers) {
+    if (now - run.started > RUN_BUFFER_TTL) {
+      runBuffers.delete(id)
+    }
+  }
+}
+
+export function appendToRun(runId, data) {
+  const run = runBuffers.get(runId)
+  if (!run) return
+
+  run.output += data
+  if (run.output.length > MAX_RUN_BUFFER_SIZE) {
+    run.output = run.output.slice(-MAX_RUN_BUFFER_SIZE)
+  }
+}
+
+export function completeRun(runId, status = 'completed') {
+  const run = runBuffers.get(runId)
+  if (run) {
+    run.status = status
+  }
+}
+
+export function getRunBuffer(runId, lines = null) {
+  const run = runBuffers.get(runId)
+  if (!run) return null
+
+  if (lines) {
+    const allLines = run.output.split('\n')
+    return allLines.slice(-lines).join('\n')
+  }
+  return run.output
+}
+
+export function getRunStatus(runId) {
+  const run = runBuffers.get(runId)
+  return run ? run.status : null
+}
+
 export function getZellijScrollback(godName) {
   const sessionName = getSessionName(godName)
   const tmpFile = path.join(os.tmpdir(), `iris-scrollback-${sanitizeName(godName)}-${Date.now()}.txt`)

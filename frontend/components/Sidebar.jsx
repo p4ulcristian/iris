@@ -696,7 +696,7 @@ function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loa
         <IconButton
           icon={faPlus}
           size="md"
-          variant="ghost"
+          variant="glass"
           onClick={onTabNew}
           title="New tab (Alt+N)"
         />
@@ -790,7 +790,7 @@ function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
           if (!entity) return null
           const isGod = type === 'god'
           return (
-            <div key={type} className="sidebar-spawn-btn flex-shrink-0 w-16 aspect-square">
+            <div key={type} className="sidebar-spawn-btn flex-shrink-0 w-12 aspect-square">
               <DraggableTypeButton
                 entityType={type}
                 title={`${entity.label} (Shift: vertical, Ctrl: new stage)`}
@@ -830,34 +830,34 @@ function AppTitle({ connected, send }) {
 
   return (
     <div className="sidebar-section border-b border-white/10 py-3 px-3">
-      <div className="sidebar-header flex items-center gap-2">
-        {/* Logo */}
-        <span className="sidebar-title font-bold text-lg tracking-wide text-white/90">IRIS</span>
-        <FontAwesomeIcon icon={faEye} className="sidebar-icon text-white/60 text-sm" />
+      <div className="sidebar-header flex items-center justify-center">
+        {/* Eye with hover menu */}
+        <div className="group relative">
+          <IconButton icon={faEye} variant="glass" size="md" />
 
-        <div className="sidebar-spacer flex-1" />
+          {/* Hover menu - pl-4 creates hover bridge, inner div has visual styling */}
+          <div className="absolute left-full top-1/2 -translate-y-1/2 pl-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+            <div className="flex items-center gap-2 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10 shadow-lg">
+              {/* Services */}
+              {powers && (
+                <ServicesDropdown
+                  connected={connected}
+                  services={services}
+                  servicesLoading={servicesLoading}
+                  onToggle={handleServiceToggle}
+                  speakDetails={speakDetails}
+                  onVolumeChange={handleVolumeChange}
+                />
+              )}
 
-        {/* Services status */}
-        {powers && (
-          <span className="sidebar-controls">
-            <ServicesDropdown
-              connected={connected}
-              services={services}
-              servicesLoading={servicesLoading}
-              onToggle={handleServiceToggle}
-              speakDetails={speakDetails}
-              onVolumeChange={handleVolumeChange}
-            />
-          </span>
-        )}
+              {/* Logs */}
+              <LogsButton send={send} />
 
-        {/* Logs */}
-        <span className="sidebar-controls">
-          <LogsButton send={send} />
-        </span>
-
-        {/* Chronicle */}
-        {powers && <span className="sidebar-controls"><ChronicleButton /></span>}
+              {/* Chronicle */}
+              {powers && <ChronicleButton />}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

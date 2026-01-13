@@ -289,3 +289,19 @@ export async function getCommitDiff(projectPath, hash, file = null) {
   if (file) args.push('--', file)
   return await runGit(projectPath, args)
 }
+
+// Get file content at a specific ref (e.g., HEAD, commit hash, branch name)
+export async function getFileAtRef(filePath, ref = 'HEAD') {
+  // Find the git root for this file
+  const dir = path.dirname(filePath)
+  const fileName = path.basename(filePath)
+
+  // Get git root
+  const gitRoot = (await runGit(dir, ['rev-parse', '--show-toplevel'])).trim()
+
+  // Get relative path from git root
+  const relativePath = path.relative(gitRoot, filePath)
+
+  // Get file content at ref
+  return await runGit(gitRoot, ['show', `${ref}:${relativePath}`])
+}

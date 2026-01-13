@@ -661,7 +661,18 @@ export default function LinearView({ send, connected }) {
       {error && (
         <div className="mb-4 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
           <FontAwesomeIcon icon={faExclamationTriangle} className="mr-2" />
-          {error}
+          {error.includes('not configured') ? (
+            <>
+              Linear API key not configured.{' '}
+              <button
+                onClick={() => window.iris?.openExternal('https://linear.app/ironrainbow/settings/account/security')}
+                className="text-accent hover:underline inline-flex items-center gap-1"
+              >
+                Get your API key
+                <FontAwesomeIcon icon={faExternalLink} className="text-[10px]" />
+              </button>
+            </>
+          ) : error}
         </div>
       )}
 

@@ -12,7 +12,7 @@
  */
 
 import { appState, saveState, broadcastState } from './state.js'
-import { getOutputBuffer, getZellijScrollback } from './pty.js'
+import { getOutputBuffer, getZellijScrollback, getRunBuffer, getRunStatus } from './pty.js'
 import { allHandlers as handlers } from './handlers/index.js'
 
 // Parse JSON body from request
@@ -296,6 +296,29 @@ export function setupApi() {
       return true
     }
 
+    // POST /api/peek-run - Get output for a specific command run
+    if (req.method === 'POST' && url.pathname === '/api/peek-run') {
+      const { run_id, lines } = await parseJson(req)
+      if (!run_id) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Missing run_id' }))
+        return true
+      }
+
+      const output = getRunBuffer(run_id, lines)
+      const status = getRunStatus(run_id)
+
+      if (output === null) {
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: `Run "${run_id}" not found` }))
+        return true
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ output, status }))
+      return true
+    }
+
     // POST /api/spawn - Spawn a new god (delegates to handler)
     if (req.method === 'POST' && url.pathname === '/api/spawn') {
       const data = await parseJson(req)
@@ -421,12 +444,15 @@ export function setupApi() {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({
             ok: true,
+            runId: response.runId,
             output: response.output,
-            exitCode: response.exitCode
+            exitCode: response.exitCode,
+            status: response.status,
+            hint: response.hint
           }))
         } else {
           res.writeHead(504, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ error: 'Command timed out' }))
+          res.end(JSON.stringify({ error: 'Command timed out', runId: requestId }))
         }
       } catch (e) {
         res.writeHead(500, { 'Content-Type': 'application/json' })
@@ -437,7 +463,7 @@ export function setupApi() {
 
     // POST /api/browse - Open URL in browser entity
     if (req.method === 'POST' && url.pathname === '/api/browse') {
-      const { url: targetUrl } = await parseJson(req)
+      const { url: targetUrl, god_name } = await parseJson(req)
       if (!targetUrl) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Missing url' }))
@@ -450,7 +476,8 @@ export function setupApi() {
       try {
         handlers['entity:spawn'](mockWs, {
           type: 'browser',
-          url: targetUrl
+          url: targetUrl,
+          relativeToEntity: god_name || null
         }, process.cwd())
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -462,9 +489,9 @@ export function setupApi() {
       return true
     }
 
-    // POST /api/code - Open file in code viewer
+    // POST /api/code - Open file in code viewer (with optional diff mode)
     if (req.method === 'POST' && url.pathname === '/api/code') {
-      const { path: filePath, line, project } = await parseJson(req)
+      const { path: filePath, line, project, diff, god_name } = await parseJson(req)
       if (!filePath) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Missing path' }))
@@ -473,7 +500,12 @@ export function setupApi() {
 
       try {
         // Use code:open handler which properly sets pendingFile
-        handlers['code:open'](null, { filePath, line: line || 1 })
+        handlers['code:open'](null, {
+          filePath,
+          line: line || 1,
+          diff: diff || false,
+          relativeToEntity: god_name || null
+        })
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, path: filePath }))
@@ -486,7 +518,7 @@ export function setupApi() {
 
     // POST /api/md - Open markdown in viewer
     if (req.method === 'POST' && url.pathname === '/api/md') {
-      const { path: filePath } = await parseJson(req)
+      const { path: filePath, god_name } = await parseJson(req)
       if (!filePath) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Missing path' }))
@@ -497,7 +529,7 @@ export function setupApi() {
 
       try {
         // Use md:open handler which properly sets pendingFile
-        handlers['md:open'](mockWs, { filePath }, process.cwd())
+        handlers['md:open'](mockWs, { filePath, relativeToEntity: god_name || null }, process.cwd())
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, path: filePath }))
@@ -534,6 +566,26 @@ export function setupApi() {
 
       try {
         handlers['code:highlight:clear'](null, { filePath })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true }))
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: e.message }))
+      }
+      return true
+    }
+
+    // POST /api/code/diff - Show diff in code viewer
+    if (req.method === 'POST' && url.pathname === '/api/code/diff') {
+      const { path: filePath, original, modified } = await parseJson(req)
+      if (!filePath || original === undefined || modified === undefined) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'Missing path, original, or modified' }))
+        return true
+      }
+
+      try {
+        handlers['code:diff'](null, { filePath, original, modified })
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true }))
       } catch (e) {

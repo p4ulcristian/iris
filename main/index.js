@@ -5,6 +5,7 @@ import fs from 'fs'
 import { importChromeGoogleCookies } from './chrome-cookies.js'
 import { fileURLToPath } from 'url'
 import { spawn } from 'child_process'
+import ports from '../ports.json' with { type: 'json' }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -227,7 +228,7 @@ function createWindow() {
 
   // Load app
   if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL(`http://localhost:${ports.vite}`)
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist-vite/index.html'))
   }

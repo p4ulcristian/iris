@@ -1,24 +1,11 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect, Children } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { animate, SPRING_EASING, SPRING_DURATION } from './utils/waapi'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
 import Sidebar from './components/Sidebar'
 import ConfirmModal from './components/ConfirmModal'
 import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
-import HistoryView from '@entities/history/frontend/View'
-import BrowserView from '@entities/browser/frontend/View'
-import GitView from '@entities/git/frontend/View'
-import LinearView from '@entities/linear/frontend/View'
-import SettingsView from '@entities/settings/frontend/View'
-import CemeteryView from '@entities/cemetery/frontend/View'
-import CalendarView from '@entities/calendar/frontend/View'
-import CodeView from '@entities/code/frontend/View'
-import PersonalitiesView from '@entities/personalities/frontend/View'
-import PersonalityEditor from '@entities/personalities/frontend/PersonalityEditor'
-import TraitEditor from '@entities/personalities/frontend/TraitEditor'
-import MarkdownView from '@entities/markdown/frontend/View'
 import Surface from './components/Surface'
 import RootDropZone from './components/RootDropZone'
 import { DragProvider } from './contexts/DragContext'
@@ -58,12 +45,15 @@ function TabSlider({ tabs, activeTabId, children }) {
 
     const fromX = -prevIndexRef.current * 100
 
+    // Set final position first - animation overrides during playback, reveals this when done
+    ref.current.style.transform = `translateX(${toX}vw)`
+
     animRef.current = ref.current.animate(
       [
         { transform: `translateX(${fromX}vw)` },
         { transform: `translateX(${toX}vw)` }
       ],
-      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
+      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
     )
 
     prevIndexRef.current = tabIndex
@@ -80,71 +70,52 @@ function TabSlider({ tabs, activeTabId, children }) {
   )
 }
 
-// Animated stage slider using WAAPI (vertical)
+// Animated stage slider using WAAPI (vertical) - uses vh units like TabSlider uses vw
 function StageSlider({ stages, activeStageId, children }) {
-  const containerRef = useRef(null)
-  const sliderRef = useRef(null)
+  const ref = useRef(null)
   const animRef = useRef(null)
   const prevIndexRef = useRef(-1)
-  const [containerHeight, setContainerHeight] = useState(0)
 
-  // Get container height
   useLayoutEffect(() => {
-    if (!containerRef.current) return
-    const updateHeight = () => {
-      setContainerHeight(containerRef.current.offsetHeight)
-    }
-    updateHeight()
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(containerRef.current)
-    return () => observer.disconnect()
-  }, [])
-
-  // Animate on stage change
-  useLayoutEffect(() => {
-    if (!sliderRef.current || stages.length === 0 || containerHeight === 0) return
+    if (!ref.current || stages.length === 0) return
 
     const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
     const idx = stageIndex === -1 ? 0 : stageIndex
-
-    const toY = -idx * containerHeight
+    const toY = -idx * 100
 
     // First render - set position without animation
     if (prevIndexRef.current === -1) {
-      sliderRef.current.style.transform = `translateY(${toY}px)`
+      ref.current.style.transform = `translateY(${toY}vh)`
       prevIndexRef.current = idx
       return
     }
 
-    // No change
     if (prevIndexRef.current === idx) return
 
-    // Cancel any running animation
     if (animRef.current) {
       try { animRef.current.cancel() } catch (e) {}
     }
 
-    const fromY = -prevIndexRef.current * containerHeight
+    const fromY = -prevIndexRef.current * 100
+    ref.current.style.transform = `translateY(${toY}vh)`
 
-    animRef.current = sliderRef.current.animate(
+    animRef.current = ref.current.animate(
       [
-        { transform: `translateY(${fromY}px)` },
-        { transform: `translateY(${toY}px)` }
+        { transform: `translateY(${fromY}vh)` },
+        { transform: `translateY(${toY}vh)` }
       ],
-      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
+      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
     )
 
     prevIndexRef.current = idx
-  }, [stages, activeStageId, containerHeight])
+  }, [stages, activeStageId])
 
   return (
-    <div ref={containerRef} className="h-full w-full overflow-hidden">
-      <div
-        ref={sliderRef}
-        className="flex flex-col w-full"
-        style={{ height: containerHeight * stages.length }}
-      >
-        {children}
+    <div className="h-full w-full overflow-hidden">
+      <div ref={ref} className="w-full" style={{ height: `${stages.length * 100}vh` }}>
+        {Children.map(children, (child) => (
+          <div style={{ height: '100vh' }}>{child}</div>
+        ))}
       </div>
     </div>
   )
@@ -155,7 +126,7 @@ export default function App() {
 
   // Get state from store - grouped selector with shallow comparison
   const {
-    tabs, activeTabId, entities, focusedEntity, focusedTile,
+    tabs, activeTabId, entities, focusedEntity, focusedTile, maximizedTile,
     layoutMode, initialLoadDone, theme, godColors, loadStage
   } = useStore(useShallow(s => ({
     tabs: s.tabs,
@@ -163,6 +134,7 @@ export default function App() {
     entities: s.entities,
     focusedEntity: s.focusedEntity,
     focusedTile: s.focusedTile,
+    maximizedTile: s.maximizedTile,
     layoutMode: s.layoutMode,
     initialLoadDone: s.initialLoadDone,
     theme: s.theme,
@@ -208,15 +180,6 @@ export default function App() {
   }, [])
 
   const mainContainerRef = useRef(null)
-
-  // Refs for keyboard handlers (avoid stale closures and re-binding)
-  const tabsRef = useRef(tabs)
-  const activeTabIdRef = useRef(activeTabId)
-  const focusedEntityRef = useRef(focusedEntity)
-  const activeEntitiesRef = useRef([])
-  useEffect(() => { tabsRef.current = tabs }, [tabs])
-  useEffect(() => { activeTabIdRef.current = activeTabId }, [activeTabId])
-  useEffect(() => { focusedEntityRef.current = focusedEntity }, [focusedEntity])
 
 
   // Update connection status in store
@@ -308,9 +271,6 @@ export default function App() {
       .sort((a, b) => (a.order || 0) - (b.order || 0))
   }, [entities, activeTabId])
 
-  // Keep refs in sync for keyboard handlers
-  useEffect(() => { activeEntitiesRef.current = activeEntities }, [activeEntities])
-
   // Helper: collect all entity IDs from a layout tree
   const collectEntityIds = useCallback((node) => {
     if (!node) return []
@@ -343,41 +303,21 @@ export default function App() {
     })
   }, [tabs, entities, collectEntityIds])
 
-  // Active tab's stages (for backwards compat with sidebar etc)
-  const activeStages = useMemo(() => {
-    return getStagesForTab(activeTabId)
-  }, [getStagesForTab, activeTabId])
-
-  // Build flat list of ALL stages across ALL tabs for continuous scroll animation
-  const { allStages, globalActiveIdx } = useMemo(() => {
+  // Build flat list of ALL stages across ALL tabs
+  const allStages = useMemo(() => {
     const stages = []
-    let activeIdx = 0
-
     tabs.forEach((tab) => {
       const tabStages = getStagesForTab(tab.id)
-      const activeStageId = tab.activeStageId
-
       if (tabStages.length > 0) {
-        tabStages.forEach((stage, stageIdx) => {
-          if (tab.id === activeTabId) {
-            const foundIdx = tabStages.findIndex(s => s.id === activeStageId)
-            const activeStageIdx = foundIdx === -1 ? 0 : foundIdx
-            if (stageIdx === activeStageIdx) {
-              activeIdx = stages.length
-            }
-          }
+        tabStages.forEach((stage) => {
           stages.push({ tab, stage, tabId: tab.id, stageId: stage.id })
         })
       } else {
-        if (tab.id === activeTabId) {
-          activeIdx = stages.length
-        }
         stages.push({ tab, stage: null, tabId: tab.id, stageId: null, isEmpty: true })
       }
     })
-
-    return { allStages: stages, globalActiveIdx: activeIdx }
-  }, [tabs, activeTabId, getStagesForTab])
+    return stages
+  }, [tabs, getStagesForTab])
 
   // Get focused entity object
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
@@ -567,17 +507,12 @@ export default function App() {
         return
       }
 
-      // Cmd+K (Mac) / Alt+K: Kill focused entity
+      // Cmd+K (Mac) / Alt+K: Kill hovered/focused entity
       if (isModifierPressed(e) && code === 'KeyK') {
         e.preventDefault()
         e.stopPropagation()
-        const focused = focusedEntityRef.current
-        const entities = activeEntitiesRef.current
-        if (focused) {
-          handleKillEntity(focused)
-        } else if (entities.length === 1) {
-          handleKillEntity(entities[0].id)
-        }
+        // Let server decide target - it tracks hover state accurately
+        send({ event: 'entity:kill-hovered' })
         return
       }
 
@@ -597,11 +532,17 @@ export default function App() {
         return
       }
 
-      // Cmd+F (Mac) / Alt+F: Toggle window fullscreen
-      if (isModifierPressed(e) && code === 'KeyF') {
+      // Ctrl+F or Cmd+F (Mac) / Alt+F: Toggle focused pane maximize (within stage)
+      if ((e.ctrlKey && !e.metaKey && !e.altKey && code === 'KeyF') ||
+          (isModifierPressed(e) && code === 'KeyF')) {
         e.preventDefault()
         e.stopPropagation()
-        window.iris.windowControl('toggle-fullscreen')
+        const doToggle = () => send({ event: 'layout:toggle-maximize' })
+        if (document.startViewTransition) {
+          document.startViewTransition(doToggle)
+        } else {
+          doToggle()
+        }
         return
       }
 
@@ -609,13 +550,7 @@ export default function App() {
       if (isModifierPressed(e) && code === 'Comma') {
         e.preventDefault()
         e.stopPropagation()
-        const t = tabsRef.current
-        const a = activeTabIdRef.current
-        if (t?.length > 0) {
-          const idx = t.findIndex(x => x.id === a)
-          const prevIdx = (idx - 1 + t.length) % t.length
-          send({ event: 'tab:select', tabId: t[prevIdx].id })
-        }
+        send({ event: 'tab:prev' })
         return
       }
 
@@ -623,35 +558,26 @@ export default function App() {
       if (isModifierPressed(e) && code === 'Period') {
         e.preventDefault()
         e.stopPropagation()
-        const t = tabsRef.current
-        const a = activeTabIdRef.current
-        if (t?.length > 0) {
-          const idx = t.findIndex(x => x.id === a)
-          const nextIdx = (idx + 1) % t.length
-          send({ event: 'tab:select', tabId: t[nextIdx].id })
-        }
+        send({ event: 'tab:next' })
         return
       }
 
       // Cmd+1-9 (Mac) / Alt+1-9: Go to tab
       if (isModifierPressed(e) && code.startsWith('Digit')) {
         const num = parseInt(code.charAt(5))
-        const t = tabsRef.current
-        if (num >= 1 && num <= 9 && t?.length > 0) {
+        if (num >= 1 && num <= 9) {
           e.preventDefault()
           e.stopPropagation()
-          if (num <= t.length) {
-            send({ event: 'tab:select', tabId: t[num - 1].id })
-          }
+          send({ event: 'tab:goto', index: num - 1 })
           return
         }
       }
 
       // Escape: Clear focus (only when terminal isn't focused - let Escape pass through to terminal apps)
-      if (e.key === 'Escape' && focusedEntityRef.current) {
+      if (e.key === 'Escape') {
         const isTerminalFocused = document.activeElement?.closest('.entity-content')
         if (!isTerminalFocused) {
-          handleSetFocus(null)
+          send({ event: 'focus:clear' })
         }
       }
 
@@ -675,13 +601,7 @@ export default function App() {
       if (isModifierPressed(e) && code === 'ArrowLeft') {
         e.preventDefault()
         e.stopPropagation()
-        const t = tabsRef.current
-        const a = activeTabIdRef.current
-        if (t?.length > 0) {
-          const idx = t.findIndex(x => x.id === a)
-          const prev = (idx - 1 + t.length) % t.length
-          send({ event: 'tab:select', tabId: t[prev].id })
-        }
+        send({ event: 'tab:prev' })
         return
       }
 
@@ -689,20 +609,14 @@ export default function App() {
       if (isModifierPressed(e) && code === 'ArrowRight') {
         e.preventDefault()
         e.stopPropagation()
-        const t = tabsRef.current
-        const a = activeTabIdRef.current
-        if (t?.length > 0) {
-          const idx = t.findIndex(x => x.id === a)
-          const next = (idx + 1) % t.length
-          send({ event: 'tab:select', tabId: t[next].id })
-        }
+        send({ event: 'tab:next' })
         return
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, handleSetFocus, send])
+  }, [handleSpawnRandomGod, handleSpawnTerminal, handleKillEntity, handleKillTab, send])
 
   // Modifier key hold for shortcuts popup (Cmd on Mac, Alt on others)
   useEffect(() => {
@@ -808,7 +722,6 @@ export default function App() {
           {tabs.map((tab) => {
             const isActiveTab = tab.id === activeTabId
             const tabStages = allStages.filter(item => item.tabId === tab.id)
-            const activeStage = tabStages.find(s => s.stageId === tab.activeStageId) || tabStages[0]
 
             return (
               <div
@@ -893,7 +806,7 @@ export default function App() {
                             {nonEmptyStages.map((stageItem) => (
                               <div
                                 key={stageItem.stageId}
-                                className="w-full flex-1 py-3"
+                                className="w-full h-full py-3"
                               >
                                 <Surface
                                   node={stageItem.stage.layout}
@@ -901,6 +814,7 @@ export default function App() {
                                   entities={entities}
                                   focusedTile={focusedTile}
                                   focusedEntity={focusedEntity}
+                                  maximizedTile={maximizedTile}
                                 />
                               </div>
                             ))}

@@ -87,4 +87,28 @@ export const handlers = {
     saveState()
     broadcastState()
   },
+
+  'tab:prev': (ws) => {
+    const tabs = appState.tabs
+    if (tabs.length === 0) return
+    const idx = tabs.findIndex(t => t.id === appState.activeTabId)
+    const prevIdx = (idx - 1 + tabs.length) % tabs.length
+    handlers['tab:select'](ws, { tabId: tabs[prevIdx].id })
+  },
+
+  'tab:next': (ws) => {
+    const tabs = appState.tabs
+    if (tabs.length === 0) return
+    const idx = tabs.findIndex(t => t.id === appState.activeTabId)
+    const nextIdx = (idx + 1) % tabs.length
+    handlers['tab:select'](ws, { tabId: tabs[nextIdx].id })
+  },
+
+  'tab:goto': (ws, data) => {
+    const { index } = data
+    const tabs = appState.tabs
+    if (index >= 0 && index < tabs.length) {
+      handlers['tab:select'](ws, { tabId: tabs[index].id })
+    }
+  },
 }

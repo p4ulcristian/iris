@@ -9,7 +9,7 @@ import { appState, saveState, broadcastState, getNextOrder } from '../state.js'
 import { startService, stopService, startChronicle, stopChronicle } from '../services.js'
 import { createTerminalSession } from '../gods.js'
 import { getSessionName } from '../gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback, handlePtyInput } from '../pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback, handlePtyInput, createRun, appendToRun, completeRun } from '../pty.js'
 import { splitIntoTile } from '../../entities/_shared/spawn.js'
 
 export const handlers = {
@@ -137,12 +137,17 @@ export const handlers = {
           ? `echo ${startMarker}; ${command}; echo ${endMarker}; echo $? > "${exitFile}"`
           : `( ${command} ) > "${outputFile}" 2>&1; cat "${outputFile}"; echo $? > "${exitFile}"`
 
+        // Create run buffer to track this command's output
+        createRun(requestId, actualTerminalId)
+
         const success = sendToZellij(actualCommand)
 
         if (!success) {
+          completeRun(requestId, 'failed')
           ws.send(JSON.stringify({
             event: 'mcp:run:response',
             requestId,
+            runId: requestId,
             terminalId: actualTerminalId,
             godName: targetGodName,
             output: 'Failed to send command to terminal.'
@@ -156,12 +161,29 @@ export const handlers = {
           try { fs.unlinkSync(outputFile) } catch {}
           try { fs.unlinkSync(exitFile) } catch {}
 
+          // On timeout, try to capture partial output from scrollback
+          let partialOutput = ''
+          try {
+            const buffer = getZellijScrollback(actualTerminalId) || ''
+            const startIdx = buffer.indexOf('\n' + startMarker)
+            if (startIdx !== -1) {
+              // Get everything after start marker
+              partialOutput = buffer.slice(startIdx + 1 + startMarker.length).trim()
+              // Store in run buffer for later peeking
+              appendToRun(requestId, partialOutput)
+            }
+          } catch {}
+
+          completeRun(requestId, 'timeout')
           ws.send(JSON.stringify({
             event: 'mcp:run:response',
             requestId,
+            runId: requestId,
             terminalId: actualTerminalId,
             godName: targetGodName,
-            output: '(Command timed out - may still be running in Iris terminal)'
+            status: 'timeout',
+            output: partialOutput || '(Command timed out - use peek_run to check output)',
+            hint: `Use peek_run("${requestId}") to see latest output`
           }))
         }, 30000) // 30s timeout
 
@@ -207,9 +229,14 @@ export const handlers = {
                 output = output.slice(0, 10000) + '\n... (truncated)'
               }
 
+              // Store output in run buffer and mark complete
+              appendToRun(requestId, output)
+              completeRun(requestId, 'completed')
+
               ws.send(JSON.stringify({
                 event: 'mcp:run:response',
                 requestId,
+                runId: requestId,
                 terminalId: actualTerminalId,
                 godName: targetGodName,
                 exitCode: parseInt(exitCode) || 0,

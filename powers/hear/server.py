@@ -77,9 +77,11 @@ except ImportError:
             return "[STT not installed - install nemo_toolkit[asr]]"
 
 
-# Config
-PORT = 8766
-SPEAK_SERVER = "http://127.0.0.1:8765"
+# Config - ports from ports.json
+import json
+PORTS = json.loads((Path(__file__).parent.parent.parent / 'ports.json').read_text())
+PORT = PORTS['hear']
+SPEAK_SERVER = f"http://127.0.0.1:{PORTS['speak']}"
 
 # State
 stt_model = None

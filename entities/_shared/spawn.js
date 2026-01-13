@@ -68,9 +68,10 @@ export function createStageForEntity(entityId, tabId) {
  * @param {Object} [options] - Split options
  * @param {string} [options.direction='horizontal'] - Split direction
  * @param {string} [options.position='after'] - Position relative to existing tile
+ * @param {string} [options.relativeToEntity] - Entity ID to split next to (overrides focused tile)
  */
 export function splitIntoTile(entityId, tabId, options = {}) {
-  const { direction = 'horizontal', position = 'after' } = options
+  const { direction = 'horizontal', position = 'after', relativeToEntity = null } = options
   const targetTabId = tabId ?? appState.activeTabId
   const tab = appState.tabs.find(t => t.id === targetTabId)
   if (!tab) return null
@@ -89,11 +90,28 @@ export function splitIntoTile(entityId, tabId, options = {}) {
     return { stageId, tileNode }
   }
 
-  // Get the focused tile or the first tile if none focused
+  // Get the target tile: relativeToEntity > focusedTile > first tile
   const allTiles = layout.getAllTiles(activeStage.layout)
-  const targetTileId = appState.focusedTile && allTiles.some(t => t.id === appState.focusedTile)
-    ? appState.focusedTile
-    : allTiles[0]?.id
+  let targetTileId = null
+
+  // If relativeToEntity specified, find its tile across ALL stages
+  if (relativeToEntity) {
+    for (const stage of (tab.stages || [])) {
+      const relativeTile = layout.findTileByEntity(stage.layout, relativeToEntity)
+      if (relativeTile) {
+        activeStage = stage  // Use the stage containing the entity
+        targetTileId = relativeTile.id
+        break
+      }
+    }
+  }
+
+  // Fall back to focused tile or first tile
+  if (!targetTileId) {
+    targetTileId = appState.focusedTile && allTiles.some(t => t.id === appState.focusedTile)
+      ? appState.focusedTile
+      : allTiles[0]?.id
+  }
 
   if (!targetTileId || !activeStage.layout) {
     // No tiles exist - create root tile
@@ -146,17 +164,18 @@ export function finalizeSpawn(entityId, options = {}) {
  * @param {Object} [spawnOptions] - Spawn options
  * @param {string} [spawnOptions.mode='split'] - 'split' to split current tile, 'stage' to create new stage
  * @param {string} [spawnOptions.direction='horizontal'] - Split direction when mode is 'split'
+ * @param {string} [spawnOptions.relativeToEntity] - Entity ID to split next to
  * @returns {Object} The created entity
  */
 export function spawnEntity(id, type, data = {}, spawnOptions = {}) {
-  const { mode = 'split', direction = 'horizontal' } = spawnOptions
+  const { mode = 'split', direction = 'horizontal', relativeToEntity = null } = spawnOptions
   const entity = createEntityBase(id, type, data)
   addEntity(id, entity)
 
   if (mode === 'stage') {
     createStageForEntity(id, entity.tabId)
   } else {
-    splitIntoTile(id, entity.tabId, { direction })
+    splitIntoTile(id, entity.tabId, { direction, relativeToEntity })
   }
 
   finalizeSpawn(id)

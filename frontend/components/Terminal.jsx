@@ -4,7 +4,6 @@ import { Terminal as XTerm } from '@xterm/xterm'
 export default function Terminal({ sessionName, color, onData, onResize }) {
   const containerRef = useRef(null)
   const termRef = useRef(null)
-  const resizeObserverRef = useRef(null)
 
   // Write data to terminal
   const write = useCallback((data) => {
@@ -47,26 +46,10 @@ export default function Terminal({ sessionName, color, onData, onResize }) {
       }
     })
 
-    // Handle resize
-    const resizeObserver = new ResizeObserver(() => {
-      if (onResize && termRef.current) {
-        onResize(termRef.current.cols, termRef.current.rows)
-      }
-    })
-    resizeObserver.observe(containerRef.current)
-    resizeObserverRef.current = resizeObserver
-
     return () => {
-      resizeObserver.disconnect()
       term.dispose()
     }
   }, [color, onData, onResize])
-
-  // Expose write function via ref callback
-  useEffect(() => {
-    // Connect to PTY output via WebSocket
-    // The parent component will call write() when data arrives
-  }, [])
 
   return (
     <div
@@ -75,17 +58,4 @@ export default function Terminal({ sessionName, color, onData, onResize }) {
       style={{ minHeight: 0 }}
     />
   )
-}
-
-// Export a hook for external control
-export function useTerminal() {
-  const terminalRef = useRef(null)
-
-  const write = useCallback((data) => {
-    if (terminalRef.current?.write) {
-      terminalRef.current.write(data)
-    }
-  }, [])
-
-  return { terminalRef, write }
 }

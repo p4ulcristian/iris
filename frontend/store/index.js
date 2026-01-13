@@ -23,6 +23,7 @@ export const useStore = create(
       entities: {},
       focusedEntity: null,
       focusedTile: null,
+      maximizedTile: null,
       theme: 'divine-void',
       godColors: {},
       gitProjects: [],
@@ -63,6 +64,7 @@ export const useStore = create(
         if (serverState.tabCounter !== undefined) state.tabCounter = serverState.tabCounter
         if (serverState.focusedEntity !== undefined) state.focusedEntity = serverState.focusedEntity
         if (serverState.focusedTile !== undefined) state.focusedTile = serverState.focusedTile
+        if (serverState.maximizedTile !== undefined) state.maximizedTile = serverState.maximizedTile
         if (serverState.theme !== undefined) state.theme = serverState.theme
         if (serverState.godColors !== undefined) state.godColors = serverState.godColors
         if (serverState.gitProjects !== undefined) state.gitProjects = serverState.gitProjects

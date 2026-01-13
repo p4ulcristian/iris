@@ -1,3 +1,6 @@
+// Ports - injected by Vite from ports.json
+const ports = typeof __PORTS__ !== 'undefined' ? __PORTS__ : { ws: 4243, oauth: 4244, hear: 4246 }
+
 // Server URLs - dynamic based on environment
 const isElectron = typeof window !== 'undefined' && !!window.iris
 
@@ -18,9 +21,9 @@ function getWsProtocol() {
 const host = getServerHost()
 const wsProtocol = getWsProtocol()
 
-export const WS_URL = `${wsProtocol}//${host}:9999`
-export const API_URL = `http://${host}:9998` // Keep for OAuth callback only
-export const CHRONICLE_URL = `http://${host}:8766`
+export const WS_URL = `${wsProtocol}//${host}:${ports.ws}`
+export const API_URL = `http://${host}:${ports.oauth}`
+export const CHRONICLE_URL = `http://${host}:${ports.hear}`
 
 // WebSocket Events
 export const EVENTS = {

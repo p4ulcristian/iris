@@ -2,6 +2,18 @@
 
 Iris provides MCP tools for interacting with the UI, voice, and other gods. These tools are available directly - no CLI needed.
 
+## Tool Preferences
+
+**Use Iris tools for visual feedback.** These show operations in the UI so Paul can see what you're doing:
+
+| Instead of... | Use... | Why |
+|---------------|--------|-----|
+| `Bash` | `run_terminal` | Shows command in visible terminal |
+| `Read` | `iris_read` | Opens file in code viewer |
+| `Edit` | `iris_edit` | Shows changes highlighted in code viewer |
+
+The built-in tools work silently. The Iris alternatives provide visual feedback.
+
 ## Quick Reference
 
 | Tool | Description |
@@ -18,6 +30,9 @@ Iris provides MCP tools for interacting with the UI, voice, and other gods. Thes
 | `clear_highlights` | Clear code highlights |
 | `open_markdown` | Open markdown viewer |
 | `run_terminal` | Run command in visible terminal |
+| `peek_run` | Get output from a command by run_id |
+| `iris_read` | Read file AND show in code viewer |
+| `iris_edit` | Edit file AND show changes in viewer |
 | `git_push` | Commit and push staged changes |
 
 ---
@@ -147,11 +162,53 @@ Open a markdown file in the rendered viewer.
 
 ## run_terminal
 
-Run a command in a visible terminal.
+Run a command in a visible terminal. Returns a `run_id` for tracking output.
 
 **Parameters:**
 - `command` (required): Shell command to execute
 - `god_name` (optional): Which god's terminal (default: Hermes)
+- `raw` (optional): Clean output mode (default: true)
+
+On timeout, returns partial output and a `run_id` you can use with `peek_run`.
+
+---
+
+## peek_run
+
+Get output from a specific command run by its run_id. Use after `run_terminal` times out to see what was captured.
+
+**Parameters:**
+- `run_id` (required): The run_id returned by run_terminal
+- `lines` (optional): Number of lines to retrieve (default: all)
+
+Returns the output and status (`running`, `completed`, `timeout`, `failed`).
+
+---
+
+## iris_read
+
+Read a file AND display it in the Iris code viewer. Use instead of built-in Read for visual feedback.
+
+**Parameters:**
+- `path` (required): File path (relative or absolute)
+- `line` (optional): Line number to jump to and highlight
+- `highlight_lines` (optional): Lines to highlight (e.g., "10-20", "5,10,15")
+
+Returns file contents with line numbers, same format as Read tool.
+
+---
+
+## iris_edit
+
+Edit a file with visual feedback in Iris code viewer. Use instead of built-in Edit for visual feedback.
+
+**Parameters:**
+- `path` (required): File path (relative or absolute)
+- `old_string` (required): The exact text to replace
+- `new_string` (required): The replacement text
+- `replace_all` (optional): Replace all occurrences (default: false)
+
+Opens the file in code viewer and highlights the changed lines in green.
 
 ---
 

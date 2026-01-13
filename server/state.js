@@ -57,6 +57,8 @@ export const appState = {
   theme: 'divine-void',
   focusedEntity: null,    // ID of focused entity
   focusedTile: null,      // ID of focused tile (for multi-tile layouts)
+  hoveredEntity: null,    // ID of hovered entity (for accurate kill targeting)
+  maximizedTile: null,    // ID of tile in maximized mode (null = none)
   gitProjects: [],        // [{path, name}]
   cemetery: [],           // Fallen gods: [{id, name, color, voice, mission, title, banishedAt, tabName, sessionId}]
   settings: {             // App settings (API keys, etc.)
@@ -415,34 +417,63 @@ export function saveState() {
 }
 
 export function getStateForBroadcast() {
-  // Get socket info for gods/terminals
+  // Fields to exclude from broadcast (internal counters, server-only state)
+  const EXCLUDE_FIELDS = new Set([
+    'entityCounter',
+    'tileCounter',
+    'splitCounter',
+    'stageCounter',
+    'hoveredEntity',  // Server-only tracking
+    'entities',       // Transformed below
+    'settings',       // Transformed below (has secrets)
+  ])
+
+  // Start with all appState fields, excluding internal ones
+  // This ensures new fields are automatically broadcast
+  const state = {}
+  for (const [key, value] of Object.entries(appState)) {
+    if (!EXCLUDE_FIELDS.has(key)) {
+      state[key] = value
+    }
+  }
+
+  // Transform entities: merge socket info for gods/terminals
   const sockets = listGodSockets()
   const socketMap = Object.fromEntries(sockets.map(s => [s.name, s]))
 
-  // Build entities array from appState.entities
-  // Just pass through entity data, merging socket info for gods/terminals
-  const entities = Object.values(appState.entities).map(entity => {
+  state.entities = Object.values(appState.entities).map(entity => {
     const sock = socketMap[entity.id]
-
-    // Merge socket info for god/terminal types
     if ((entity.type === 'god' || entity.type === 'terminal') && sock) {
       return { ...entity, color: entity.color || sock.color, voice: sock.voice }
     }
-
     return entity
-  })
+  }).sort((a, b) => (a.order || 0) - (b.order || 0))
 
-  entities.sort((a, b) => a.order - b.order)
+  // Transform settings: mask secrets, add computed flags
+  state.settings = {
+    linearApiKey: maskApiKey(appState.settings?.linearApiKey),
+    hasLinearApiKey: !!appState.settings?.linearApiKey,
+    userName: appState.settings?.userName || '',
+    startPrompt: appState.settings?.startPrompt || '',
+    powers: appState.settings?.powers ?? true,
+    googleClientId: maskApiKey(appState.settings?.googleClientId),
+    hasGoogleClientId: !!appState.settings?.googleClientId,
+    googleClientSecret: maskApiKey(appState.settings?.googleClientSecret),
+    hasGoogleClientSecret: !!appState.settings?.googleClientSecret,
+    googleCalendar: {
+      connected: !!appState.settings?.googleCalendar?.refresh_token,
+      email: appState.settings?.googleCalendar?.email || null
+    }
+  }
 
-  // Extract tiles from ALL stages in each tab (so scrolls show all entities)
-  const tiles = {}
+  // Computed: extract tiles from all stages (for sidebar display)
+  state.tiles = {}
   appState.tabs.forEach(tab => {
     const allTiles = []
     if (tab.stages) {
       for (const stage of tab.stages) {
         if (stage.layout) {
           const stageTiles = layout.getAllTiles(stage.layout)
-          // Mark which stage each tile belongs to
           stageTiles.forEach(tile => {
             tile.stageId = stage.id
             tile.isActiveStage = stage.id === tab.activeStageId
@@ -451,41 +482,15 @@ export function getStateForBroadcast() {
         }
       }
     }
-    tiles[tab.id] = allTiles
+    state.tiles[tab.id] = allTiles
   })
 
-  const godColors = GOD_COLORS
-  return {
-    tabs: appState.tabs,
-    activeTabId: appState.activeTabId,
-    tabCounter: appState.tabCounter,
-    entities,
-    entityRegistry: getClientRegistry(entityRegistry),  // Entity type definitions from app/entities/
-    theme: appState.theme,
-    godColors,
-    focusedEntity: appState.focusedEntity,
-    focusedTile: appState.focusedTile,
-    tiles,
-    gitProjects: appState.gitProjects || [],
-    cemetery: appState.cemetery || [],
-    settings: {
-      linearApiKey: maskApiKey(appState.settings?.linearApiKey),
-      hasLinearApiKey: !!appState.settings?.linearApiKey,
-      userName: appState.settings?.userName || '',
-      startPrompt: appState.settings?.startPrompt || '',
-      powers: appState.settings?.powers ?? true,
-      googleClientId: maskApiKey(appState.settings?.googleClientId),
-      hasGoogleClientId: !!appState.settings?.googleClientId,
-      googleClientSecret: maskApiKey(appState.settings?.googleClientSecret),
-      hasGoogleClientSecret: !!appState.settings?.googleClientSecret,
-      googleCalendar: {
-        connected: !!appState.settings?.googleCalendar?.refresh_token,
-        email: appState.settings?.googleCalendar?.email || null
-      }
-    },
-    codeHighlights: appState.codeHighlights || {},
-    version: APP_VERSION
-  }
+  // Computed: add extra fields
+  state.entityRegistry = getClientRegistry(entityRegistry)
+  state.godColors = GOD_COLORS
+  state.version = APP_VERSION
+
+  return state
 }
 
 export function broadcastState() {

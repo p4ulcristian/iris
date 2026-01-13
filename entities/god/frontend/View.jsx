@@ -244,7 +244,7 @@ export default function TerminalContent({ entity, isFocused }) {
 
       const isCtrlShortcut = e.ctrlKey && !e.shiftKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
       const isAltShortcut = e.altKey && (
-        ['n', 'k', ',', '.'].includes(key) ||
+        ['n', 'k', 'f', ',', '.'].includes(key) ||
         (e.key >= '1' && e.key <= '9')
       )
 
@@ -254,6 +254,7 @@ export default function TerminalContent({ entity, isFocused }) {
         e.stopImmediatePropagation()
         window.dispatchEvent(new KeyboardEvent('keydown', {
           key: e.key,
+          code: e.code,
           ctrlKey: e.ctrlKey,
           altKey: e.altKey,
           shiftKey: e.shiftKey,
