@@ -204,6 +204,7 @@ export const handlers = {
       setTimeout(() => {
         const POLL_INTERVAL = 200
         const INITIAL_TIMEOUT = 30000
+        let responseSent = false
 
         const pollInterval = setInterval(() => {
           const running = isCommandRunning(sessionName)
@@ -212,13 +213,21 @@ export const handlers = {
             clearInterval(pollInterval)
             clearTimeout(timeoutTimer)
             // Small delay to let buffer flush
-            setTimeout(() => sendOutput('completed'), 300)
+            setTimeout(() => {
+              if (!responseSent) {
+                responseSent = true
+                sendOutput('completed')
+              } else {
+                // Response already sent due to timeout, just update status
+                completeRun(requestId, 'completed')
+              }
+            }, 300)
           }
         }, POLL_INTERVAL)
 
         const timeoutTimer = setTimeout(() => {
-          clearInterval(pollInterval)
-          // Still running - return partial output
+          // Don't stop polling - let it continue to update status when done
+          responseSent = true
           sendOutput('running')
         }, INITIAL_TIMEOUT)
       }, 100)

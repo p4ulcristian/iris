@@ -9,6 +9,7 @@ import ports from '../ports.json' with { type: 'json' }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+
 // Dev mode logging
 const isDev = !__dirname.includes('app.asar')
 const projectRoot = isDev ? path.join(__dirname, '..') : null

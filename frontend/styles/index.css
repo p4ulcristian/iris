@@ -657,7 +657,9 @@ body.alt-held .entity-content {
   filter: blur(40px);
   opacity: 0.5;
   mix-blend-mode: screen;
-  will-change: transform, border-radius, opacity;
+  /* Removed will-change - it forces GPU layers and can cause Electron freezes */
+  /* Only animate transform (GPU-friendly), not border-radius */
+  animation: none !important; /* TEMP: Disable to unfreeze */
 }
 
 /* Blob 1: Primary - rises left to right */
