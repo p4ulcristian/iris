@@ -192,22 +192,30 @@ server.tool(
   {
     command: z.string().describe("Shell command to execute"),
     god_name: z.string().optional().describe("God name for terminal (default: Hermes)"),
-    raw: z.boolean().default(true).describe("Clean terminal output (default: true). Set false for wrapped mode with file capture.")
+    raw: z.boolean().default(true).describe("Clean terminal output (default: true). Set false for wrapped mode with file capture."),
+    background: z.boolean().default(false).describe("Run in background and return immediately with run_id. Use peek_run to check output later.")
   },
-  async ({ command, god_name, raw }) => {
+  async ({ command, god_name, raw, background }) => {
     const god = god_name || GOD_NAME || "Hermes";
-    const result = await apiPost("run", { god, command, raw }, 40000); // 40s timeout
+    const timeout = background ? 5000 : 40000; // Short timeout for background mode
+    const result = await apiPost("run", { god, command, raw, background }, timeout);
 
     if (result.error) {
       const runId = result.runId ? `\nrun_id: ${result.runId}` : "";
       return fail(`Command failed: ${result.error}${runId}`);
     }
 
-    const output = result.output || "(no output)";
     const runId = result.runId || "unknown";
     const status = result.status || "completed";
 
-    if (status === "timeout") {
+    // Background mode - return immediately
+    if (background || status === "background") {
+      return ok(`Running in background (run_id: ${runId})\nUse peek_run("${runId}") to check output.`);
+    }
+
+    const output = result.output || "(no output)";
+
+    if (status === "timeout" || status === "running") {
       return ok(`Timed out (run_id: ${runId})\nUse peek_run("${runId}") to check output\n\nPartial output:\n${output}`);
     }
 

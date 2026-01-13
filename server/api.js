@@ -402,9 +402,9 @@ export function setupApi() {
     }
 
     // POST /api/run - Run command in terminal (uses mcp:run handler)
-    // Options: god (terminal owner), command, raw (clean output mode)
+    // Options: god (terminal owner), command, raw (clean output mode), background (return immediately)
     if (req.method === 'POST' && url.pathname === '/api/run') {
-      const { god, command, raw } = await parseJson(req)
+      const { god, command, raw, background } = await parseJson(req)
       if (!command) {
         res.writeHead(400, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ error: 'Missing command' }))
@@ -430,8 +430,23 @@ export function setupApi() {
           requestId,
           godName: god || 'Hermes',
           command,
-          raw: !!raw
+          raw: !!raw,
+          background: !!background
         }, process.cwd())
+
+        // Background mode - return immediately with run_id
+        if (background) {
+          // Small delay to ensure terminal is created
+          await new Promise(r => setTimeout(r, 500))
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({
+            ok: true,
+            runId: requestId,
+            status: 'background',
+            hint: `Use peek_run("${requestId}") to check output`
+          }))
+          return true
+        }
 
         // Wait for response (up to 35s for command timeout + buffer)
         let waited = 0
