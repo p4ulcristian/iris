@@ -29,6 +29,9 @@
 /* Enable CSS transitions to/from auto, max-content, etc. */
 :root {
   interpolate-size: allow-keywords;
+
+  /* Sidebar icon-only mode sizing */
+  --sidebar-icon-size: 48px;
 }
 
 /* Frameless window resize handles */
@@ -278,6 +281,7 @@ body.alt-held .entity-content {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -933,4 +937,85 @@ body.alt-held .entity-content {
   opacity: 0.7;
   filter: saturate(0.8);
   transition: box-shadow 150ms ease, opacity 150ms ease, filter 150ms ease;
+}
+
+/* ============================================
+   RESPONSIVE SIDEBAR (Container Queries)
+   ============================================ */
+
+/* Container query scope for sidebar (all children respond to sidebar width) */
+.sidebar-container {
+  container-type: inline-size;
+}
+
+/* Narrow sidebar mode (< 100px) */
+@container (max-width: 100px) {
+  /* Entity cards: icon-only */
+  .entity-card-header-text,
+  .entity-card-controls,
+  .entity-card-content {
+    display: none !important;
+  }
+
+  .entity-card-header {
+    justify-content: center !important;
+    padding: 0 !important;
+    height: 100% !important;
+  }
+
+  .entity-card-icon {
+    margin: 0 !important;
+  }
+
+  .entity-card {
+    width: var(--sidebar-icon-size) !important;
+    height: var(--sidebar-icon-size) !important;
+    min-height: var(--sidebar-icon-size) !important;
+    border-right: none !important;
+    border-radius: 12px !important;
+  }
+
+  .entity-card-container {
+    display: flex;
+    justify-content: center;
+  }
+
+  /* App title: eye icon only, centered */
+  .sidebar-title,
+  .sidebar-spacer,
+  .sidebar-controls {
+    display: none !important;
+  }
+
+  .sidebar-header {
+    justify-content: center !important;
+  }
+
+  .sidebar-icon {
+    font-size: 1.25rem !important;
+  }
+
+  /* Entity groups: minimal style */
+  .entity-group {
+    padding: 0 !important;
+    border: none !important;
+    gap: 4px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Tabs: grow to 48px squares, centered */
+  .sidebar-tabs {
+    justify-content: center !important;
+  }
+
+  .sidebar-tabs .btn-icon-md {
+    width: var(--sidebar-icon-size) !important;
+    height: var(--sidebar-icon-size) !important;
+  }
+
+  /* Spawn buttons: shrink to 48px squares */
+  .sidebar-spawn-btn {
+    width: var(--sidebar-icon-size) !important;
+    height: var(--sidebar-icon-size) !important;
+  }
 }

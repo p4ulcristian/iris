@@ -231,12 +231,13 @@ export const handlers = {
   },
 
   'code:files:sync': (ws, data) => {
-    const { entityId, openFiles, activeFilePath, rootPath } = data
+    const { entityId, openFiles, activeFilePath, rootPath, expandedFolders } = data
     if (!entityId || !appState.entities[entityId]) return
 
     appState.entities[entityId].openFiles = openFiles || []
     appState.entities[entityId].activeFilePath = activeFilePath || null
     appState.entities[entityId].rootPath = rootPath || null
+    appState.entities[entityId].expandedFolders = expandedFolders || []
 
     if (rootPath) {
       const folderName = path.basename(rootPath)

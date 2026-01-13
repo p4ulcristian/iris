@@ -6,17 +6,157 @@ import { getSessionName, sanitizeName, sessionExists } from './gods.js'
 import { ZELLIJ_CONFIG_DIR, ZELLIJ_BIN } from './config.js'
 import { appState, saveState, broadcastState } from './state.js'
 
-// Parse OSC title sequences from terminal output
-// Format: \x1b]0;title\x07 or \x1b]2;title\x07 (or \x1b\\ instead of \x07)
-const OSC_TITLE_REGEX = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
+// Input buffer per terminal - captures typed commands
+const inputBuffers = new Map()
 
-function parseOscTitle(data) {
-  const matches = [...data.matchAll(OSC_TITLE_REGEX)]
-  if (matches.length > 0) {
-    // Return the last title found (most recent)
-    return matches[matches.length - 1][2]
+// Handle PTY input - buffer keystrokes and capture command on Enter
+export function handlePtyInput(entityId, data) {
+  let buffer = inputBuffers.get(entityId) || ''
+
+  for (const char of data) {
+    const code = char.charCodeAt(0)
+
+    if (code === 13 || code === 10) {
+      // Enter pressed - capture command
+      const command = buffer.trim()
+      if (command && appState.entities[entityId]) {
+        appState.entities[entityId].title = command
+        saveState()
+        broadcastState()
+      }
+      buffer = ''
+    } else if (code === 127 || code === 8) {
+      // Backspace - remove last char
+      buffer = buffer.slice(0, -1)
+    } else if (code === 3) {
+      // Ctrl+C - clear buffer
+      buffer = ''
+    } else if (code === 21) {
+      // Ctrl+U - clear line
+      buffer = ''
+    } else if (code >= 32 && code < 127) {
+      // Printable ASCII
+      buffer += char
+    }
   }
-  return null
+
+  inputBuffers.set(entityId, buffer)
+}
+
+// Clear input buffer (e.g., when terminal closes)
+export function clearInputBuffer(entityId) {
+  inputBuffers.delete(entityId)
+}
+
+// Get shell PID for a Zellij session
+function getShellPid(sessionName) {
+  try {
+    // Find Zellij server PID by session name
+    const serverPid = execSync(`pgrep -f "zellij --server.*${sessionName}$"`, {
+      encoding: 'utf-8',
+      timeout: 1000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim().split('\n')[0]
+
+    if (!serverPid) return null
+
+    // Get shell child of Zellij server
+    const shellPid = execSync(`pgrep -P ${serverPid}`, {
+      encoding: 'utf-8',
+      timeout: 1000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim().split('\n')[0]
+
+    return shellPid || null
+  } catch {
+    return null
+  }
+}
+
+// Get running command for a terminal by checking process tree
+function getRunningCommand(sessionName) {
+  try {
+    const shellPid = getShellPid(sessionName)
+    if (!shellPid) return null
+
+    // Get command running under shell
+    const cmdPid = execSync(`pgrep -P ${shellPid}`, {
+      encoding: 'utf-8',
+      timeout: 1000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim().split('\n')[0]
+
+    if (!cmdPid) return null // Shell is idle
+
+    // Get command name (not full path)
+    const cmdName = execSync(`ps -p ${cmdPid} -o comm=`, {
+      encoding: 'utf-8',
+      timeout: 1000,
+      stdio: ['pipe', 'pipe', 'pipe']
+    }).trim()
+
+    return cmdName || null
+  } catch {
+    return null
+  }
+}
+
+// Get current working directory of terminal's shell
+function getShellCwd(sessionName) {
+  try {
+    const shellPid = getShellPid(sessionName)
+    if (!shellPid) return null
+
+    // Read cwd from /proc
+    const cwd = fs.readlinkSync(`/proc/${shellPid}/cwd`)
+    // Return just the directory name
+    return path.basename(cwd)
+  } catch {
+    return null
+  }
+}
+
+// Poll terminal processes and update titles
+let titlePollInterval = null
+
+export function startTitlePolling() {
+  if (titlePollInterval) return
+
+  titlePollInterval = setInterval(() => {
+    let changed = false
+
+    for (const [entityId, entity] of Object.entries(appState.entities)) {
+      if (entity.type !== 'terminal') continue
+
+      const sessionName = getSessionName(entityId)
+      const cmd = getRunningCommand(sessionName)
+      const cwd = getShellCwd(sessionName)
+
+      // Only update title if we found a command (keep last command when idle)
+      if (cmd && entity.title !== cmd) {
+        entity.title = cmd
+        changed = true
+      }
+
+      // Always update cwd
+      if (cwd && entity.cwd !== cwd) {
+        entity.cwd = cwd
+        changed = true
+      }
+    }
+
+    if (changed) {
+      saveState()
+      broadcastState()
+    }
+  }, 2000) // Poll every 2 seconds
+}
+
+export function stopTitlePolling() {
+  if (titlePollInterval) {
+    clearInterval(titlePollInterval)
+    titlePollInterval = null
+  }
 }
 
 const PTY_LOG = path.join(os.homedir(), '.local/share/iris/logs/pty-debug.log')
@@ -182,14 +322,6 @@ function attachPtyInternal(godName, ws, cols, rows, sessionName, T) {
 
           // Store in buffer for peek
           appendToBuffer(godName, dataStr)
-
-          // Check for OSC title sequences and update entity title
-          const oscTitle = parseOscTitle(dataStr)
-          if (oscTitle && appState.entities[godName]) {
-            appState.entities[godName].title = oscTitle
-            saveState()
-            broadcastState()
-          }
 
           const msg = JSON.stringify({ event: 'pty:output', godName, data: dataStr })
           entry.clients.forEach(client => {

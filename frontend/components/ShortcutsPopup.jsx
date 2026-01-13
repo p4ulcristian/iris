@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from 'framer-motion'
+import { usePresence, FAST_DURATION, EASE_OUT } from '../utils/waapi'
 import { useStore } from '../store'
 import EntityIcon from './EntityIcon'
 
@@ -88,68 +88,72 @@ export default function ShortcutsPopup({ isOpen, onSpawnEntity, onOpenSummonModa
   const entityRegistry = useStore(s => s.entityRegistry)
   const order = entityRegistry._order || []
 
+  // Use presence hook for enter/exit animations
+  const { shouldRender, ref } = usePresence(isOpen, {
+    enter: [
+      { opacity: 0 },
+      { opacity: 1 }
+    ],
+    exit: [
+      { opacity: 1 },
+      { opacity: 0 }
+    ],
+    enterDuration: FAST_DURATION,
+    exitDuration: FAST_DURATION
+  })
+
+  if (!shouldRender) return null
+
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.1 }}
-        >
-          {/* Subtle backdrop */}
-          <div className="absolute inset-0 bg-black/20" />
+    <div
+      ref={ref}
+      className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+      style={{ opacity: 0 }} // Initial state before animation
+    >
+      {/* Subtle backdrop */}
+      <div className="absolute inset-0 bg-black/20" />
 
-          {/* Popup */}
-          <motion.div
-            className="relative liquid-glass-modal p-6 max-w-2xl"
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.95, opacity: 0 }}
-            transition={{ duration: 0.1 }}
-          >
-            <h2 className="text-lg font-semibold text-text-primary mb-4 text-center">
-              Keyboard Shortcuts
-            </h2>
+      {/* Popup */}
+      <div className="relative liquid-glass-modal p-6 max-w-2xl">
+        <h2 className="text-lg font-semibold text-text-primary mb-4 text-center">
+          Keyboard Shortcuts
+        </h2>
 
-            <div className="grid grid-cols-3 gap-6">
-              {shortcuts.map((section, i) => (
-                <Section key={i} title={section.title} items={section.items} />
-              ))}
+        <div className="grid grid-cols-3 gap-6">
+          {shortcuts.map((section, i) => (
+            <Section key={i} title={section.title} items={section.items} />
+          ))}
+        </div>
+
+        {/* Entity spawn section */}
+        {order.length > 0 && (
+          <>
+            <div className="border-t border-white/10 my-4" />
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3 text-center">
+              Quick Spawn
+            </h3>
+            <div className="flex flex-wrap justify-center gap-1">
+              {order.map(type => {
+                const entity = entityRegistry[type]
+                if (!entity) return null
+                const isGod = type === 'god'
+                return (
+                  <EntityButton
+                    key={type}
+                    type={type}
+                    label={entity.label}
+                    onClick={(e) => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type, {}, e)}
+                  />
+                )
+              })}
             </div>
+          </>
+        )}
 
-            {/* Entity spawn section */}
-            {order.length > 0 && (
-              <>
-                <div className="border-t border-white/10 my-4" />
-                <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3 text-center">
-                  Quick Spawn
-                </h3>
-                <div className="flex flex-wrap justify-center gap-1">
-                  {order.map(type => {
-                    const entity = entityRegistry[type]
-                    if (!entity) return null
-                    const isGod = type === 'god'
-                    return (
-                      <EntityButton
-                        key={type}
-                        type={type}
-                        label={entity.label}
-                        onClick={(e) => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type, {}, e)}
-                      />
-                    )
-                  })}
-                </div>
-              </>
-            )}
-
-            <p className="text-xs text-text-secondary text-center mt-4 opacity-60">
-              Release {modifierKey} to close
-            </p>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        <p className="text-xs text-text-secondary text-center mt-4 opacity-60">
+          Release {modifierKey} to close
+        </p>
+      </div>
+    </div>
   )
 }

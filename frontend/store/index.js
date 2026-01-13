@@ -49,6 +49,8 @@ export const useStore = create(
       gitBranches: {},  // { [projectPath]: branchName } - fetched per entity
       servicesLoading: { speak: false, hear: false, chronicle: false, mcp: false },
       serviceTargets: {},  // Target state when toggling
+      codeActiveFiles: {},  // { [entityId]: filePath } - active file per code entity
+      codeOpenFiles: {},  // { [entityId]: [filePath, ...] } - open file paths per code entity
 
       // ============================================
       // SERVER SYNC
@@ -143,6 +145,14 @@ export const useStore = create(
 
       setGitBranch: (projectPath, branch) => set((state) => {
         state.gitBranches[projectPath] = branch
+      }),
+
+      setCodeActiveFile: (entityId, filePath) => set((state) => {
+        state.codeActiveFiles[entityId] = filePath
+      }),
+
+      setCodeOpenFiles: (entityId, filePaths) => set((state) => {
+        state.codeOpenFiles[entityId] = filePaths
       }),
 
       // ============================================

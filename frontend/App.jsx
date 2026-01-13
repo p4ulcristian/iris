@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { animate, SPRING_EASING, SPRING_DURATION } from './utils/waapi'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
 import Sidebar from './components/Sidebar'
@@ -26,6 +26,129 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
+
+// Animated tab slider using WAAPI (horizontal)
+function TabSlider({ tabs, activeTabId, children }) {
+  const ref = useRef(null)
+  const animRef = useRef(null)
+  const prevIndexRef = useRef(-1)
+
+  useLayoutEffect(() => {
+    if (!ref.current || tabs.length === 0) return
+
+    const tabIndex = tabs.findIndex(t => t.id === activeTabId)
+    if (tabIndex === -1) return
+
+    const toX = -tabIndex * 100
+
+    // First render - set position without animation
+    if (prevIndexRef.current === -1) {
+      ref.current.style.transform = `translateX(${toX}vw)`
+      prevIndexRef.current = tabIndex
+      return
+    }
+
+    // No change
+    if (prevIndexRef.current === tabIndex) return
+
+    // Cancel any running animation
+    if (animRef.current) {
+      try { animRef.current.cancel() } catch (e) {}
+    }
+
+    const fromX = -prevIndexRef.current * 100
+
+    animRef.current = ref.current.animate(
+      [
+        { transform: `translateX(${fromX}vw)` },
+        { transform: `translateX(${toX}vw)` }
+      ],
+      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
+    )
+
+    prevIndexRef.current = tabIndex
+  }, [tabs, activeTabId])
+
+  return (
+    <div
+      ref={ref}
+      className="flex h-full"
+      style={{ width: `${tabs.length * 100}vw` }}
+    >
+      {children}
+    </div>
+  )
+}
+
+// Animated stage slider using WAAPI (vertical)
+function StageSlider({ stages, activeStageId, children }) {
+  const containerRef = useRef(null)
+  const sliderRef = useRef(null)
+  const animRef = useRef(null)
+  const prevIndexRef = useRef(-1)
+  const [containerHeight, setContainerHeight] = useState(0)
+
+  // Get container height
+  useLayoutEffect(() => {
+    if (!containerRef.current) return
+    const updateHeight = () => {
+      setContainerHeight(containerRef.current.offsetHeight)
+    }
+    updateHeight()
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  // Animate on stage change
+  useLayoutEffect(() => {
+    if (!sliderRef.current || stages.length === 0 || containerHeight === 0) return
+
+    const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
+    const idx = stageIndex === -1 ? 0 : stageIndex
+
+    const toY = -idx * containerHeight
+
+    // First render - set position without animation
+    if (prevIndexRef.current === -1) {
+      sliderRef.current.style.transform = `translateY(${toY}px)`
+      prevIndexRef.current = idx
+      return
+    }
+
+    // No change
+    if (prevIndexRef.current === idx) return
+
+    // Cancel any running animation
+    if (animRef.current) {
+      try { animRef.current.cancel() } catch (e) {}
+    }
+
+    const fromY = -prevIndexRef.current * containerHeight
+
+    animRef.current = sliderRef.current.animate(
+      [
+        { transform: `translateY(${fromY}px)` },
+        { transform: `translateY(${toY}px)` }
+      ],
+      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' }
+    )
+
+    prevIndexRef.current = idx
+  }, [stages, activeStageId, containerHeight])
+
+  return (
+    <div ref={containerRef} className="h-full w-full overflow-hidden">
+      <div
+        ref={sliderRef}
+        className="flex flex-col w-full"
+        style={{ height: containerHeight * stages.length }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function App() {
   const { connected, send, lastMessage } = useWebSocket(WS_URL)
@@ -204,7 +327,7 @@ export default function App() {
   }, [])
 
   // Get stages for any tab with their entities (grouped by stage)
-  // Sorted by first entity's order so Ctrl+Up/Down matches visual order
+  // Uses server's stage order (no sorting - matches visual display)
   const getStagesForTab = useCallback((tabId) => {
     const tab = tabs.find(t => t.id === tabId)
     const stages = tab?.stages || []
@@ -217,10 +340,6 @@ export default function App() {
           .filter(Boolean)
           .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
       }
-    }).sort((a, b) => {
-      const aOrder = a.entities[0]?.order ?? Infinity
-      const bOrder = b.entities[0]?.order ?? Infinity
-      return aOrder - bOrder
     })
   }, [tabs, entities, collectEntityIds])
 
@@ -264,6 +383,14 @@ export default function App() {
   const focusedEntityObj = focusedEntity ? entities[focusedEntity] : null
   const focusedEntityType = focusedEntityObj?.type || 'god'
 
+  // Smart split: choose direction based on focused tile aspect ratio
+  const getSmartDirection = useCallback(() => {
+    if (!focusedTile) return 'horizontal'
+    const el = document.querySelector(`[data-tile-id="${focusedTile}"]`)
+    if (!el) return 'horizontal'
+    const { width, height } = el.getBoundingClientRect()
+    return width >= height ? 'horizontal' : 'vertical'
+  }, [focusedTile])
 
   // Summon a new god (with specific name)
   // Server handles all state - no optimistic UI needed
@@ -271,7 +398,7 @@ export default function App() {
   const handleSummonGod = useCallback((name, task = '', personality = 'god', project = null, permissionMode, event = null) => {
     // Detect modifier keys if event provided
     const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
-    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
+    const direction = event?.shiftKey ? 'vertical' : getSmartDirection()
 
     send({
       event: 'god:spawn',
@@ -283,25 +410,25 @@ export default function App() {
       mode,
       direction
     })
-  }, [send])
+  }, [send, getSmartDirection])
 
   // Spawn a random god (server picks unused first, then numbers)
   const handleSpawnRandomGod = useCallback((event = null) => {
     const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
-    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
+    const direction = event?.shiftKey ? 'vertical' : getSmartDirection()
     send({ event: 'god:spawn', task: '', mode, direction })
-  }, [send])
+  }, [send, getSmartDirection])
 
   // Spawn a raw terminal (no Claude)
   const handleSpawnTerminal = useCallback((event = null) => {
     const mode = event?.ctrlKey || event?.metaKey ? 'stage' : 'split'
-    const direction = event?.shiftKey ? 'vertical' : 'horizontal'
+    const direction = event?.shiftKey ? 'vertical' : getSmartDirection()
     send({
       event: 'terminal:spawn',
       mode,
       direction
     })
-  }, [send])
+  }, [send, getSmartDirection])
 
   // Kill an entity (gods go to cemetery, can be resurrected)
   const handleKillEntity = useCallback((entityId) => {
@@ -326,10 +453,12 @@ export default function App() {
   const handleSpawnEntity = useCallback((type, data = {}, event = null) => {
     // Detect modifier keys if event provided
     const mode = event?.ctrlKey || event?.metaKey ? 'stage' : (data.mode || 'split')
-    const direction = event?.shiftKey ? 'vertical' : (data.direction || 'horizontal')
+    const direction = event?.shiftKey ? 'vertical' : (data.direction || getSmartDirection())
 
-    send({ event: 'entity:spawn', type, ...data, mode, direction })
-  }, [send])
+    // god and terminal have their own spawn events
+    const eventName = type === 'terminal' ? 'terminal:spawn' : 'entity:spawn'
+    send({ event: eventName, type, ...data, mode, direction })
+  }, [send, getSmartDirection])
 
   // Kill current tab (with confirmation if not empty)
   const handleKillTab = useCallback((tabId = activeTabId) => {
@@ -673,255 +802,118 @@ export default function App() {
         <div className="blob blob-6" />
       </div>
 
-      {/* Main layout: sidebar + content */}
-      <div ref={mainContainerRef} className="flex flex-1 min-h-0 pr-3">
-        {/* Unified Sidebar */}
-        <Sidebar
-          connected={connected}
-          send={send}
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
-          onTabClose={handleKillTab}
-          onTabNew={() => send({ event: 'tab:add' })}
-          allStages={allStages}
-          globalActiveIdx={globalActiveIdx}
-          activeEntities={activeEntities}
-          focusedEntity={focusedEntity}
-          effectiveFocusedEntity={effectiveFocusedEntity}
-          godColors={godColors}
-          loadStage={loadStage}
-          initialLoadDone={initialLoadDone}
-          onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
-          onEntityClose={handleKillEntity}
-          onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
-          onMoveToTab={(entityId, tabId) => {
-            send({ event: 'entity:move', entityId, tabId })
-            send({ event: 'tab:select', tabId })
-          }}
-          onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
-          onReorderInStage={(stageId, entityId, targetIndex) => {
-            send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
-          }}
-          onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
-            send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
-          }}
-          onCreateStageAtPosition={(entityId, sourceStageId, position) => {
-            send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
-          }}
-          onSpawnEntity={handleSpawnEntity}
-          onOpenSummonModal={() => setSummonModalOpen(true)}
-          width={sidebarWidth}
-          onWidthChange={handleSidebarResize}
-        />
+      {/* Main layout: horizontal sliding tabs */}
+      <div ref={mainContainerRef} className="flex-1 min-h-0 overflow-hidden">
+        <TabSlider tabs={tabs} activeTabId={activeTabId}>
+          {tabs.map((tab) => {
+            const isActiveTab = tab.id === activeTabId
+            const tabStages = allStages.filter(item => item.tabId === tab.id)
+            const activeStage = tabStages.find(s => s.stageId === tab.activeStageId) || tabStages[0]
 
-        {/* Main content area */}
-        <main className="flex-1 min-h-0 overflow-visible relative">
-          <RootDropZone tabId={activeTabId} hasLayout={!!getActiveLayout()}>
-              {(() => {
-                // Use memoized allStages and globalActiveIdx for continuous scroll
-                if (allStages.length > 0) {
-                  return (
-                    <div className="relative h-full overflow-hidden">
-                      {/* Render ALL stages from ALL tabs as one continuous stack */}
-                      {allStages.map((item, idx) => {
-                        const offset = idx - globalActiveIdx
-                        const isActive = offset === 0
+            return (
+              <div
+                key={tab.id}
+                className="flex h-full pr-3"
+                style={{ width: '100vw', pointerEvents: isActiveTab ? 'auto' : 'none' }}
+              >
+                {/* Sidebar for this tab */}
+                <Sidebar
+                  connected={connected}
+                  send={send}
+                  tabs={tabs}
+                  activeTabId={activeTabId}
+                  currentTab={tab}
+                  onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
+                  onTabClose={handleKillTab}
+                  onTabNew={() => send({ event: 'tab:add' })}
+                  tabStages={tabStages}
+                  focusedEntity={focusedEntity}
+                  loadStage={loadStage}
+                  initialLoadDone={initialLoadDone}
+                  onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
+                  onEntityClose={handleKillEntity}
+                  onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
+                  onMoveToTab={(entityId, tabId) => {
+                    send({ event: 'entity:move', entityId, tabId })
+                    send({ event: 'tab:select', tabId })
+                  }}
+                  onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
+                  onReorderInStage={(stageId, entityId, targetIndex) => {
+                    send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
+                  }}
+                  onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
+                    send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
+                  }}
+                  onCreateStageAtPosition={(entityId, sourceStageId, position) => {
+                    send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
+                  }}
+                  onSpawnEntity={handleSpawnEntity}
+                  onOpenSummonModal={() => setSummonModalOpen(true)}
+                  width={sidebarWidth}
+                  onWidthChange={handleSidebarResize}
+                />
 
+                {/* Stage for this tab */}
+                <main className="flex-1 min-h-0 overflow-hidden relative">
+                  <RootDropZone tabId={tab.id} hasLayout={!!tab.stages?.length}>
+                    {(() => {
+                      // Filter same as sidebar to ensure matching indices
+                      const nonEmptyStages = tabStages.filter(item => !item.isEmpty)
+
+                      if (nonEmptyStages.length === 0) {
+                        // Welcome screen when no stages
                         return (
-                          <motion.div
-                            key={item.stageId || `empty-${item.tabId}`}
-                            className={`absolute inset-0 stage py-3 ${offset !== 0 ? 'stage-offscreen' : ''}`}
-                            initial={false}
-                            animate={{ x: `${offset * 100}%` }}
-                            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                            style={{ pointerEvents: isActive ? 'auto' : 'none' }}
-                          >
-                            {item.isEmpty ? (
-                              // Empty tab welcome screen
-                              <motion.div
-                                className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4"
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: isActive ? 1 : 0, y: isActive ? 0 : 20 }}
-                                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                              >
-                                <div className="text-center">
-                                  <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
-                                  <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
-                                </div>
-                                <div className="flex flex-col gap-3 text-sm">
-                                  <p className="flex items-center gap-3">
-                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
-                                    <span>Summon a god</span>
-                                  </p>
-                                  <p className="flex items-center gap-3">
-                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
-                                    <span>Open terminal</span>
-                                  </p>
-                                  <p className="flex items-center gap-3">
-                                    <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
-                                    <span>New realm</span>
-                                  </p>
-                                </div>
-                                <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
-                              </motion.div>
-                            ) : (
-                              <Surface
-                                node={item.stage.layout}
-                                tabId={item.tabId}
-                                entities={entities}
-                                focusedTile={focusedTile}
-                                focusedEntity={focusedEntity}
-                              />
-                            )}
-                          </motion.div>
+                          <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
+                            <div className="text-center">
+                              <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
+                              <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
+                            </div>
+                            <div className="flex flex-col gap-3 text-sm">
+                              <p className="flex items-center gap-3">
+                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+                                <span>Summon a god</span>
+                              </p>
+                              <p className="flex items-center gap-3">
+                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
+                                <span>Open terminal</span>
+                              </p>
+                              <p className="flex items-center gap-3">
+                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
+                                <span>New realm</span>
+                              </p>
+                            </div>
+                            <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
+                          </div>
                         )
-                      })}
-                    </div>
-                  )
-                }
-
-                // Legacy mode: no layout tree, render flat entity list
-                if (activeEntities.length === 0) {
-                  return (
-                    <motion.div
-                      className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{
-                        opacity: loadStage >= 3 ? 1 : 0,
-                        y: loadStage >= 3 ? 0 : 20
-                      }}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 300,
-                        damping: 30
-                      }}
-                    >
-                      <div className="text-center">
-                        <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
-                        <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
-                      </div>
-
-                      <div className="flex flex-col gap-3 text-sm">
-                        <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
-                          <span>Summon a god</span>
-                        </p>
-                        <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
-                          <span>Open terminal</span>
-                        </p>
-                        <p className="flex items-center gap-3">
-                          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
-                          <span>New realm</span>
-                        </p>
-                      </div>
-
-                      <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
-                    </motion.div>
-                  )
-                }
-
-                // Legacy entity stack rendering
-                return (
-                  <AnimatePresence mode="popLayout">
-                    {activeEntities.map(entity => {
-                      const position = getStackPosition(entity.id, effectiveFocusedEntity, activeEntities)
-                      const style = getStackStyle(position)
+                      }
 
                       return (
-                        <motion.div
-                          key={entity.id}
-                          initial={{ opacity: 0, y: '-100%', scale: 0.9, rotateX: 15 }}
-                          animate={{
-                            y: style.y,
-                            rotateX: style.rotateX,
-                            scale: style.scale,
-                            opacity: style.opacity,
-                            zIndex: style.zIndex,
-                          }}
-                          exit={{ opacity: 0, y: '100%', scale: 0.9, rotateX: -15 }}
-                          transition={{
-                            type: 'spring',
-                            stiffness: 250,
-                            damping: 25,
-                            opacity: { type: 'tween', duration: 0.25, ease: 'easeOut' },
-                          }}
-                          className="absolute inset-0"
-                          style={{
-                            pointerEvents: style.pointerEvents,
-                            transformOrigin: 'center center',
-                          }}
-                          onAnimationComplete={() => {
-                            window.dispatchEvent(new CustomEvent('iris:animation-complete'))
-                          }}
-                        >
-                          <TileCard
-                            entity={entity}
-                            isFocused={position === 0}
-                            onClick={() => handleSetFocus(entity.id)}
-                          >
-                            {/* Render content based on entity type */}
-                            {(entity.type === 'god' || entity.type === 'terminal') && (
-                              <TerminalContent
-                                entity={entity}
-                                isFocused={position === 0}
-                              />
-                            )}
-                              {entity.type === 'browser' && (
-                                <BrowserView entityId={entity.id} />
-                              )}
-                              {entity.type === 'history' && (
-                                <HistoryView send={send} />
-                              )}
-                              {entity.type === 'git' && (
-                                <GitView send={send} />
-                              )}
-                              {entity.type === 'linear' && (
-                                <LinearView send={send} connected={connected} />
-                              )}
-                              {entity.type === 'settings' && (
-                                <SettingsView send={send} />
-                              )}
-                              {entity.type === 'cemetery' && (
-                                <CemeteryView send={send} />
-                              )}
-                              {entity.type === 'calendar' && (
-                                <CalendarView send={send} />
-                              )}
-                              {entity.type === 'code' && (
-                                <CodeView entityId={entity.id} />
-                              )}
-                              {entity.type === 'personalities' && (
-                                <PersonalitiesView
-                                  onOpenEditor={(personality) => handleSpawnEntity('personality-editor', {
-                                    name: personality.name || 'New Personality',
-                                    data: { personality }
-                                  })}
-                                  onOpenTraitEditor={(trait) => handleSpawnEntity('trait-editor', {
-                                    name: trait.name || 'New Trait',
-                                    data: { trait }
-                                  })}
+                        <div className="absolute inset-0">
+                          <StageSlider stages={nonEmptyStages} activeStageId={tab.activeStageId}>
+                            {nonEmptyStages.map((stageItem) => (
+                              <div
+                                key={stageItem.stageId}
+                                className="w-full flex-1 py-3"
+                              >
+                                <Surface
+                                  node={stageItem.stage.layout}
+                                  tabId={tab.id}
+                                  entities={entities}
+                                  focusedTile={focusedTile}
+                                  focusedEntity={focusedEntity}
                                 />
-                              )}
-                              {entity.type === 'personality-editor' && (
-                                <PersonalityEditor entity={entity} />
-                              )}
-                              {entity.type === 'trait-editor' && (
-                                <TraitEditor entity={entity} />
-                              )}
-                              {entity.type === 'markdown' && (
-                                <MarkdownView entityId={entity.id} />
-                              )}
-                          </TileCard>
-                        </motion.div>
+                              </div>
+                            ))}
+                          </StageSlider>
+                        </div>
                       )
-                    })}
-                  </AnimatePresence>
-                )
-              })()}
-          </RootDropZone>
-        </main>
+                    })()}
+                  </RootDropZone>
+                </main>
+              </div>
+            )
+          })}
+        </TabSlider>
       </div>
 
       {/* Hidden gods container - keeps terminals alive when on other tabs */}

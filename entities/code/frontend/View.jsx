@@ -133,13 +133,19 @@ function TreeBranch({ depth, isLast, parentIsLast = [] }) {
 }
 
 // File tree node component
-function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu, loadedStats, loadingStats }) {
+function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileClick, expandedFolders, toggleFolder, loadingFolders, onContextMenu, loadedStats, loadingStats, entityId }) {
+  // Read from store directly - avoids stale prop issues in recursive tree
+  const activeFilePath = useStore(s => s.codeActiveFiles[entityId])
+  const openFilePaths = useStore(s => s.codeOpenFiles[entityId]) || []
+
   if (!node) return null
   const isFolder = node.type === 'directory'
   const isExpanded = expandedFolders.has(node.path)
   const isLoading = loadingFolders?.has(node.path)
   const isStatsLoading = loadingStats?.has(node.path)
   const stats = loadedStats?.[node.path]
+  const isOpen = !isFolder && openFilePaths?.includes(node.path)
+  const isActive = !isFolder && activeFilePath === node.path
 
   const handleContextMenu = (e) => {
     e.preventDefault()
@@ -161,7 +167,13 @@ function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileCl
           ${isFolder ? 'text-white/70' : 'text-white/85'}
           ${isExpanded ? 'bg-white/5' : ''}
         `}
-        style={{ paddingLeft: depth === 0 ? '8px' : '4px' }}
+        style={{
+          paddingLeft: depth === 0 ? '8px' : '4px',
+          backgroundColor: isActive ? 'rgba(99, 102, 241, 0.3)' : isOpen ? 'rgba(255, 255, 255, 0.15)' : undefined,
+          borderLeft: isActive ? '2px solid rgb(99, 102, 241)' : isOpen ? '2px solid rgba(255, 255, 255, 0.5)' : undefined,
+          fontWeight: isActive ? 600 : undefined,
+          color: isOpen && !isActive ? 'rgba(255, 255, 255, 0.95)' : undefined
+        }}
       >
         <TreeBranch depth={depth} isLast={isLast} parentIsLast={childParentIsLast} />
         {isFolder && (
@@ -201,6 +213,7 @@ function TreeNode({ node, depth = 0, isLast = false, parentIsLast = [], onFileCl
               onContextMenu={onContextMenu}
               loadedStats={loadedStats}
               loadingStats={loadingStats}
+              entityId={entityId}
             />
           ))}
         </div>
@@ -248,7 +261,6 @@ export default function CodeView({ entity }) {
   const [rootPath, setRootPath] = useState(null)
   const [fileTree, setFileTree] = useState(null)
   const [openFiles, setOpenFiles] = useState([]) // [{path, name, content}]
-  const [activeFilePath, setActiveFilePath] = useState(null)
   const [expandedFolders, setExpandedFolders] = useState(new Set())
   const [highlights, setHighlights] = useState({}) // {filePath: [{line, endLine, color, note}]}
   const [loading, setLoading] = useState(false)
@@ -274,10 +286,16 @@ export default function CodeView({ entity }) {
   const monacoRef = useRef(null)
   const decorationsRef = useRef([])
   const contextMenuRef = useRef(null)
+  const pendingExpandedFolders = useRef(null) // Used to restore expanded folders after tree loads
+  const openFilesRef = useRef(openFiles) // Always-current ref for callbacks
+  openFilesRef.current = openFiles
 
   const { send, request } = useWebSocket(WS_URL)
   const codeHighlights = useStore(s => s.codeHighlights)
   const storeInitialLoadDone = useStore(s => s.initialLoadDone)
+  const setCodeActiveFile = useStore(s => s.setCodeActiveFile)
+  const setCodeOpenFiles = useStore(s => s.setCodeOpenFiles)
+  const activeFilePath = useStore(s => s.codeActiveFiles[entityId])
 
   // Apply highlights from store
   useEffect(() => {
@@ -285,6 +303,13 @@ export default function CodeView({ entity }) {
       setHighlights(codeHighlights)
     }
   }, [codeHighlights])
+
+  // Sync open file paths to store for TreeNode to read
+  useEffect(() => {
+    if (entityId) {
+      setCodeOpenFiles(entityId, openFiles.map(f => f.path))
+    }
+  }, [entityId, openFiles, setCodeOpenFiles])
 
   // Sidebar resize handling
   useEffect(() => {
@@ -342,7 +367,19 @@ export default function CodeView({ entity }) {
             // Show children directly, not the root folder
             setFileTree(msg.tree.children || [])
             setRootPath(msg.tree.path)
-            setExpandedFolders(new Set())
+
+            // Check if we have pending expanded folders to restore (from refresh or restoration)
+            if (pendingExpandedFolders.current) {
+              const foldersToExpand = pendingExpandedFolders.current
+              pendingExpandedFolders.current = null
+              setExpandedFolders(new Set(foldersToExpand))
+              // Load children for expanded folders
+              foldersToExpand.forEach(folderPath => {
+                send({ event: 'file:children', path: folderPath, showHidden })
+              })
+            } else {
+              setExpandedFolders(new Set())
+            }
           } else {
             console.error('Failed to load directory:', msg.error)
           }
@@ -367,7 +404,7 @@ export default function CodeView({ entity }) {
 
     ws.addEventListener('message', handleMessage)
     return () => ws.removeEventListener('message', handleMessage)
-  }, [])
+  }, [send, showHidden])
 
   // Load directory tree from server (using send/listen pattern)
   const loadDirectory = useCallback((dirPath, hidden = showHidden) => {
@@ -377,43 +414,47 @@ export default function CodeView({ entity }) {
     send({ event: 'file:list', path: dirPath, showHidden: hidden })
   }, [showHidden, send])
 
+  // Refresh directory while preserving expanded folders
+  const refreshDirectory = useCallback(() => {
+    if (!send || !rootPath) return
+    console.log('[CodeView] refreshDirectory - preserving', expandedFolders.size, 'expanded folders')
+    // Store current expanded folders to restore after tree loads
+    pendingExpandedFolders.current = Array.from(expandedFolders)
+    setLoading(true)
+    send({ event: 'file:list', path: rootPath, showHidden })
+  }, [send, rootPath, expandedFolders, showHidden])
+
   // Load file content
   const loadFile = useCallback(async (node, retries = 3) => {
-    console.log('[CodeView] loadFile called:', node.path)
+    // Set active immediately for instant UI feedback
+    setCodeActiveFile(entityId, node.path)
 
-    // Check if already open
-    const existing = openFiles.find(f => f.path === node.path)
+    // Check if already open (use ref for current value, not stale closure)
+    const existing = openFilesRef.current.find(f => f.path === node.path)
     if (existing) {
-      console.log('[CodeView] File already open, switching to it')
-      setActiveFilePath(node.path)
       return
     }
 
     try {
-      console.log('[CodeView] Requesting file:read')
       const response = await request('file:read', { path: node.path })
-      console.log('[CodeView] file:read response:', response?.ok, response?.error)
       if (response.ok) {
         setOpenFiles(prev => [...prev, {
           path: node.path,
           name: node.name,
           content: response.content
         }])
-        setActiveFilePath(node.path)
       } else {
         console.error('[CodeView] Failed to load file:', response.error)
       }
     } catch (err) {
-      console.error('[CodeView] loadFile error:', err)
       // Retry on WebSocket errors
       if (retries > 0 && err.message?.includes('WebSocket')) {
-        console.log(`[CodeView] WebSocket not ready, retrying in 200ms... (${retries} left)`)
         setTimeout(() => loadFile(node, retries - 1), 200)
         return
       }
       console.error('[CodeView] Failed to load file:', err)
     }
-  }, [openFiles, request])
+  }, [request, entityId, setCodeActiveFile])
 
   // Load pending file from entity (for newly created code entities)
   useEffect(() => {
@@ -432,7 +473,7 @@ export default function CodeView({ entity }) {
         const response = await request('file:read', { path })
         if (response.ok) {
           setOpenFiles([{ path, name, content: response.content }])
-          setActiveFilePath(path)
+          setCodeActiveFile(entityId, path)
           // Jump to line if specified
           if (entity.pendingLine) {
             setTimeout(() => {
@@ -561,9 +602,11 @@ export default function CodeView({ entity }) {
   const closeFile = useCallback((path) => {
     setOpenFiles(prev => prev.filter(f => f.path !== path))
     if (activeFilePath === path) {
-      setActiveFilePath(openFiles.find(f => f.path !== path)?.path || null)
+      // Use ref for current openFiles to avoid stale closure
+      const remaining = openFilesRef.current.filter(f => f.path !== path)
+      setCodeActiveFile(entityId, remaining[0]?.path || null)
     }
-  }, [activeFilePath, openFiles])
+  }, [activeFilePath, entityId, setCodeActiveFile])
 
   // Handle context menu open
   const handleContextMenu = useCallback((e, node) => {
@@ -663,6 +706,11 @@ export default function CodeView({ entity }) {
       // Restore rootPath if available
       if (entity.rootPath) {
         console.log('[CodeView] Restoring rootPath:', entity.rootPath)
+        // Set pending expanded folders before loading tree - they'll be restored when tree loads
+        if (entity.expandedFolders?.length) {
+          console.log('[CodeView] Restoring expandedFolders:', entity.expandedFolders.length)
+          pendingExpandedFolders.current = entity.expandedFolders
+        }
         setRootPath(entity.rootPath)
         send({ event: 'file:list', path: entity.rootPath, showHidden })
       }
@@ -682,7 +730,7 @@ export default function CodeView({ entity }) {
         }
         if (loaded.length > 0) {
           setOpenFiles(loaded)
-          setActiveFilePath(entity.activeFilePath || loaded[0].path)
+          setCodeActiveFile(entityId, entity.activeFilePath || loaded[0].path)
         }
       }
 
@@ -690,9 +738,9 @@ export default function CodeView({ entity }) {
     }
 
     restoreState()
-  }, [entity, initialLoadDone, storeInitialLoadDone, send, request, showHidden])
+  }, [entity, initialLoadDone, storeInitialLoadDone, send, request, showHidden, entityId, setCodeActiveFile])
 
-  // Sync open files to server when they change
+  // Sync open files and expanded folders to server when they change
   useEffect(() => {
     console.log('[CodeView sync check]', { initialLoadDone, hasSend: !!send, rootPath })
     if (!initialLoadDone || !send) return
@@ -700,15 +748,16 @@ export default function CodeView({ entity }) {
     // Only send path and name, not content (too large)
     const filesToSync = openFiles.map(f => ({ path: f.path, name: f.name }))
 
-    console.log('[CodeView sync SENDING] rootPath:', rootPath)
+    console.log('[CodeView sync SENDING] rootPath:', rootPath, 'expandedFolders:', expandedFolders.size)
     send({
       event: 'code:files:sync',
       entityId,
       openFiles: filesToSync,
       activeFilePath,
-      rootPath
+      rootPath,
+      expandedFolders: Array.from(expandedFolders)
     })
-  }, [openFiles, activeFilePath, rootPath, entityId, send, initialLoadDone])
+  }, [openFiles, activeFilePath, rootPath, expandedFolders, entityId, send, initialLoadDone])
 
   // Debug: Log when rootPath changes
   useEffect(() => {
@@ -866,7 +915,7 @@ export default function CodeView({ entity }) {
                 />
                 <IconButton
                   icon={faRefresh}
-                  onClick={() => rootPath && loadDirectory(rootPath)}
+                  onClick={refreshDirectory}
                   title="Refresh"
                 />
               </>
@@ -940,6 +989,7 @@ export default function CodeView({ entity }) {
                 onContextMenu={handleContextMenu}
                 loadedStats={loadedStats}
                 loadingStats={loadingStats}
+                entityId={entityId}
               />
             ))}
           </div>
@@ -961,7 +1011,7 @@ export default function CodeView({ entity }) {
             />
             <IconButton
               icon={faRefresh}
-              onClick={() => rootPath && loadDirectory(rootPath)}
+              onClick={refreshDirectory}
               title="Refresh"
             />
           </div>
@@ -978,7 +1028,7 @@ export default function CodeView({ entity }) {
                 key={file.path}
                 file={file}
                 isActive={file.path === activeFilePath}
-                onClick={() => setActiveFilePath(file.path)}
+                onClick={() => setCodeActiveFile(entityId, file.path)}
                 onClose={closeFile}
               />
             ))}

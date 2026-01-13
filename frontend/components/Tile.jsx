@@ -237,6 +237,7 @@ export default function Tile({
   return (
     <div
       ref={ref}
+      data-tile-id={tileId}
       className={tileClasses}
       onMouseEnter={handleTileClick}
     >

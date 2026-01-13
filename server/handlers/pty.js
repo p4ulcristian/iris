@@ -5,23 +5,12 @@
 import { execSync } from 'child_process'
 import fs from 'fs'
 import { SERVICES, ZELLIJ_BIN, ZELLIJ_CONFIG_DIR } from '../config.js'
-import {
-  appState, saveState, broadcastState,
-  getNextOrder
-} from '../state.js'
+import { appState, saveState, broadcastState, getNextOrder } from '../state.js'
 import { startService, stopService, startChronicle, stopChronicle } from '../services.js'
 import { createTerminalSession } from '../gods.js'
 import { getSessionName } from '../gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback } from '../pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback, handlePtyInput } from '../pty.js'
 import { splitIntoTile } from '../../entities/_shared/spawn.js'
-
-// Extract readable command title from shell command
-function getCommandTitle(command) {
-  const cleaned = command.trim()
-  const parts = cleaned.split(/\s+/).slice(0, 3)
-  const title = parts.join(' ')
-  return title.length > 40 ? title.slice(0, 37) + '...' : title
-}
 
 export const handlers = {
   'service:start': (ws, data, projectRoot) => {
@@ -150,13 +139,6 @@ export const handlers = {
 
         const success = sendToZellij(actualCommand)
 
-        // Update terminal title with the command
-        if (success && appState.entities[actualTerminalId]) {
-          appState.entities[actualTerminalId].title = getCommandTitle(command)
-          saveState()
-          broadcastState()
-        }
-
         if (!success) {
           ws.send(JSON.stringify({
             event: 'mcp:run:response',
@@ -253,15 +235,23 @@ export const handlers = {
   },
 
   'pty:input': (ws, data) => {
-    const entityId = data.entityId || data.godName
+    const godName = data.entityId || data.godName
+    // Find entity - try direct lookup, then by name (handles displayName vs ID mismatch)
+    const entity = appState.entities[godName] ||
+      Object.values(appState.entities).find(e => e.name === godName)
+
     // Reset readyState when user types to an entity
-    if (appState.entities[entityId]?.readyState &&
-        appState.entities[entityId].readyState !== 'working') {
-      appState.entities[entityId].readyState = 'working'
+    if (entity?.readyState && entity.readyState !== 'working') {
+      entity.readyState = 'working'
       saveState()
       broadcastState()
     }
-    sendToPty(entityId, data.data)
+    // Capture commands for terminal entities (standalone terminals, not gods)
+    if (entity?.type === 'terminal') {
+      handlePtyInput(entity.id, data.data)
+    }
+    // Use original godName for PTY (it's what the PTY is registered under)
+    sendToPty(godName, data.data)
   },
 
   'pty:resize': (ws, data) => {

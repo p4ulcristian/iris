@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, memo } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState, memo, useLayoutEffect } from 'react'
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'
 import { useStore } from '../store'
 import EntityCard from './EntityCard'
 import DropIndicator from './DropIndicator'
+import { animate, SPRING_EASING, SPRING_DURATION } from '../utils/waapi'
 
 /**
  * EntityGroup - Renders a stage's entities
@@ -40,32 +40,57 @@ export default memo(function EntityGroup({
 }) {
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
+  const wrapperRef = useRef(null)
+  const animRef = useRef(null)
 
-  // Calculate stagger delay for the group container
-  const groupStaggerDelay = (!initialLoadDone || loadStage < 5) ? staggerOffset * 0.08 : 0
+  // Calculate stagger delay for the group container (in ms)
+  const groupStaggerDelay = (!initialLoadDone || loadStage < 5) ? staggerOffset * 80 : 0
 
   const isSoloStage = entities.length === 1
 
   // Skip entry animation after initial load (so reorder doesn't animate)
   const skipEntryAnimation = initialLoadDone && loadStage >= 5
+  const shouldShow = loadStage >= 4
+
+  // Enter animation
+  useLayoutEffect(() => {
+    if (skipEntryAnimation || !wrapperRef.current) return
+
+    // Cancel previous animation
+    if (animRef.current) {
+      try { animRef.current.cancel() } catch (e) {}
+    }
+
+    if (shouldShow) {
+      animRef.current = animate(wrapperRef.current,
+        [
+          { opacity: 0, transform: 'translateY(-20px)' },
+          { opacity: 1, transform: 'translateY(0)' }
+        ],
+        {
+          duration: SPRING_DURATION,
+          easing: SPRING_EASING,
+          delay: groupStaggerDelay,
+          fill: 'forwards'
+        }
+      )
+    }
+
+    return () => {
+      if (animRef.current) {
+        try { animRef.current.cancel() } catch (e) {}
+      }
+    }
+  }, [shouldShow, skipEntryAnimation])
 
   // Solo stage - single EntityCard with drop target
   if (isSoloStage) {
     return (
-      <motion.div
-        layout
-        initial={skipEntryAnimation ? false : { opacity: 0, y: -20 }}
-        animate={{
-          opacity: loadStage >= 4 ? 1 : 0,
-          y: loadStage >= 4 ? 0 : -20
-        }}
-        exit={{ opacity: 0, y: 20 }}
-        transition={{
-          layout: { type: 'tween', duration: 0.2, ease: 'easeOut' },
-          type: 'spring',
-          stiffness: 400,
-          damping: 25,
-          delay: skipEntryAnimation ? 0 : groupStaggerDelay
+      <div
+        ref={wrapperRef}
+        style={{
+          opacity: skipEntryAnimation ? 1 : 0,
+          transition: 'transform 0.2s ease-out' // CSS transition for layout reordering
         }}
       >
         <EntityCardDropTarget
@@ -87,29 +112,20 @@ export default memo(function EntityGroup({
           onJoinStage={onJoinStage}
           onCreateStageAtPosition={onCreateStageAtPosition}
         />
-      </motion.div>
+      </div>
     )
   }
 
   // Multi-entity stage - vertical list inside group container
   return (
-    <motion.div
-      layout
-      initial={skipEntryAnimation ? false : { opacity: 0, y: -20 }}
-      animate={{
-        opacity: loadStage >= 4 ? 1 : 0,
-        y: loadStage >= 4 ? 0 : -20
-      }}
-      exit={{ opacity: 0, y: 20 }}
-      transition={{
-        layout: { type: 'tween', duration: 0.2, ease: 'easeOut' },
-        type: 'spring',
-        stiffness: 400,
-        damping: 25,
-        delay: skipEntryAnimation ? 0 : groupStaggerDelay
+    <div
+      ref={wrapperRef}
+      style={{
+        opacity: skipEntryAnimation ? 1 : 0,
+        transition: 'transform 0.2s ease-out' // CSS transition for layout reordering
       }}
     >
-      <div className="flex flex-col gap-2 p-2 rounded-2xl border border-white/20 bg-white/5">
+      <div className="entity-group flex flex-col gap-2 p-2 rounded-2xl border border-white/20 bg-white/5">
         {entities.map((entity, idx) => (
           <EntityCardDropTarget
             key={entity.id}
@@ -135,7 +151,7 @@ export default memo(function EntityGroup({
           />
         ))}
       </div>
-    </motion.div>
+    </div>
   )
 })
 
@@ -226,11 +242,10 @@ const EntityCardDropTarget = memo(function EntityCardDropTarget({
   }, [stageId, stageIndex, entityIndex, entity.id, isSoloStage, onReorderInStage, onJoinStage, onCreateStageAtPosition])
 
   return (
-    <motion.div
+    <div
       ref={dropRef}
-      layout
-      transition={{ layout: { type: 'tween', duration: 0.2, ease: 'easeOut' } }}
       className="relative"
+      style={{ transition: 'transform 0.2s ease-out' }} // CSS transition for reordering
     >
       {/* Drop indicator - top */}
       <DropIndicator
@@ -263,6 +278,6 @@ const EntityCardDropTarget = memo(function EntityCardDropTarget({
         label="Insert below"
         visible={dropState.isDraggedOver && dropState.closestEdge === 'bottom'}
       />
-    </motion.div>
+    </div>
   )
 })

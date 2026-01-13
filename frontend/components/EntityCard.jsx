@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, memo } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useRef, memo, useLayoutEffect } from 'react'
 import { useStore } from '../store'
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
+import { faArrowUpRightFromSquare, faArrowRightFromBracket, faCheck, faTriangleExclamation, faQuestion, faXmark, faChevronDown, faChevronUp, faCodeBranch, faFolder } from '@fortawesome/free-solid-svg-icons'
 import EntityIcon from './EntityIcon'
 import { hexToRgbCss } from '../../entities/_shared/colors'
+import { animate, SPRING_EASING, SPRING_DURATION } from '../utils/waapi'
 
 function formatElapsed(ms) {
   if (!ms || ms < 0) return null
@@ -24,7 +24,7 @@ function formatElapsed(ms) {
 
 
 export default memo(function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false, stageId = null, entityIndex = 0 }) {
-  const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project } = entity
+  const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project, cwd } = entity
   const loadStage = useStore(s => s.loadStage)
   const initialLoadDone = useStore(s => s.initialLoadDone)
   const isAltHeld = useStore(s => s.isAltHeld)
@@ -38,6 +38,8 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
   const [isExpanded, setIsExpanded] = useState(false)
   const moveMenuRef = useRef(null)
   const cardRef = useRef(null)
+  const wrapperRef = useRef(null)
+  const animRef = useRef(null)
 
   const COLLAPSED_HEIGHT = 120
 
@@ -156,49 +158,70 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
   const statusPill = getStatusPill()
   const isSpawning = readyState === 'spawning'
 
-  // Calculate stagger delay: only apply on initial load before stage 5
-  const staggerDelay = (!initialLoadDone || loadStage < 5) ? staggerIndex * 0.08 : 0
+  // Calculate stagger delay: only apply on initial load before stage 5 (in ms)
+  const staggerDelay = (!initialLoadDone || loadStage < 5) ? staggerIndex * 80 : 0
   // Should be visible based on load stage (entities appear at stage 4)
   const shouldShow = loadStage >= 4
 
+  // Enter animation
+  useLayoutEffect(() => {
+    if (disableAnimation || !wrapperRef.current) return
+
+    // Cancel previous animation
+    if (animRef.current) {
+      try { animRef.current.cancel() } catch (e) {}
+    }
+
+    if (shouldShow) {
+      animRef.current = animate(wrapperRef.current,
+        [
+          { opacity: 0, transform: 'translateY(-40px) scale(0.9)', filter: 'blur(8px)' },
+          { opacity: isActive ? 1 : 0.6, transform: 'translateY(0) scale(1)', filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)' }
+        ],
+        {
+          duration: SPRING_DURATION,
+          easing: SPRING_EASING,
+          delay: staggerDelay,
+          fill: 'forwards'
+        }
+      )
+    }
+
+    return () => {
+      if (animRef.current) {
+        try { animRef.current.cancel() } catch (e) {}
+      }
+    }
+  }, [shouldShow, disableAnimation]) // Only run on mount/visibility change
+
+  // Active state animation (separate from enter)
+  useEffect(() => {
+    if (disableAnimation || !wrapperRef.current || !shouldShow) return
+
+    // Quick transition for active state changes
+    animate(wrapperRef.current,
+      { opacity: isActive ? 1 : 0.6, filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)' },
+      { duration: 200, easing: 'ease-out', fill: 'forwards' }
+    )
+  }, [isActive, disableAnimation, shouldShow])
+
   return (
-    <motion.div
-      className={`group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''} ${isSpawning ? 'spawning-pulse' : ''}`}
-      style={{ borderRadius: '12px 16px 16px 12px' }}
-      initial={disableAnimation ? false : { opacity: 0, y: -40, scale: 0.9, filter: 'blur(8px)' }}
-      animate={disableAnimation ? {
-        opacity: isActive ? 1 : 0.6,
-        filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)',
-      } : {
-        opacity: shouldShow ? (isActive ? 1 : 0.6) : 0,
-        y: shouldShow ? 0 : -40,
-        scale: shouldShow ? 1 : 0.9,
-        filter: shouldShow ? (isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)') : 'blur(8px)',
+    <div
+      ref={wrapperRef}
+      className={`entity-card-container group relative overflow-hidden ${isSummoning ? 'summon-glow' : ''} ${isSpawning ? 'spawning-pulse' : ''}`}
+      style={{
+        borderRadius: '12px 16px 16px 12px',
+        opacity: disableAnimation ? (isActive ? 1 : 0.6) : 0,
+        filter: disableAnimation ? (isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)') : 'blur(8px)',
+        transition: 'transform 0.2s ease-out' // CSS transition for layout changes
       }}
-      exit={disableAnimation ? undefined : {
-        opacity: 0,
-        y: 30,
-        scale: 0.85,
-        filter: 'blur(12px)',
-        transition: { duration: 0.15, ease: 'easeIn' }
-      }}
-      transition={disableAnimation ? {
-        duration: 0.2,
-        layout: { type: 'tween', duration: 0.2, ease: 'easeOut' }
-      } : {
-        type: 'spring',
-        stiffness: 400,
-        damping: 25,
-        mass: 0.8,
-        delay: staggerDelay,
-      }}
-      layout
+      title={displayName || name}
     >
       {/* Draggable card wrapper for tile splitting */}
       <div
         ref={cardRef}
         onClick={() => !isAltHeld && onClick()}
-        className={`liquid-glass-god-tinted cursor-grab active:cursor-grabbing overflow-hidden flex flex-col ${isTileDragging ? 'opacity-50' : ''}`}
+        className={`entity-card liquid-glass-god-tinted cursor-grab active:cursor-grabbing overflow-hidden flex flex-col ${isTileDragging ? 'opacity-50' : ''}`}
         style={{
           '--god-color': entityColor,
           '--god-color-rgb': hexToRgbCss(entityColor),
@@ -209,91 +232,96 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
         }}
       >
       {/* Header row - fixed */}
-      <div className="flex items-center h-8 px-3 gap-2 shrink-0">
+      <div className="entity-card-header flex items-center h-8 px-3 gap-2 shrink-0">
         {/* Type icon */}
-        <EntityIcon type={type} />
-        <span className="text-sm font-medium text-white truncate flex-1">
+        <span className="entity-card-icon">
+          <EntityIcon type={type} />
+        </span>
+        <span className="entity-card-header-text text-sm font-medium text-white truncate flex-1">
           {displayName || name}
         </span>
 
-        {/* Split out of group button */}
-        {onSplit && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onSplit()
-            }}
-            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
-            title="Split to new stage"
-          >
-            <FontAwesomeIcon icon={faArrowRightFromBracket} size="xs" />
-          </button>
-        )}
-
-        {/* Move to tab button */}
-        <div className="relative" ref={moveMenuRef}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowMoveMenu(!showMoveMenu)
-            }}
-            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
-            title="Move to tab"
-          >
-            <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />
-          </button>
-
-          {/* Dropdown menu */}
-          {showMoveMenu && (
-            <div className="absolute right-0 top-6 z-50 min-w-[140px] bg-bg-secondary border border-border rounded shadow-lg py-1">
-              {otherTabs.length > 0 && (
-                <>
-                  {otherTabs.map((tab, idx) => (
-                    <button
-                      key={tab.id}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onMoveToTab?.(id, tab.id)
-                        setShowMoveMenu(false)
-                      }}
-                      className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
-                    >
-                      <span className="text-xs text-text-secondary opacity-60">{idx + 1}</span>
-                      <span>{tab.name}</span>
-                    </button>
-                  ))}
-                  <div className="border-t border-border my-1" />
-                </>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onMoveToNewTab?.(id)
-                  setShowMoveMenu(false)
-                }}
-                className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
-              >
-                <span className="text-xs text-text-secondary opacity-60">+</span>
-                <span>New Tab</span>
-              </button>
-            </div>
+        {/* Control buttons - hidden in icon-only mode */}
+        <div className="entity-card-controls flex items-center gap-0">
+          {/* Split out of group button */}
+          {onSplit && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onSplit()
+              }}
+              className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
+              title="Split to new stage"
+            >
+              <FontAwesomeIcon icon={faArrowRightFromBracket} size="xs" />
+            </button>
           )}
-        </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-          className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
-          title="Banish"
-        >
-          <FontAwesomeIcon icon={faXmark} size="xs" />
-        </button>
+          {/* Move to tab button */}
+          <div className="relative" ref={moveMenuRef}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowMoveMenu(!showMoveMenu)
+              }}
+              className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
+              title="Move to tab"
+            >
+              <FontAwesomeIcon icon={faArrowUpRightFromSquare} size="xs" />
+            </button>
+
+            {/* Dropdown menu */}
+            {showMoveMenu && (
+              <div className="absolute right-0 top-6 z-50 min-w-[140px] bg-bg-secondary border border-border rounded shadow-lg py-1">
+                {otherTabs.length > 0 && (
+                  <>
+                    {otherTabs.map((tab, idx) => (
+                      <button
+                        key={tab.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onMoveToTab?.(id, tab.id)
+                          setShowMoveMenu(false)
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
+                      >
+                        <span className="text-xs text-text-secondary opacity-60">{idx + 1}</span>
+                        <span>{tab.name}</span>
+                      </button>
+                    ))}
+                    <div className="border-t border-border my-1" />
+                  </>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onMoveToNewTab?.(id)
+                    setShowMoveMenu(false)
+                  }}
+                  className="w-full px-3 py-1.5 text-left text-sm text-text-primary hover:bg-bg-tertiary flex items-center gap-2"
+                >
+                  <span className="text-xs text-text-secondary opacity-60">+</span>
+                  <span>New Tab</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+            className="w-6 h-6 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 rounded transition-all cursor-pointer"
+            title="Banish"
+          >
+            <FontAwesomeIcon icon={faXmark} size="xs" />
+          </button>
+        </div>
       </div>
 
-      {/* Content wrapper */}
-      <div className="flex flex-col flex-1 min-h-0">
+      {/* Content wrapper - hidden in icon-only mode */}
+      <div className="entity-card-content flex flex-col flex-1 min-h-0">
         {/* Text content area - clips when collapsed */}
         <div
           className="flex-1 px-3 overflow-hidden min-h-0"
@@ -325,6 +353,13 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
             </span>
           )}
           <div className="flex-1" />
+          {/* CWD pill for terminals */}
+          {cwd && (
+            <span className="liquid-glass-pill text-white/70 font-mono flex items-center gap-1">
+              <FontAwesomeIcon icon={faFolder} size="xs" />
+              {cwd}
+            </span>
+          )}
           {/* Branch pill */}
           {branch && (
             <span className="liquid-glass-pill text-white/70 font-mono flex items-center gap-1">
@@ -355,6 +390,6 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
         </div>
       </div>
       </div>
-    </motion.div>
+    </div>
   )
 })

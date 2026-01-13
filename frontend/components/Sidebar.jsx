@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { useStore } from '../store'
+import { animate, SPRING_EASING, SPRING_DURATION, FAST_DURATION } from '../utils/waapi'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   faCircle,
@@ -11,7 +11,8 @@ import {
   faScroll,
   faPlug,
   faTerminal,
-  faTrash
+  faTrash,
+  faEye
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import DraggableTypeButton from './DraggableTypeButton'
@@ -21,7 +22,7 @@ import { REALM_COLORS } from '../themes'
 import { CHRONICLE_URL } from '../config'
 
 // Constants
-const MIN_WIDTH = 50
+const MIN_WIDTH = 72
 const MAX_WIDTH = 1000
 const WIDTH_TRANSITION_MS = 150
 
@@ -198,7 +199,7 @@ function ChronicleButton() {
         title="Chronicle preview"
       />
       {open && (
-        <div className="absolute left-full bottom-0 ml-2 w-[400px] max-h-[60vh] liquid-glass-popup flex flex-col z-50">
+        <div className="absolute left-full top-0 ml-2 w-[400px] max-h-[60vh] liquid-glass-popup flex flex-col z-50">
           <div
             ref={scrollRef}
             className="flex-1 overflow-y-auto p-3 min-h-[200px] max-h-[calc(60vh-60px)]"
@@ -359,7 +360,7 @@ function LogsButton({ send }) {
         title="System logs"
       />
       {open && (
-        <div className="absolute left-full bottom-0 ml-2 w-[500px] max-h-[70vh] liquid-glass-popup flex flex-col z-50">
+        <div className="absolute left-full top-0 ml-2 w-[500px] max-h-[70vh] liquid-glass-popup flex flex-col z-50">
           <div className="flex border-b border-white/10">
             <button
               onClick={() => setActiveTab('backend')}
@@ -479,7 +480,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
       </button>
 
       {open && (
-        <div className="absolute left-full bottom-0 ml-2 min-w-[160px] liquid-glass-popup py-1.5 z-50">
+        <div className="absolute left-full top-0 ml-2 min-w-[160px] liquid-glass-popup py-1.5 z-50">
           {serviceList.map((service) => {
             const isActive = services[service.key]
             const isLoading = servicesLoading[service.key]
@@ -562,75 +563,136 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
   )
 }
 
+// Animated tab button with enter animation
+function AnimatedTabButton({ tab, isActive, realmColor, onSelect, onClose, tabsLength, staggerDelay, shouldShow }) {
+  const ref = useRef(null)
+  const animRef = useRef(null)
+
+  useLayoutEffect(() => {
+    if (!ref.current) return
+
+    if (animRef.current) {
+      try { animRef.current.cancel() } catch (e) {}
+    }
+
+    if (shouldShow) {
+      animRef.current = animate(ref.current,
+        [
+          { opacity: 0, transform: 'scale(0.8)' },
+          { opacity: 1, transform: 'scale(1)' }
+        ],
+        {
+          duration: SPRING_DURATION,
+          easing: SPRING_EASING,
+          delay: staggerDelay,
+          fill: 'forwards'
+        }
+      )
+    }
+
+    return () => {
+      if (animRef.current) {
+        try { animRef.current.cancel() } catch (e) {}
+      }
+    }
+  }, [shouldShow])
+
+  return (
+    <button
+      ref={ref}
+      onClick={() => onSelect(tab.id)}
+      className="group relative btn btn-icon btn-icon-md btn-glass"
+      style={{
+        opacity: 0, // Initial state before animation
+        ...(isActive ? {
+          background: `linear-gradient(135deg, ${realmColor}33 0%, ${realmColor}1a 100%)`,
+          borderColor: `${realmColor}40`,
+          boxShadow: `0 0 12px ${realmColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
+        } : {})
+      }}
+      title={`${tab.name}`}
+    >
+      <FontAwesomeIcon
+        icon={faCircle}
+        style={{ color: realmColor }}
+        className="text-[10px]"
+      />
+      {tabsLength > 1 && (
+        <span
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose(tab.id)
+          }}
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
+        >
+          <FontAwesomeIcon icon={faXmark} />
+        </span>
+      )}
+    </button>
+  )
+}
+
 // Tabs section at top
 function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loadStage, initialLoadDone }) {
-  return (
-    <div className="flex flex-wrap gap-1.5 p-3 border-b border-white/10">
-      <AnimatePresence>
-        {tabs?.map((tab, idx) => {
-          const isActive = activeTabId === tab.id
-          const realmColor = REALM_COLORS[tab.name] || '#888888'
-          const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 0.05 : 0
+  const addButtonRef = useRef(null)
+  const addAnimRef = useRef(null)
+  const shouldShow = loadStage >= 2
 
-          return (
-            <motion.button
-              key={tab.id}
-              onClick={() => onTabSelect(tab.id)}
-              className="group relative btn btn-icon btn-icon-md btn-glass"
-              style={isActive ? {
-                background: `linear-gradient(135deg, ${realmColor}33 0%, ${realmColor}1a 100%)`,
-                borderColor: `${realmColor}40`,
-                boxShadow: `0 0 12px ${realmColor}30, inset 0 1px 0 rgba(255,255,255,0.1)`
-              } : undefined}
-              title={`${tab.name} (Alt+${idx + 1})`}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{
-                opacity: loadStage >= 2 ? 1 : 0,
-                scale: loadStage >= 2 ? 1 : 0.8
-              }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{
-                type: 'spring',
-                stiffness: 400,
-                damping: 25,
-                delay: staggerDelay
-              }}
-            >
-              <FontAwesomeIcon
-                icon={faCircle}
-                style={{ color: realmColor }}
-                className="text-[10px]"
-              />
-              {tabs.length > 1 && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onTabClose(tab.id)
-                  }}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center scale-0 group-hover:scale-100 bg-white/10 backdrop-blur-md hover:bg-red-500/60 text-white/60 hover:text-white rounded-full transition-all duration-200 cursor-pointer text-[8px] border border-white/10 hover:border-red-400/30"
-                >
-                  <FontAwesomeIcon icon={faXmark} />
-                </span>
-              )}
-            </motion.button>
-          )
-        })}
-      </AnimatePresence>
+  // Add button enter animation
+  useLayoutEffect(() => {
+    if (!addButtonRef.current) return
+
+    if (addAnimRef.current) {
+      try { addAnimRef.current.cancel() } catch (e) {}
+    }
+
+    if (shouldShow) {
+      const staggerDelay = (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 50 : 0
+      addAnimRef.current = animate(addButtonRef.current,
+        [
+          { opacity: 0, transform: 'scale(0.8)' },
+          { opacity: 1, transform: 'scale(1)' }
+        ],
+        {
+          duration: SPRING_DURATION,
+          easing: SPRING_EASING,
+          delay: staggerDelay,
+          fill: 'forwards'
+        }
+      )
+    }
+
+    return () => {
+      if (addAnimRef.current) {
+        try { addAnimRef.current.cancel() } catch (e) {}
+      }
+    }
+  }, [shouldShow, tabs?.length, initialLoadDone, loadStage])
+
+  return (
+    <div className="sidebar-tabs flex flex-wrap gap-1.5 p-3 border-b border-white/10">
+      {tabs?.map((tab, idx) => {
+        const isActive = activeTabId === tab.id
+        const realmColor = REALM_COLORS[tab.name] || '#888888'
+        const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 50 : 0
+
+        return (
+          <AnimatedTabButton
+            key={tab.id}
+            tab={tab}
+            isActive={isActive}
+            realmColor={realmColor}
+            onSelect={onTabSelect}
+            onClose={onTabClose}
+            tabsLength={tabs.length}
+            staggerDelay={staggerDelay}
+            shouldShow={shouldShow}
+          />
+        )
+      })}
 
       {/* Add tab button */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{
-          opacity: loadStage >= 2 ? 1 : 0,
-          scale: loadStage >= 2 ? 1 : 0.8
-        }}
-        transition={{
-          type: 'spring',
-          stiffness: 400,
-          damping: 25,
-          delay: (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 0.05 : 0
-        }}
-      >
+      <div ref={addButtonRef} style={{ opacity: 0 }}>
         <IconButton
           icon={faPlus}
           size="md"
@@ -638,16 +700,16 @@ function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loa
           onClick={onTabNew}
           title="New tab (Alt+N)"
         />
-      </motion.div>
+      </div>
     </div>
   )
 }
 
 // Entity cards section (scrollable middle)
 function EntityCardsSection({
-  allStages,
+  tabStages,
+  currentTab,
   tabs,
-  activeTabId,
   focusedEntity,
   onEntityClick,
   onEntityClose,
@@ -658,68 +720,41 @@ function EntityCardsSection({
   onJoinStage,
   onCreateStageAtPosition,
 }) {
-  return (
-    <TileUngroupDropZone className="flex-1 overflow-hidden relative">
-      {tabs.length > 0 && (
-        <div className="relative h-full">
-          {tabs.map((tab, tabIdx) => {
-            const activeTabIdx = tabs.findIndex(t => t.id === activeTabId)
-            const tabOffset = tabIdx - activeTabIdx
-            const isActiveTab = tab.id === activeTabId
+  // Filter to non-empty stages
+  const nonEmptyStages = tabStages.filter(item => !item.isEmpty)
 
-            const tabStages = allStages
-              ? allStages.filter(item => item.tabId === tab.id && !item.isEmpty)
-              : []
+  return (
+    <TileUngroupDropZone className="flex-1 overflow-y-auto overflow-x-visible relative p-3">
+      {nonEmptyStages.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {nonEmptyStages.map((item, stageIdx) => {
+            const stage = item.stage || item
+            const isActiveStage = stage.id === currentTab?.activeStageId
+            const staggerOffset = nonEmptyStages
+              .slice(0, stageIdx)
+              .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
 
             return (
-              <motion.div
-                key={tab.id}
-                className="absolute inset-0 overflow-y-auto overflow-x-visible p-3"
-                initial={false}
-                animate={{ x: `${tabOffset * 100}%` }}
-                transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                style={{
-                  pointerEvents: isActiveTab ? 'auto' : 'none'
-                }}
-              >
-                {tabStages.length > 0 && (
-                  <LayoutGroup>
-                    <div className="flex flex-col gap-3">
-                      {tabStages.map((item, stageIdx) => {
-                        const stage = item.stage || item
-                        const activeTab = tabs.find(t => t.id === tab.id)
-                        const isActiveStage = stage.id === activeTab?.activeStageId
-                        const staggerOffset = tabStages
-                          .slice(0, stageIdx)
-                          .reduce((sum, s) => sum + ((s.stage || s).entities?.length || 0), 0)
-
-                        return (
-                          <EntityGroup
-                            key={stage.id}
-                            stage={stage}
-                            entities={stage.entities || []}
-                            isFocused={isActiveStage}
-                            focusedEntityId={focusedEntity}
-                            onClick={onEntityClick}
-                            onClose={onEntityClose}
-                            onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
-                            tabs={tabs}
-                            activeTabId={tab.id}
-                            onMoveToTab={onMoveToTab}
-                            onMoveToNewTab={onMoveToNewTab}
-                            onReorderInStage={onReorderInStage}
-                            onJoinStage={onJoinStage}
-                            onCreateStageAtPosition={onCreateStageAtPosition}
-                            staggerOffset={staggerOffset}
-                            stageIndex={stageIdx}
-                            totalStages={tabStages.length}
-                          />
-                        )
-                      })}
-                    </div>
-                  </LayoutGroup>
-                )}
-              </motion.div>
+              <EntityGroup
+                key={stage.id}
+                stage={stage}
+                entities={stage.entities || []}
+                isFocused={isActiveStage}
+                focusedEntityId={focusedEntity}
+                onClick={onEntityClick}
+                onClose={onEntityClose}
+                onSplit={(entityId) => onEntitySplit(entityId, stage.id)}
+                tabs={tabs}
+                activeTabId={currentTab.id}
+                onMoveToTab={onMoveToTab}
+                onMoveToNewTab={onMoveToNewTab}
+                onReorderInStage={onReorderInStage}
+                onJoinStage={onJoinStage}
+                onCreateStageAtPosition={onCreateStageAtPosition}
+                staggerOffset={staggerOffset}
+                stageIndex={stageIdx}
+                totalStages={nonEmptyStages.length}
+              />
             )
           })}
         </div>
@@ -755,7 +790,7 @@ function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
           if (!entity) return null
           const isGod = type === 'god'
           return (
-            <div key={type} className="flex-shrink-0 w-16 aspect-square">
+            <div key={type} className="sidebar-spawn-btn flex-shrink-0 w-16 aspect-square">
               <DraggableTypeButton
                 entityType={type}
                 title={`${entity.label} (Shift: vertical, Ctrl: new stage)`}
@@ -770,8 +805,8 @@ function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
   )
 }
 
-// Bottom menu section (services only)
-function BottomMenu({ connected, send }) {
+// App title section (logo + services)
+function AppTitle({ connected, send }) {
   const services = useStore(s => s.services)
   const servicesLoading = useStore(s => s.servicesLoading)
   const setServiceLoading = useStore(s => s.setServiceLoading)
@@ -794,25 +829,35 @@ function BottomMenu({ connected, send }) {
   }
 
   return (
-    <div className="border-t border-white/10 py-3 pr-3">
-      <div className="flex items-center justify-center gap-1">
+    <div className="sidebar-section border-b border-white/10 py-3 px-3">
+      <div className="sidebar-header flex items-center gap-2">
+        {/* Logo */}
+        <span className="sidebar-title font-bold text-lg tracking-wide text-white/90">IRIS</span>
+        <FontAwesomeIcon icon={faEye} className="sidebar-icon text-white/60 text-sm" />
+
+        <div className="sidebar-spacer flex-1" />
+
         {/* Services status */}
         {powers && (
-          <ServicesDropdown
-            connected={connected}
-            services={services}
-            servicesLoading={servicesLoading}
-            onToggle={handleServiceToggle}
-            speakDetails={speakDetails}
-            onVolumeChange={handleVolumeChange}
-          />
+          <span className="sidebar-controls">
+            <ServicesDropdown
+              connected={connected}
+              services={services}
+              servicesLoading={servicesLoading}
+              onToggle={handleServiceToggle}
+              speakDetails={speakDetails}
+              onVolumeChange={handleVolumeChange}
+            />
+          </span>
         )}
 
         {/* Logs */}
-        <LogsButton send={send} />
+        <span className="sidebar-controls">
+          <LogsButton send={send} />
+        </span>
 
         {/* Chronicle */}
-        {powers && <ChronicleButton />}
+        {powers && <span className="sidebar-controls"><ChronicleButton /></span>}
       </div>
     </div>
   )
@@ -840,10 +885,11 @@ export default function Sidebar({
   send,
   tabs,
   activeTabId,
+  currentTab,
   onTabSelect,
   onTabClose,
   onTabNew,
-  allStages,
+  tabStages,
   focusedEntity,
   loadStage,
   initialLoadDone,
@@ -895,13 +941,16 @@ export default function Sidebar({
 
   return (
     <aside
-      className="flex flex-col liquid-glass-light z-20 overflow-visible relative"
+      className="sidebar-container flex flex-col liquid-glass-light z-20 overflow-visible relative"
       style={{
         width,
         transition: isDragging ? 'none' : `width ${WIDTH_TRANSITION_MS}ms ease-in-out`
       }}
     >
-      {/* Tabs at top */}
+      {/* App title (logo + services) */}
+      <AppTitle connected={connected} send={send} />
+
+      {/* Tabs */}
       <TabsSection
         tabs={tabs}
         activeTabId={activeTabId}
@@ -914,9 +963,9 @@ export default function Sidebar({
 
       {/* Entity cards in middle (scrollable) */}
       <EntityCardsSection
-        allStages={allStages}
+        tabStages={tabStages}
+        currentTab={currentTab}
         tabs={tabs}
-        activeTabId={activeTabId}
         focusedEntity={focusedEntity}
         onEntityClick={onEntityClick}
         onEntityClose={onEntityClose}
@@ -933,9 +982,6 @@ export default function Sidebar({
         onSpawnEntity={onSpawnEntity}
         onOpenSummonModal={onOpenSummonModal}
       />
-
-      {/* Bottom menu (services) */}
-      <BottomMenu connected={connected} send={send} />
 
       {/* Resize handle */}
       <ResizeHandle onResizeStart={handleResizeStart} />
