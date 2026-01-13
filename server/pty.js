@@ -101,6 +101,11 @@ function getRunningCommand(sessionName) {
   }
 }
 
+// Check if a command is currently running in the terminal
+export function isCommandRunning(sessionName) {
+  return getRunningCommand(sessionName) !== null
+}
+
 // Get current working directory of terminal's shell
 function getShellCwd(sessionName) {
   try {

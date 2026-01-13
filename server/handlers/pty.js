@@ -3,13 +3,12 @@
  */
 
 import { execSync } from 'child_process'
-import fs from 'fs'
 import { SERVICES, ZELLIJ_BIN, ZELLIJ_CONFIG_DIR } from '../config.js'
 import { appState, saveState, broadcastState, getNextOrder } from '../state.js'
 import { startService, stopService, startChronicle, stopChronicle } from '../services.js'
 import { createTerminalSession } from '../gods.js'
 import { getSessionName } from '../gods.js'
-import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback, handlePtyInput, createRun, appendToRun, completeRun } from '../pty.js'
+import { attachPty, detachPty, sendToPty, resizePty, clearOutputBuffer, getOutputBuffer, getZellijScrollback, handlePtyInput, createRun, appendToRun, completeRun, isCommandRunning } from '../pty.js'
 import { splitIntoTile } from '../../entities/_shared/spawn.js'
 
 export const handlers = {
@@ -78,8 +77,11 @@ export const handlers = {
           mcpGod: targetGodName
         }
 
-        // Split focused tile to place terminal beside current entity
-        splitIntoTile(actualTerminalId, appState.activeTabId, { direction: 'horizontal' })
+        // Split to place terminal beside the calling god
+        splitIntoTile(actualTerminalId, appState.activeTabId, { 
+          direction: 'horizontal',
+          relativeToEntity: targetGodName  // Split next to the god who called run_terminal
+        })
 
         appState.focusedEntity = actualTerminalId
         saveState()
@@ -90,8 +92,6 @@ export const handlers = {
 
     // Send command directly to Zellij session (bypasses PTY attachment requirement)
     const sessionName = getSessionName(actualTerminalId)
-    const outputFile = `/tmp/iris-mcp-${requestId}.out`
-    const exitFile = `/tmp/iris-mcp-${requestId}.exit`
 
     // Helper to send command to zellij using byte values
     const sendToZellij = (cmd) => {
@@ -117,137 +117,110 @@ export const handlers = {
     // New terminals need ~3s for Zellij + shell to fully initialize
     const initDelay = terminal ? 100 : 3000
     setTimeout(() => {
-      // Send Ctrl+C to clear any stuck input (skip in raw mode for cleaner output)
-      if (!raw) {
-        try {
-          execSync(`"${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" -s "${sessionName}" action write 3`, {
-            timeout: 1000,
-            stdio: 'pipe'
-          })
-        } catch {}
+      // Create run buffer to track this command's output
+      createRun(requestId, actualTerminalId)
+
+      // Send raw command - no markers, no exit file, nothing added
+      const success = sendToZellij(command)
+
+      if (!success) {
+        completeRun(requestId, 'failed')
+        ws.send(JSON.stringify({
+          event: 'mcp:run:response',
+          requestId,
+          runId: requestId,
+          terminalId: actualTerminalId,
+          godName: targetGodName,
+          output: 'Failed to send command to terminal.'
+        }))
+        return
       }
 
-      // Small delay before command
-      setTimeout(() => {
-        // Raw mode: clean terminal output with markers for parsing
-        // Wrapped mode: captures stdout/stderr to file (uglier but more reliable)
-        const startMarker = `__IRIS_START_${requestId}__`
-        const endMarker = `__IRIS_END_${requestId}__`
-        const actualCommand = raw
-          ? `echo ${startMarker}; ${command}; echo ${endMarker}; echo $? > "${exitFile}"`
-          : `( ${command} ) > "${outputFile}" 2>&1; cat "${outputFile}"; echo $? > "${exitFile}"`
+      // Helper to check if line looks like a shell prompt
+      const isPromptLine = (line) => {
+        const trimmed = line.trim()
+        if (!trimmed) return false
+        return trimmed.match(/❯\s*$/) ||
+               trimmed.match(/\$\s*$/) ||
+               trimmed.match(/>\s*$/) ||
+               trimmed.match(/^[^@]*@[^:]*:.*[$#]\s*$/)
+      }
 
-        // Create run buffer to track this command's output
-        createRun(requestId, actualTerminalId)
+      // Helper to parse output from buffer content
+      const parseOutput = (newContent) => {
+        const lines = newContent.split('\n')
 
-        const success = sendToZellij(actualCommand)
-
-        if (!success) {
-          completeRun(requestId, 'failed')
-          ws.send(JSON.stringify({
-            event: 'mcp:run:response',
-            requestId,
-            runId: requestId,
-            terminalId: actualTerminalId,
-            godName: targetGodName,
-            output: 'Failed to send command to terminal.'
-          }))
-          return
-        }
-
-        // Watch for exit file using fs.watchFile (more efficient than polling)
-        const timeout = setTimeout(() => {
-          fs.unwatchFile(exitFile)
-          try { fs.unlinkSync(outputFile) } catch {}
-          try { fs.unlinkSync(exitFile) } catch {}
-
-          // On timeout, try to capture partial output from scrollback
-          let partialOutput = ''
-          try {
-            const buffer = getZellijScrollback(actualTerminalId) || ''
-            const startIdx = buffer.indexOf('\n' + startMarker)
-            if (startIdx !== -1) {
-              // Get everything after start marker
-              partialOutput = buffer.slice(startIdx + 1 + startMarker.length).trim()
-              // Store in run buffer for later peeking
-              appendToRun(requestId, partialOutput)
-            }
-          } catch {}
-
-          completeRun(requestId, 'timeout')
-          ws.send(JSON.stringify({
-            event: 'mcp:run:response',
-            requestId,
-            runId: requestId,
-            terminalId: actualTerminalId,
-            godName: targetGodName,
-            status: 'timeout',
-            output: partialOutput || '(Command timed out - use peek_run to check output)',
-            hint: `Use peek_run("${requestId}") to see latest output`
-          }))
-        }, 30000) // 30s timeout
-
-        const handleFileChange = (curr) => {
-          // File exists when size > 0
-          if (curr.size > 0) {
-            clearTimeout(timeout)
-            fs.unwatchFile(exitFile)
-
-            // Small delay to let buffer flush before reading
-            const readDelay = raw ? 500 : 0
-            setTimeout(() => {
-              let output = ''
-              let exitCode = '0'
-
-              try {
-                exitCode = fs.readFileSync(exitFile, 'utf-8').trim()
-                fs.unlinkSync(exitFile)
-
-                if (raw) {
-                  // Raw mode: parse output between markers from Zellij scrollback
-                  const buffer = getZellijScrollback(actualTerminalId) || ''
-                  const startIdx = buffer.indexOf('\n' + startMarker)
-                  const endIdx = buffer.indexOf('\n' + endMarker)
-                  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-                    const content = buffer.slice(startIdx + 1 + startMarker.length, endIdx)
-                    output = content.trim()
-                  } else {
-                    output = '(Could not parse output)'
-                  }
-                } else {
-                  // Wrapped mode: read from output file
-                  if (fs.existsSync(outputFile)) {
-                    output = fs.readFileSync(outputFile, 'utf-8').trim()
-                    fs.unlinkSync(outputFile)
-                  }
-                }
-              } catch (e) {
-                // Error reading output
-              }
-
-              if (output.length > 10000) {
-                output = output.slice(0, 10000) + '\n... (truncated)'
-              }
-
-              // Store output in run buffer and mark complete
-              appendToRun(requestId, output)
-              completeRun(requestId, 'completed')
-
-              ws.send(JSON.stringify({
-                event: 'mcp:run:response',
-                requestId,
-                runId: requestId,
-                terminalId: actualTerminalId,
-                godName: targetGodName,
-                exitCode: parseInt(exitCode) || 0,
-                output: output || '(No output)'
-              }))
-            }, readDelay)
+        // Find command line (contains our command text)
+        let startIdx = 0
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].includes(command)) {
+            startIdx = i + 1
+            break
           }
         }
 
-        // Watch with 500ms poll interval (more efficient than 200ms)
-        fs.watchFile(exitFile, { interval: 500 }, handleFileChange)
+        // Find end (before prompt returns or end of content)
+        let endIdx = lines.length
+        for (let i = lines.length - 1; i >= startIdx; i--) {
+          const line = lines[i]
+          if (line.trim() && !isPromptLine(line)) {
+            endIdx = i + 1
+            break
+          }
+        }
+
+        return lines.slice(startIdx, endIdx).join('\n').trim()
+      }
+
+      // Helper to send output response
+      const sendOutput = (status) => {
+        const scrollbackAfter = getZellijScrollback(actualTerminalId)
+        // Find new content by looking for our command
+        let output = parseOutput(scrollbackAfter)
+
+        if (output.length > 10000) {
+          output = output.slice(0, 10000) + '\n... (truncated)'
+        }
+
+        // Store in run buffer for peek_run
+        appendToRun(requestId, output)
+        completeRun(requestId, status)
+
+        ws.send(JSON.stringify({
+          event: 'mcp:run:response',
+          requestId,
+          runId: requestId,
+          terminalId: actualTerminalId,
+          godName: targetGodName,
+          status,
+          output: output || '(No output)',
+          ...(status === 'running' && {
+            hint: `Command still running. Use peek_run("${requestId}") for more output.`
+          })
+        }))
+      }
+
+      // Brief delay for command to start, then poll for completion
+      setTimeout(() => {
+        const POLL_INTERVAL = 200
+        const INITIAL_TIMEOUT = 30000
+
+        const pollInterval = setInterval(() => {
+          const running = isCommandRunning(sessionName)
+          if (!running) {
+            // Command finished
+            clearInterval(pollInterval)
+            clearTimeout(timeoutTimer)
+            // Small delay to let buffer flush
+            setTimeout(() => sendOutput('completed'), 300)
+          }
+        }, POLL_INTERVAL)
+
+        const timeoutTimer = setTimeout(() => {
+          clearInterval(pollInterval)
+          // Still running - return partial output
+          sendOutput('running')
+        }, INITIAL_TIMEOUT)
       }, 100)
     }, initDelay)
   },
