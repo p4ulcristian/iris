@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
-import { MarkdownRenderer, ToolCard } from '../../_ui'
+import { MarkdownRenderer, ToolCard, TodoCard, EditCard } from '../../_ui'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
@@ -16,13 +16,29 @@ function GodView({ entity, isFocused }) {
   })
 
   const [input, setInput] = useState('')
-  const [viewMode, setViewMode] = useState(() => {
-    return localStorage.getItem('iris-god-viewMode') || 'pro'
-  })
+  const [viewMode, setViewMode] = useState('pro')
 
   const scrollRef = useRef(null)
   const godName = entity?.id
-  const { connected, send } = useWebSocket(WS_URL)
+  const { connected, send, request } = useWebSocket(WS_URL)
+
+  // Helper to fetch file content for EditCard
+  const requestFile = async (filePath) => {
+    try {
+      const response = await request('file:read', { path: filePath })
+      return response.ok ? response.content : null
+    } catch {
+      return null
+    }
+  }
+
+  // Load view mode per god
+  useEffect(() => {
+    if (godName) {
+      const saved = localStorage.getItem(`iris-god-viewMode-${godName}`)
+      if (saved) setViewMode(saved)
+    }
+  }, [godName])
 
   // Filter out stream_event from history
   const messages = useMemo(() =>
@@ -30,9 +46,27 @@ function GodView({ entity, isFocused }) {
     [godState.history]
   )
 
-  // Auto-scroll on new content
+  // Extract latest TodoWrite for pinned display
+  const latestTodos = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg.type === 'assistant' && msg.message?.content) {
+        const todoTool = msg.message.content.find(c => c.type === 'tool_use' && c.name === 'TodoWrite')
+        if (todoTool?.input?.todos) return todoTool.input.todos
+      }
+    }
+    return null
+  }, [messages])
+
+  // Auto-scroll only if already near bottom
   useEffect(() => {
-    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)
+    const el = scrollRef.current
+    if (!el) return
+    const threshold = 100
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    if (isNearBottom) {
+      el.scrollTo(0, el.scrollHeight)
+    }
   }, [messages])
 
   // Subscribe directly to god:state messages for THIS god
@@ -164,14 +198,29 @@ function GodView({ entity, isFocused }) {
                 <MarkdownRenderer content={text} />
               </div>
             )}
-            {viewMode === 'pro' && tools.map((t, j) => {
-              const result = getToolResult(t.id)
-              return (
-                <div key={j} className="mt-2">
-                  <ToolCard name={t.name} input={t.input} result={result} />
-                </div>
-              )
-            })}
+            {viewMode === 'pro' && tools
+              .filter(t => t.name !== 'TodoWrite')
+              .map((t, j) => {
+                const result = getToolResult(t.id)
+                if (t.name === 'Edit') {
+                  return (
+                    <div key={j} className="mt-2">
+                      <EditCard
+                        filePath={t.input?.file_path}
+                        oldString={t.input?.old_string}
+                        newString={t.input?.new_string}
+                        result={result}
+                        onRequestFile={requestFile}
+                      />
+                    </div>
+                  )
+                }
+                return (
+                  <div key={j} className="mt-2">
+                    <ToolCard name={t.name} input={t.input} result={result} />
+                  </div>
+                )
+              })}
           </div>
         </div>
       )
@@ -191,7 +240,7 @@ function GodView({ entity, isFocused }) {
               const modes = ['chat', 'pro', 'json']
               const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
               setViewMode(next)
-              localStorage.setItem('iris-god-viewMode', next)
+              if (godName) localStorage.setItem(`iris-god-viewMode-${godName}`, next)
             }}
             className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
               viewMode === 'json'
@@ -207,6 +256,12 @@ function GodView({ entity, isFocused }) {
         </div>
         {status && <span className="text-xs text-white/50">{status}</span>}
       </div>
+
+      {viewMode !== 'json' && latestTodos && (
+        <div className="p-2 border-b border-white/10">
+          <TodoCard todos={latestTodos} />
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3" style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text' }}>
         {messages.length === 0 && (

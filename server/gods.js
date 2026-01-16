@@ -697,6 +697,12 @@ function handleClaudeMessage(godName, msg) {
   if (msg.type === 'user' && msg.message?.content) {
     const hasToolResult = msg.message.content.some(c => c.type === 'tool_result')
     if (hasToolResult) {
+      // Save the assistant message that triggered the tool BEFORE processing tool_result
+      // Otherwise the next assistant message will overwrite currentPartial and we lose tool_use
+      if (entry.currentPartial) {
+        entry.history.push(entry.currentPartial)
+        entry.currentPartial = null
+      }
       entry.history.push({
         type: 'user',
         message: msg.message,

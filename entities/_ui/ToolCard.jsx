@@ -134,6 +134,21 @@ export default function ToolCard({ name, input, result }) {
                 {input.command}
               </CodeBlock>
             </div>
+          ) : name === 'TodoWrite' && input?.todos ? (
+            <div className="p-2 space-y-1">
+              {input.todos.map((todo, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className={`w-2 h-2 rounded-full ${
+                    todo.status === 'completed' ? 'bg-green-500' :
+                    todo.status === 'in_progress' ? 'bg-yellow-500 animate-pulse' :
+                    'bg-white/30'
+                  }`} />
+                  <span className={todo.status === 'completed' ? 'text-white/50 line-through' : 'text-white/80'}>
+                    {todo.content}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : (
             <pre className="p-3 text-xs text-white/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
               {JSON.stringify(input, null, 2)}
