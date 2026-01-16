@@ -6,11 +6,9 @@ import { createLogger } from './logger.js'
 
 const log = createLogger('services')
 
-// Broadcast function - set by index.js
-let broadcastFn = null
-
+// NOTE: setBroadcast is deprecated - delta sync handles all state updates
 export function setBroadcast(fn) {
-  broadcastFn = fn
+  // No-op - delta sync replaces direct broadcasts
 }
 
 // Service status
@@ -31,6 +29,15 @@ let chronicleDetails = null
 
 // Speak details extracted from speak health check
 let speakDetails = null
+
+// Getters for delta sync
+export function getChronicleDetails() {
+  return chronicleDetails
+}
+
+export function getSpeakDetails() {
+  return speakDetails
+}
 
 async function checkServiceHealth(name, port) {
   // For services without a port, check if process is running
@@ -141,15 +148,7 @@ export async function checkAllServices() {
   )
 
   serviceStatus.chronicle = chronicleRunning
-
-  // Broadcast on status change, or when chronicle is running (for volume/vad updates)
-  if (broadcastFn && (changed || chronicleRunning)) {
-    broadcastFn('services:status', {
-      services: serviceStatus,
-      chronicleDetails: chronicleDetails,
-      speakDetails: speakDetails
-    })
-  }
+  // NOTE: No broadcast needed - delta sync polls this state automatically
 }
 
 export function startHealthChecks() {

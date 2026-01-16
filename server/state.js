@@ -14,15 +14,15 @@ const APP_VERSION = pkg.version
 // Entity registry (loaded from entities/)
 let entityRegistry = {}
 
-// Broadcast function - set by index.js
-let broadcastFn = null
+// NOTE: Broadcast functions are deprecated - delta sync handles all state updates
+// These are kept as no-ops for backwards compatibility with handlers
 
 export function setBroadcast(fn) {
-  broadcastFn = fn
+  // No-op - delta sync replaces direct broadcasts
 }
 
 export function broadcast(event, data = {}) {
-  if (broadcastFn) broadcastFn(event, data)
+  // No-op - delta sync handles all state updates
 }
 
 // Load entity registry from entities/
@@ -440,19 +440,15 @@ export function getStateForBroadcast() {
   state.version = APP_VERSION
   state._serverTime = Date.now()  // For latency calculation
 
-  log.log(`getStateForBroadcast took ${(performance.now() - t0).toFixed(1)}ms`)
+  // NOTE: Logging disabled - called every 32ms by delta sync
+  // log.log(`getStateForBroadcast took ${(performance.now() - t0).toFixed(1)}ms`)
   return state
 }
 
-// Leading-edge debounce - broadcasts immediately, then ignores calls for 16ms
-let broadcastTimeout = null
+// NOTE: broadcastState is deprecated - delta sync handles all state updates automatically
+// Kept as no-op for backwards compatibility with handlers
 export function broadcastState() {
-  if (broadcastTimeout) return
-  broadcast('state:sync', getStateForBroadcast())
-  // Block subsequent calls for 16ms
-  broadcastTimeout = setTimeout(() => {
-    broadcastTimeout = null
-  }, 16)
+  // No-op - delta sync polls state every 32ms
 }
 
 // Generate a unique entity ID

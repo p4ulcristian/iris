@@ -14,7 +14,7 @@ import { createLogger } from './logger.js'
 import { getComposedPrompt, getPersonalityMcpConfig } from './personalities.js'
 import { getProjectsContext } from './projects.js'
 import { OAUTH_PORT, DEFAULT_PERMISSION_MODE } from './config.js'
-import { appState, saveState, broadcastState } from './state.js'
+import { appState, saveState } from './state.js'
 
 const log = createLogger('god')
 
@@ -182,7 +182,7 @@ export function interruptGod(godName) {
   entry.currentPartial = null
   entry.error = null
   entry.result = { success: false, interrupted: true }
-  broadcastGodState(godName)
+  // State synced via delta sync
 
   // Remove from processes map
   processes.delete(godName)
@@ -207,7 +207,7 @@ export function interruptGod(godName) {
           }
         })
         // Broadcast new state to reconnected clients
-        broadcastGodState(godName)
+        // State synced via delta sync
       }
     }, 1000)  // Wait for createGod to finish setting up
   }, 500)
@@ -495,50 +495,7 @@ function readClaudeHistory(sessionId, cwd) {
   }
 }
 
-/**
- * Broadcast state to all attached clients.
- * Sends history + currentPartial for display.
- */
-function broadcastGodState(godName) {
-  const entry = processes.get(godName)
-  if (!entry) return
-
-  // Increment sequence counter
-  entry.stateSeq = (entry.stateSeq || 0) + 1
-
-  // Combine history with current partial for display
-  const displayHistory = entry.currentPartial
-    ? [...entry.history, entry.currentPartial]
-    : entry.history
-
-  const payload = {
-    event: 'god:state',
-    godName,
-    history: displayHistory,
-    sessionId: entry.sessionId,
-    streaming: entry.streaming,
-    result: entry.result,
-    error: entry.error,
-    exited: entry.exited,
-    stateSeq: entry.stateSeq,  // Sequence number for ordering
-  }
-
-  const msg = JSON.stringify(payload)
-
-  // Clean up dead clients and send to live ones
-  const deadClients = []
-  for (const ws of entry.clients) {
-    try {
-      if (ws.readyState === 1) ws.send(msg)
-      else if (ws.readyState >= 2) deadClients.push(ws)
-    } catch (e) {
-      deadClients.push(ws)
-    }
-  }
-  for (const ws of deadClients) {
-    entry.clients.delete(ws)
-  }
-}
+// NOTE: broadcastGodState removed - delta sync handles all state updates automatically
 
 /**
  * Connect to FIFOs for a god (for reading output).
@@ -599,7 +556,7 @@ function connectToFifos(godName, entry) {
     entry.outputStream.on('error', (err) => {
       log.error(`${godName} output stream error:`, err.message)
       entry.error = err.message
-      broadcastGodState(godName)
+      // State synced via delta sync
     })
 
     entry.outputStream.on('end', () => {
@@ -607,7 +564,7 @@ function connectToFifos(godName, entry) {
       entry.streaming = false
       entry.currentPartial = null
       entry.exited = 0
-      broadcastGodState(godName)
+      // State synced via delta sync
 
       // Clean up
       if (entry.outputStream) {
@@ -705,7 +662,7 @@ export function createGod(godName, options = {}) {
 
   if (!created) {
     entry.error = 'Failed to create Zellij session'
-    broadcastGodState(godName)
+    // State synced via delta sync
     return { godName, sessionId, error: 'Failed to create session' }
   }
 
@@ -739,10 +696,9 @@ function handleClaudeMessage(godName, msg) {
         appState.entities[godName].readyState = 'working'
       }
       saveState()
-      // Force broadcast after debounce window to ensure state update reaches frontend
-      setTimeout(() => broadcastState(), 50)
+      // State synced via delta sync
     }
-    broadcastGodState(godName)
+    // State synced via delta sync
     return
   }
 
@@ -754,13 +710,14 @@ function handleClaudeMessage(godName, msg) {
     if (isPartial) {
       // Update currentPartial (not in history)
       entry.currentPartial = msg
+      // Throttle streaming updates to avoid flooding WebSocket
+      // State synced via delta sync
     } else {
       // Final message - add to history, clear partial
       entry.history.push(msg)
       entry.currentPartial = null
+      // State synced via delta sync
     }
-
-    broadcastGodState(godName)
     return
   }
 
@@ -780,7 +737,7 @@ function handleClaudeMessage(godName, msg) {
       appState.entities[godName].readyState = 'done'
       saveState()
     }
-    broadcastGodState(godName)
+    // State synced via delta sync
     return
   }
 
@@ -799,7 +756,7 @@ function handleClaudeMessage(godName, msg) {
         message: msg.message,
         timestamp: Date.now()
       })
-      broadcastGodState(godName)
+      // State synced via delta sync
     }
     return
   }
@@ -821,14 +778,14 @@ export function sendUserMessage(godName, text) {
     log.error(`Cannot send: Claude process for ${godName} not found`)
     entry.error = 'Claude session has ended'
     entry.exited = 1
-    broadcastGodState(godName)
+    // State synced via delta sync
     return false
   }
 
   if (appState.entities[godName]?.readyState === 'done') {
     appState.entities[godName].readyState = 'working'
     saveState()
-    broadcastState()
+    // State synced via delta sync
   }
 
   // Add to history
@@ -838,7 +795,7 @@ export function sendUserMessage(godName, text) {
     timestamp: Date.now(),
   })
   entry.streaming = true
-  broadcastGodState(godName)
+  // State synced via delta sync
 
   // Send to Claude via FIFO
   const msg = JSON.stringify({
@@ -864,7 +821,7 @@ export function sendUserMessage(godName, text) {
   } catch (e) {
     log.error(`Write error:`, e)
     entry.error = `Failed to send: ${e.message}`
-    broadcastGodState(godName)
+    // State synced via delta sync
     return false
   }
 }
@@ -948,6 +905,33 @@ export function listGods() {
       processAlive: isProcessAlive(godName),
     }
   })
+}
+
+/**
+ * Get all god states for delta sync.
+ * Returns a map of godName -> state for inclusion in unified state sync.
+ */
+export function getAllGodStates() {
+  const states = {}
+
+  for (const [godName, entry] of processes) {
+    // Combine history with current partial for display
+    const displayHistory = entry.currentPartial
+      ? [...entry.history, entry.currentPartial]
+      : entry.history
+
+    states[godName] = {
+      history: displayHistory,
+      sessionId: entry.sessionId,
+      streaming: entry.streaming,
+      result: entry.result,
+      error: entry.error,
+      exited: entry.exited,
+      stateSeq: entry.stateSeq || 0,
+    }
+  }
+
+  return states
 }
 
 /**

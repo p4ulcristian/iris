@@ -38,6 +38,7 @@ export const useStore = create(
       chronicleDetails: null,  // { running, paused, volume, vad, start_time, ... }
       speakDetails: null,  // { volume, muted }
       systemClaudes: [],  // [{ pid, cwd, tty, project, isIrisManaged }]
+      gods: {},  // { godName: { history, sessionId, streaming, result, error, exited, stateSeq } }
 
       // ============================================
       // LOCAL UI STATE (not synced to server)
@@ -58,31 +59,80 @@ export const useStore = create(
       // SERVER SYNC
       // ============================================
 
-      syncState: (serverState) => set((state) => {
+      // Deep merge helper for delta sync
+      _applyDelta: (target, delta) => {
+        if (!delta) return target
+        if (typeof delta !== 'object' || delta === null) return delta
+        if (Array.isArray(delta)) return delta
+
+        const result = { ...target }
+        for (const [key, value] of Object.entries(delta)) {
+          if (value === null) {
+            delete result[key]
+          } else if (
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            typeof result[key] === 'object' &&
+            !Array.isArray(result[key]) &&
+            result[key] !== null
+          ) {
+            result[key] = get()._applyDelta(result[key], value)
+          } else {
+            result[key] = value
+          }
+        }
+        return result
+      },
+
+      syncState: (serverState, options = {}) => set((state) => {
+        const { merge = false } = options
+
+        // For delta sync, merge nested objects
+        const getValue = (key, newValue) => {
+          if (!merge) return newValue
+          const oldValue = state[key]
+          if (typeof newValue === 'object' && !Array.isArray(newValue) &&
+              typeof oldValue === 'object' && !Array.isArray(oldValue) &&
+              oldValue !== null && newValue !== null) {
+            return get()._applyDelta(oldValue, newValue)
+          }
+          return newValue
+        }
         // Sync all server-managed state
-        if (serverState.tabs !== undefined) state.tabs = serverState.tabs
+        if (serverState.tabs !== undefined) state.tabs = getValue('tabs', serverState.tabs)
         if (serverState.activeTabId !== undefined) state.activeTabId = serverState.activeTabId
         if (serverState.tabCounter !== undefined) state.tabCounter = serverState.tabCounter
         if (serverState.focusedEntity !== undefined) state.focusedEntity = serverState.focusedEntity
         if (serverState.focusedTile !== undefined) state.focusedTile = serverState.focusedTile
         if (serverState.maximizedTile !== undefined) state.maximizedTile = serverState.maximizedTile
         if (serverState.theme !== undefined) state.theme = serverState.theme
-        if (serverState.godColors !== undefined) state.godColors = serverState.godColors
-        if (serverState.gitProjects !== undefined) state.gitProjects = serverState.gitProjects
-        if (serverState.cemetery !== undefined) state.cemetery = serverState.cemetery
-        if (serverState.settings !== undefined) state.settings = serverState.settings
-        if (serverState.codeHighlights !== undefined) state.codeHighlights = serverState.codeHighlights
-        if (serverState.entityRegistry !== undefined) state.entityRegistry = serverState.entityRegistry
-        if (serverState.tiles !== undefined) state.tiles = serverState.tiles
+        if (serverState.godColors !== undefined) state.godColors = getValue('godColors', serverState.godColors)
+        if (serverState.gitProjects !== undefined) state.gitProjects = getValue('gitProjects', serverState.gitProjects)
+        if (serverState.cemetery !== undefined) state.cemetery = getValue('cemetery', serverState.cemetery)
+        if (serverState.settings !== undefined) state.settings = getValue('settings', serverState.settings)
+        if (serverState.codeHighlights !== undefined) state.codeHighlights = getValue('codeHighlights', serverState.codeHighlights)
+        if (serverState.entityRegistry !== undefined) state.entityRegistry = getValue('entityRegistry', serverState.entityRegistry)
+        if (serverState.tiles !== undefined) state.tiles = getValue('tiles', serverState.tiles)
         if (serverState.version !== undefined) state.version = serverState.version
 
-        // Entities come as array, convert to object
+        // Entities come as array (full sync) or object (delta)
         if (serverState.entities) {
-          const newEntities = {}
-          serverState.entities.forEach(entity => {
-            newEntities[entity.id] = entity
-          })
-          state.entities = newEntities
+          if (Array.isArray(serverState.entities)) {
+            // Full sync - array from server
+            const newEntities = {}
+            serverState.entities.forEach(entity => {
+              newEntities[entity.id] = entity
+            })
+            state.entities = newEntities
+          } else {
+            // Delta sync - object with updates
+            state.entities = getValue('entities', serverState.entities)
+          }
+        }
+
+        // Gods state from delta sync (god streaming, history, etc.)
+        if (serverState.gods !== undefined) {
+          state.gods = getValue('gods', serverState.gods)
         }
 
         // Services status

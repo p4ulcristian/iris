@@ -71,49 +71,15 @@ function TabSlider({ tabs, activeTabId, children }) {
   )
 }
 
-// Animated stage slider using WAAPI (vertical) - uses vh units like TabSlider uses vw
+// Stage slider - snaps between stages vertically
 function StageSlider({ stages, activeStageId, children }) {
-  const ref = useRef(null)
-  const animRef = useRef(null)
-  const prevIndexRef = useRef(-1)
-
-  useLayoutEffect(() => {
-    if (!ref.current || stages.length === 0) return
-
-    const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
-    const idx = stageIndex === -1 ? 0 : stageIndex
-    const toY = -idx * 100
-
-    // First render - set position without animation
-    if (prevIndexRef.current === -1) {
-      ref.current.style.transform = `translateY(${toY}vh)`
-      prevIndexRef.current = idx
-      return
-    }
-
-    if (prevIndexRef.current === idx) return
-
-    if (animRef.current) {
-      try { animRef.current.cancel() } catch (e) {}
-    }
-
-    const fromY = -prevIndexRef.current * 100
-    ref.current.style.transform = `translateY(${toY}vh)`
-
-    animRef.current = ref.current.animate(
-      [
-        { transform: `translateY(${fromY}vh)` },
-        { transform: `translateY(${toY}vh)` }
-      ],
-      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
-    )
-
-    prevIndexRef.current = idx
-  }, [stages, activeStageId])
+  const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
+  const idx = stageIndex === -1 ? 0 : stageIndex
+  const translateY = -idx * 100
 
   return (
     <div className="h-full w-full overflow-hidden">
-      <div ref={ref} className="w-full" style={{ height: `${stages.length * 100}vh` }}>
+      <div className="w-full" style={{ height: `${stages.length * 100}vh`, transform: `translateY(${translateY}vh)` }}>
         {Children.map(children, (child) => (
           <div style={{ height: '100vh' }}>{child}</div>
         ))}
@@ -205,14 +171,28 @@ export default function App() {
     const { event, ...data } = lastMessage
 
     switch (event) {
+      // New delta sync protocol
+      case 'state:full': {
+        const isFirstLoad = !initialLoadDone
+        syncState(data.state)
+        setInitialLoadDone(true)
+        if (isFirstLoad) {
+          triggerStagedReveal()
+        }
+        break
+      }
+
+      case 'state:delta': {
+        // Delta sync - merge changes
+        syncState(data.delta, { merge: true })
+        break
+      }
+
+      // Legacy support
       case 'state:sync': {
-        const t0 = performance.now()
-        const latency = data._serverTime ? Date.now() - data._serverTime : null
         const isFirstLoad = !initialLoadDone
         syncState(data)
-        console.log(`[App] state:sync processed in ${(performance.now() - t0).toFixed(1)}ms, latency: ${latency}ms`)
         setInitialLoadDone(true)
-        // Trigger staged reveal animation on first load
         if (isFirstLoad) {
           triggerStagedReveal()
         }
@@ -224,12 +204,12 @@ export default function App() {
         syncState({
           services: data.services,
           chronicleDetails: data.chronicleDetails || null
-        })
+        }, { merge: true })
         break
 
       case 'system-claude:status':
         // System Claude processes update
-        syncState({ systemClaudes: data.processes || [] })
+        syncState({ systemClaudes: data.processes || [] }, { merge: true })
         break
 
       case 'chronicle:line':

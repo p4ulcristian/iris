@@ -17,10 +17,10 @@ const HOME = os.homedir()
 // State
 let systemClaudes = []
 let scanInterval = null
-let broadcastFn = null
 
+// NOTE: setBroadcast is deprecated - delta sync handles all state updates
 export function setBroadcast(fn) {
-  broadcastFn = fn
+  // No-op - delta sync replaces direct broadcasts
 }
 
 /**
@@ -134,9 +134,7 @@ function scan() {
 
   if (changed) {
     log.log(`Claude processes changed: ${newProcesses.length} running`)
-    if (broadcastFn) {
-      broadcastFn('system-claude:status', { processes: systemClaudes })
-    }
+    // NOTE: No broadcast needed - delta sync polls this state automatically
   }
 }
 

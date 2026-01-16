@@ -6,11 +6,13 @@ import { execSync } from 'child_process'
 import { WebSocketServer } from 'ws'
 
 import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
-import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getStateForBroadcast, broadcastState } from './state.js'
-import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
+import { loadState, loadEntityRegistry, getStateForBroadcast } from './state.js'
+import { serviceStatus, getChronicleDetails, getSpeakDetails, startHealthChecks, stopHealthChecks } from './services.js'
 import { setBroadcast as setChronicleBroadcast, startWatcher as startChronicleWatcher, stopWatcher as stopChronicleWatcher } from './chronicle.js'
-import { setBroadcast as setSystemClaudeBroadcast, startScanner as startSystemClaudeScanner, stopScanner as stopSystemClaudeScanner, getSystemClaudes } from './system-claude.js'
+import { startScanner as startSystemClaudeScanner, stopScanner as stopSystemClaudeScanner, getSystemClaudes } from './system-claude.js'
 import { handleMessage } from './handlers/index.js'
+import { startDeltaSync, stopDeltaSync, sendFullState } from './delta-sync.js'
+import { getAllGodStates } from './gods.js'
 import { setupApi } from './api.js'
 import * as calendar from './calendar.js'
 import { createLogger, clearLog } from './logger.js'
@@ -71,28 +73,33 @@ if (!fs.existsSync(SOCKET_DIR)) {
 // WebSocket clients
 const wsClients = new Set()
 
-// Broadcast function
-const broadcastLog = createLogger('broadcast')
-function broadcast(event, data = {}) {
-  const msg = JSON.stringify({ event, ...data })
-  broadcastLog.log(`${event} to ${wsClients.size} clients`)
-  let sent = 0
-  wsClients.forEach(ws => {
-    if (ws.readyState === 1) {
-      ws.send(msg)
-      sent++
-    }
-  })
-}
-
-// Wire up broadcast to state, services, chronicle, and system-claude modules
-setStateBroadcast(broadcast)
-setServicesBroadcast(broadcast)
-setChronicleBroadcast(broadcast)
-setSystemClaudeBroadcast(broadcast)
-
 // Load persisted state
 loadState()
+
+// Unified state getter for delta sync
+function getFullState() {
+  const baseState = getStateForBroadcast()
+  return {
+    ...baseState,
+    gods: getAllGodStates(),
+    services: serviceStatus,
+    chronicleDetails: getChronicleDetails(),
+    speakDetails: getSpeakDetails(),
+    systemClaudes: getSystemClaudes()
+  }
+}
+
+// Start delta sync after state is loaded
+startDeltaSync(wsClients, getFullState)
+
+// Direct broadcast for real-time events (chronicle lines)
+function directBroadcast(event, data = {}) {
+  const msg = JSON.stringify({ event, ...data })
+  wsClients.forEach(ws => {
+    if (ws.readyState === 1) ws.send(msg)
+  })
+}
+setChronicleBroadcast(directBroadcast)
 
 // Clean up orphaned Zellij sessions and FIFOs
 cleanupOrphanedSessions()
@@ -116,14 +123,8 @@ wss.on('connection', (ws, req) => {
   wsClients.add(ws)
   wsLog.log(`Client connected (${wsClients.size} total)`)
 
-  // Send initial state
-  const stateData = getStateForBroadcast()
-  ws.send(JSON.stringify({
-    event: 'state:sync',
-    ...stateData,
-    services: serviceStatus,
-    systemClaudes: getSystemClaudes()
-  }))
+  // Send initial full state via delta sync
+  sendFullState(ws)
 
   // Warn if zellij is missing
   if (zellijMissing) {
@@ -218,8 +219,7 @@ const oauthServer = http.createServer(async (req, res) => {
           </body>
         </html>
       `)
-      // Broadcast updated state to all clients
-      broadcastState()
+      // State will be synced automatically by delta sync
     } catch (err) {
       log.error('OAuth callback error:', err)
       res.writeHead(500, { 'Content-Type': 'text/html' })
@@ -266,6 +266,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 function cleanup() {
   log.log('Shutting down server...')
+  stopDeltaSync()
   stopHealthChecks()
   stopChronicleWatcher()
   stopSystemClaudeScanner()

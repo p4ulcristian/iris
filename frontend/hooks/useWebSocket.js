@@ -137,8 +137,10 @@ export function useWebSocket(url, { trackMessages = false } = {}) {
     let onMessage = null
     if (trackMessages) {
       onMessage = (event) => {
+        const receiveTime = Date.now()
         try {
           const data = JSON.parse(event.data)
+          data._receiveTime = receiveTime
           setLastMessage(data)
         } catch (e) {
           console.error('Invalid WebSocket message:', e)

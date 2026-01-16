@@ -15,6 +15,7 @@ import { handlers as calendarHandlers } from './calendar.js'
 import { handlers as settingsHandlers } from './settings.js'
 import { handlers as layoutHandlers } from './layout.js'
 import { handlers as configHandlers } from './config.js'
+import { handlers as ptyHandlers } from './pty.js'
 
 // Merge all handlers into a single lookup table
 const allHandlers = {
@@ -28,6 +29,7 @@ const allHandlers = {
   ...settingsHandlers,
   ...layoutHandlers,
   ...configHandlers,
+  ...ptyHandlers,
 }
 
 /**
@@ -39,11 +41,6 @@ const allHandlers = {
  */
 export function handleMessage(ws, msg, projectRoot) {
   const { event, ...data } = msg
-
-  // Debug: log god events
-  if (event?.startsWith('god:')) {
-    console.log('[handleMessage] God event:', event, data)
-  }
 
   const handler = allHandlers[event]
   if (handler) {
