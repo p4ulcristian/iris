@@ -1,28 +1,5 @@
 /* ============================================
-   WALLPAPER - Reactive Glass Background
-   ============================================
-
-   Features:
-   - Animated blobs with chromatic aberration (RGB split)
-   - Caustic light refraction overlay
-   - Specular highlights following mouse
-   - Blobs influenced by mouse position
-
-   Performance:
-   - All animations use transform/opacity only (GPU)
-   - No border-radius morphing (causes layout thrashing)
-   - Blur is static, not animated
-   - Mouse reactivity via CSS custom properties
-*/
-
-/* ============================================
-   SVG Filters (defined once, referenced by CSS)
-   ============================================ */
-
-/* This filter is applied via URL reference in the caustics layer */
-
-/* ============================================
-   Container
+   WALLPAPER - Simple Blob Background
    ============================================ */
 
 .wallpaper {
@@ -31,337 +8,107 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-
-  /* Mouse position from JS (0-1 range) */
-  --mouse-x: 0.5;
-  --mouse-y: 0.5;
 }
 
-/* Base background color */
 .wallpaper-base {
   position: absolute;
   inset: 0;
   background: var(--wallpaper-base, #050508);
 }
 
-/* ============================================
-   Caustics - Dancing Light Refraction
-   ============================================ */
-
-.wallpaper-caustics {
-  position: absolute;
-  inset: -50%;
-  width: 200%;
-  height: 200%;
-  opacity: 0.08;
-  mix-blend-mode: overlay;
-  pointer-events: none;
-
-  /* Animated caustic pattern using CSS */
-  background:
-    repeating-conic-gradient(
-      from 0deg at 50% 50%,
-      transparent 0deg,
-      rgba(255, 255, 255, 0.03) 1deg,
-      transparent 2deg
-    );
-
-  /* Slow rotation for organic movement */
-  animation: caustics-move 60s linear infinite;
-  filter: blur(30px);
-}
-
-@keyframes caustics-move {
-  0% {
-    transform: translate(-25%, -25%) rotate(0deg) scale(1);
-  }
-  50% {
-    transform: translate(-25%, -25%) rotate(180deg) scale(1.1);
-  }
-  100% {
-    transform: translate(-25%, -25%) rotate(360deg) scale(1);
-  }
-}
-
-/* Secondary caustics layer for complexity */
-.wallpaper-caustics::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    repeating-conic-gradient(
-      from 45deg at 30% 70%,
-      transparent 0deg,
-      rgba(255, 255, 255, 0.02) 2deg,
-      transparent 4deg
-    );
-  animation: caustics-move-reverse 45s linear infinite;
-}
-
-@keyframes caustics-move-reverse {
-  0% {
-    transform: rotate(0deg) scale(1.1);
-  }
-  50% {
-    transform: rotate(-180deg) scale(1);
-  }
-  100% {
-    transform: rotate(-360deg) scale(1.1);
-  }
-}
-
-/* ============================================
-   Blob Layer Container
-   ============================================ */
-
 .blob-layer {
   position: absolute;
   inset: 0;
-  /* Mouse influence on all blobs */
-  transform:
-    translate(
-      calc((var(--mouse-x) - 0.5) * 20px),
-      calc((var(--mouse-y) - 0.5) * 20px)
-    );
-  transition: transform 0.3s ease-out;
 }
-
-/* ============================================
-   Individual Blobs with Chromatic Aberration
-   ============================================ */
 
 .blob {
   position: absolute;
-  /* Reduced blur for sharper edges */
-  filter: blur(25px);
-  opacity: 0.6;
+  border-radius: 50%;
   mix-blend-mode: screen;
 }
 
-/* Chromatic aberration - RGB split layers */
-.blob-r,
-.blob-g,
-.blob-b {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(circle, currentColor 0%, transparent 70%);
-}
-
-.blob-r {
-  color: var(--blob-color-r, #ff000030);
-  transform: translate(-3px, -2px);
-}
-
-.blob-g {
-  color: var(--blob-color-g, #00ff0030);
-  transform: translate(0, 0);
-}
-
-.blob-b {
-  color: var(--blob-color-b, #0000ff30);
-  transform: translate(3px, 2px);
-}
-
-/* Blob 1 - Large, primary */
 .blob-1 {
   width: 50vmax;
   height: 50vmax;
-  --blob-color-r: color-mix(in srgb, var(--blob-1, #505050) 60%, #ff0000 40%);
-  --blob-color-g: var(--blob-1, #505050);
-  --blob-color-b: color-mix(in srgb, var(--blob-1, #505050) 60%, #0000ff 40%);
-  animation: blob-1-move 30s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  background: radial-gradient(circle, var(--blob-1, #404040) 0%, transparent 70%);
+  animation:
+    blob-1-move 40s ease-in-out infinite,
+    blob-1-color 60s ease-in-out infinite;
 }
 
-/* Blob 2 - Medium, secondary */
 .blob-2 {
   width: 45vmax;
   height: 45vmax;
-  --blob-color-r: color-mix(in srgb, var(--blob-2, #404040) 60%, #ff0000 40%);
-  --blob-color-g: var(--blob-2, #404040);
-  --blob-color-b: color-mix(in srgb, var(--blob-2, #404040) 60%, #0000ff 40%);
-  animation: blob-2-move 38s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  animation-delay: -12s;
+  background: radial-gradient(circle, var(--blob-2, #353535) 0%, transparent 70%);
+  animation:
+    blob-2-move 50s ease-in-out infinite,
+    blob-2-color 45s ease-in-out infinite;
 }
 
-/* Blob 3 - Medium, accent */
 .blob-3 {
   width: 40vmax;
   height: 40vmax;
-  --blob-color-r: color-mix(in srgb, var(--blob-3, #606060) 60%, #ff0000 40%);
-  --blob-color-g: var(--blob-3, #606060);
-  --blob-color-b: color-mix(in srgb, var(--blob-3, #606060) 60%, #0000ff 40%);
-  animation: blob-3-move 25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  animation-delay: -5s;
+  background: radial-gradient(circle, var(--blob-3, #4a4a4a) 0%, transparent 70%);
+  animation:
+    blob-3-move 35s ease-in-out infinite,
+    blob-3-color 55s ease-in-out infinite;
 }
 
-/* Blob 4 - Smaller, background */
 .blob-4 {
   width: 35vmax;
   height: 35vmax;
-  --blob-color-r: color-mix(in srgb, var(--blob-4, #383838) 60%, #ff0000 40%);
-  --blob-color-g: var(--blob-4, #383838);
-  --blob-color-b: color-mix(in srgb, var(--blob-4, #383838) 60%, #0000ff 40%);
-  animation: blob-4-move 42s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  animation-delay: -20s;
+  background: radial-gradient(circle, var(--blob-4, #303030) 0%, transparent 70%);
+  animation:
+    blob-4-move 55s ease-in-out infinite,
+    blob-4-color 70s ease-in-out infinite;
 }
 
-/* ============================================
-   Blob Movement Keyframes
-   ============================================
-   Only using transform and opacity (GPU-friendly)
-   No border-radius morphing
-*/
-
 @keyframes blob-1-move {
-  0% {
-    transform: translate(-10vw, 80vh) scale(1);
-    opacity: 0.5;
-  }
-  25% {
-    transform: translate(5vw, 30vh) scale(1.1);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translate(20vw, -10vh) scale(0.95);
-    opacity: 0.6;
-  }
-  75% {
-    transform: translate(10vw, 40vh) scale(1.05);
-    opacity: 0.55;
-  }
-  100% {
-    transform: translate(-10vw, 80vh) scale(1);
-    opacity: 0.5;
-  }
+  0%, 100% { transform: translate(-5vw, 70vh); opacity: 0.5; }
+  50% { transform: translate(25vw, 10vh); opacity: 0.6; }
 }
 
 @keyframes blob-2-move {
-  0% {
-    transform: translate(80vw, 70vh) scale(1.05);
-    opacity: 0.45;
-  }
-  25% {
-    transform: translate(60vw, 20vh) scale(0.9);
-    opacity: 0.65;
-  }
-  50% {
-    transform: translate(40vw, -5vh) scale(1.1);
-    opacity: 0.55;
-  }
-  75% {
-    transform: translate(70vw, 50vh) scale(0.95);
-    opacity: 0.5;
-  }
-  100% {
-    transform: translate(80vw, 70vh) scale(1.05);
-    opacity: 0.45;
-  }
+  0%, 100% { transform: translate(75vw, 65vh); opacity: 0.45; }
+  50% { transform: translate(35vw, 5vh); opacity: 0.55; }
 }
 
 @keyframes blob-3-move {
-  0% {
-    transform: translate(30vw, 90vh) scale(0.95);
-    opacity: 0.45;
-  }
-  33% {
-    transform: translate(45vw, 40vh) scale(1.1);
-    opacity: 0.7;
-  }
-  66% {
-    transform: translate(35vw, 10vh) scale(1);
-    opacity: 0.55;
-  }
-  100% {
-    transform: translate(30vw, 90vh) scale(0.95);
-    opacity: 0.45;
-  }
+  0%, 100% { transform: translate(35vw, 80vh); opacity: 0.5; }
+  50% { transform: translate(50vw, 15vh); opacity: 0.6; }
 }
 
 @keyframes blob-4-move {
-  0% {
-    transform: translate(60vw, 85vh) scale(1);
-    opacity: 0.4;
-  }
-  25% {
-    transform: translate(45vw, 55vh) scale(1.08);
-    opacity: 0.55;
-  }
-  50% {
-    transform: translate(25vw, 25vh) scale(0.92);
-    opacity: 0.6;
-  }
-  75% {
-    transform: translate(40vw, 60vh) scale(1.05);
-    opacity: 0.5;
-  }
-  100% {
-    transform: translate(60vw, 85vh) scale(1);
-    opacity: 0.4;
-  }
+  0%, 100% { transform: translate(55vw, 75vh); opacity: 0.4; }
+  50% { transform: translate(20vw, 20vh); opacity: 0.5; }
 }
 
-/* ============================================
-   Specular Highlight - Mouse-following shine
-   ============================================ */
-
-.wallpaper-specular {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-
-  /* Radial gradient positioned by mouse */
-  background: radial-gradient(
-    ellipse 40% 30% at var(--specular-x, 50%) var(--specular-y, 50%),
-    rgba(255, 255, 255, 0.03) 0%,
-    transparent 70%
-  );
-
-  /* Secondary highlight for depth */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(
-      ellipse 20% 15% at var(--specular-x, 50%) var(--specular-y, 50%),
-      rgba(255, 255, 255, 0.05) 0%,
-      transparent 50%
-    );
-  }
+/* Color shift animations - subtle hue rotation */
+@keyframes blob-1-color {
+  0%, 100% { filter: blur(80px) hue-rotate(0deg); }
+  50% { filter: blur(80px) hue-rotate(20deg); }
 }
 
-/* ============================================
-   Reduced Motion
-   ============================================ */
+@keyframes blob-2-color {
+  0%, 100% { filter: blur(80px) hue-rotate(0deg); }
+  50% { filter: blur(80px) hue-rotate(-15deg); }
+}
+
+@keyframes blob-3-color {
+  0%, 100% { filter: blur(80px) hue-rotate(0deg); }
+  50% { filter: blur(80px) hue-rotate(25deg); }
+}
+
+@keyframes blob-4-color {
+  0%, 100% { filter: blur(80px) hue-rotate(0deg); }
+  50% { filter: blur(80px) hue-rotate(-20deg); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .wallpaper-caustics {
-    animation: none;
-  }
-
-  .wallpaper-caustics::after {
-    animation: none;
-  }
-
-  .blob {
-    animation-duration: 120s !important;
-  }
-
-  .blob-layer {
-    transform: none;
-    transition: none;
-  }
-
-  .wallpaper-specular {
-    display: none;
-  }
+  .blob { animation: none; }
 }
 
-/* ============================================
-   Theme Colors
-   ============================================ */
-
-/* Divine Void - deep space with subtle purple/blue hints */
+/* Theme Colors */
 .theme-divine-void {
   --wallpaper-base: #050508;
   --blob-1: #2a2a3a;

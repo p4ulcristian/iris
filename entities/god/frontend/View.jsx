@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
+import { useStore } from '@/store'
 import { MarkdownRenderer, ToolCard, TodoCard, EditCard, WriteCard } from '../../_ui'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+import { faSpinner, faCodeBranch } from '@fortawesome/free-solid-svg-icons'
 
 // Isolated input component - doesn't re-render when parent state changes
 const InputBar = memo(function InputBar({ connected, onSend, isFocused, onType, onInterrupt }) {
@@ -61,8 +62,11 @@ function GodView({ entity, isFocused }) {
   const [viewMode, setViewMode] = useState('pro')
 
   const scrollRef = useRef(null)
+  const lastStateSeq = useRef(0)  // Track last seen sequence to ignore stale states
   const godName = entity?.id
   const { connected, send, request } = useWebSocket(WS_URL)
+  const gitBranches = useStore(s => s.gitBranches)
+  const branch = entity?.project ? gitBranches[entity.project] : null
 
   // Helper to fetch file content for EditCard
   const requestFile = async (filePath) => {
@@ -146,12 +150,21 @@ function GodView({ entity, isFocused }) {
   useEffect(() => {
     if (!godName) return
 
+    // Reset sequence tracker for new god
+    lastStateSeq.current = 0
+
     let currentWs = null
 
     const handler = (event) => {
       try {
         const msg = JSON.parse(event.data)
         if (msg.event === 'god:state' && msg.godName === godName) {
+          // Ignore stale states (out-of-order messages)
+          if (msg.stateSeq && msg.stateSeq <= lastStateSeq.current) {
+            return
+          }
+          lastStateSeq.current = msg.stateSeq || 0
+
           setGodState({
             history: msg.history || [],
             streaming: msg.streaming || false,
@@ -324,6 +337,17 @@ function GodView({ entity, isFocused }) {
         <div className="flex items-center gap-2 text-sm text-white/70">
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
           {entity?.name}
+          {entity?.project && (
+            <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/50" title={entity.project}>
+              {entity.project.split('/').pop()}
+            </span>
+          )}
+          {branch && (
+            <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/50 font-mono flex items-center gap-1">
+              <FontAwesomeIcon icon={faCodeBranch} size="xs" />
+              {branch}
+            </span>
+          )}
           <button
             onClick={() => {
               const modes = ['chat', 'pro', 'json']

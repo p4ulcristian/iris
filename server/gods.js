@@ -503,6 +503,9 @@ function broadcastGodState(godName) {
   const entry = processes.get(godName)
   if (!entry) return
 
+  // Increment sequence counter
+  entry.stateSeq = (entry.stateSeq || 0) + 1
+
   // Combine history with current partial for display
   const displayHistory = entry.currentPartial
     ? [...entry.history, entry.currentPartial]
@@ -517,6 +520,7 @@ function broadcastGodState(godName) {
     result: entry.result,
     error: entry.error,
     exited: entry.exited,
+    stateSeq: entry.stateSeq,  // Sequence number for ordering
   }
 
   const msg = JSON.stringify(payload)
@@ -669,6 +673,7 @@ export function createGod(godName, options = {}) {
     error: null,
     exited: null,
     project: project || HOME,
+    stateSeq: 0,  // Sequence counter to prevent stale state overwrites
   }
 
   processes.set(godName, entry)

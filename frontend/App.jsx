@@ -123,7 +123,7 @@ function StageSlider({ stages, activeStageId, children }) {
 }
 
 export default function App() {
-  const { connected, send, lastMessage } = useWebSocket(WS_URL)
+  const { connected, send, lastMessage } = useWebSocket(WS_URL, { trackMessages: true })
 
   // Get state from store - grouped selector with shallow comparison
   const {

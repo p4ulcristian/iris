@@ -105,7 +105,7 @@ export default function ToolCard({ name, input, result }) {
   const resultText = formatResult(result)
 
   return (
-    <div className={`mt-2 rounded-lg border ${colorClass} overflow-hidden`}>
+    <div className={`mt-2 rounded-lg border ${colorClass} overflow-hidden min-w-0 max-w-full`}>
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -150,7 +150,7 @@ export default function ToolCard({ name, input, result }) {
               ))}
             </div>
           ) : (
-            <pre className="p-3 text-xs text-white/60 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+            <pre className="p-3 text-xs text-white/60 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
               {JSON.stringify(input, null, 2)}
             </pre>
           )}
@@ -159,7 +159,7 @@ export default function ToolCard({ name, input, result }) {
           {resultText && (
             <div className="border-t border-white/10 bg-green-500/5">
               <div className="px-3 py-1.5 text-xs text-green-400 font-medium">Result</div>
-              <pre className="px-3 pb-3 text-xs text-white/70 font-mono whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
+              <pre className="px-3 pb-3 text-xs text-white/70 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
                 {resultText}
               </pre>
             </div>

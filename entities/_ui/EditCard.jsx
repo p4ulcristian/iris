@@ -46,7 +46,7 @@ function getLanguage(filename) {
 }
 
 export default function EditCard({ filePath, oldString, newString, result, onRequestFile }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [viewMode, setViewMode] = useState('diff') // 'diff' | 'full'
   const [fullFileContent, setFullFileContent] = useState(null)
   const [loadingFull, setLoadingFull] = useState(false)
@@ -75,7 +75,7 @@ export default function EditCard({ filePath, oldString, newString, result, onReq
   }
 
   return (
-    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 overflow-hidden">
+    <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 overflow-hidden min-w-0 w-full">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -94,7 +94,7 @@ export default function EditCard({ filePath, oldString, newString, result, onReq
         )}
       </button>
 
-      {/* Expanded content */}
+      {/* Content */}
       {expanded && (
         <div className="border-t border-yellow-500/20">
           {/* Tab bar */}
@@ -126,20 +126,20 @@ export default function EditCard({ filePath, oldString, newString, result, onReq
           {/* Content */}
           {viewMode === 'diff' ? (
             // Side-by-side diff of old vs new string
-            <div className="flex text-xs font-mono">
+            <div className="flex text-xs font-mono min-w-0">
               {/* Old (left) */}
-              <div className="flex-1 border-r border-white/10 overflow-hidden">
+              <div className="flex-1 border-r border-white/10 overflow-hidden min-w-0">
                 <div className="max-h-48 overflow-y-auto overflow-x-auto">
                   {oldString?.split('\n').map((line, i) => (
-                    <pre key={i} className="px-2 py-0.5 bg-red-500/25 text-red-100 whitespace-pre border-b border-red-500/10">{line || ' '}</pre>
+                    <pre key={i} className="px-2 py-0.5 whitespace-pre overflow-hidden text-ellipsis" style={{ backgroundColor: 'rgba(239, 68, 68, 0.4)', color: '#fecaca' }}>{line || ' '}</pre>
                   ))}
                 </div>
               </div>
               {/* New (right) */}
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden min-w-0">
                 <div className="max-h-48 overflow-y-auto overflow-x-auto">
                   {newString?.split('\n').map((line, i) => (
-                    <pre key={i} className="px-2 py-0.5 bg-green-500/25 text-green-100 whitespace-pre border-b border-green-500/10">{line || ' '}</pre>
+                    <pre key={i} className="px-2 py-0.5 whitespace-pre overflow-hidden text-ellipsis" style={{ backgroundColor: 'rgba(34, 197, 94, 0.4)', color: '#bbf7d0' }}>{line || ' '}</pre>
                   ))}
                 </div>
               </div>

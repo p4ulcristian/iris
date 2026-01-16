@@ -363,13 +363,6 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
               {cwd}
             </span>
           )}
-          {/* Branch pill */}
-          {branch && (
-            <span className="liquid-glass-pill text-white/70 font-mono flex items-center gap-1">
-              <FontAwesomeIcon icon={faCodeBranch} size="xs" />
-              {branch}
-            </span>
-          )}
           {/* Time pill */}
           {elapsed !== null && (
             <span className="liquid-glass-pill text-white/70 font-mono">
