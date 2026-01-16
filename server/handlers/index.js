@@ -7,7 +7,6 @@
 import { broadcast } from '../state.js'
 import { handlers as godHandlers } from './god.js'
 import { handlers as entityHandlers } from './entity.js'
-import { handlers as ptyHandlers } from './pty.js'
 import { handlers as tabHandlers } from './tab.js'
 import { handlers as fileHandlers } from './file.js'
 import { handlers as gitHandlers } from './git.js'
@@ -21,7 +20,6 @@ import { handlers as configHandlers } from './config.js'
 const allHandlers = {
   ...godHandlers,
   ...entityHandlers,
-  ...ptyHandlers,
   ...tabHandlers,
   ...fileHandlers,
   ...gitHandlers,

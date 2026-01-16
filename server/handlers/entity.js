@@ -12,8 +12,10 @@ import {
   addEntity,
   createStageForEntity,
   splitIntoTile,
-  finalizeSpawn
+  finalizeSpawn,
+  removeEntity
 } from '../../entities/_shared/index.js'
+import { killGod } from '../gods.js'
 
 // Helper to get entity type info from registry (with fallback)
 function getEntityType(type) {
@@ -81,5 +83,23 @@ export const handlers = {
       saveState()
       broadcastState()
     }
+  },
+
+  // Kill hovered or focused entity (Alt+K)
+  'entity:kill-hovered': (ws, data) => {
+    // Server tracks hoveredEntity, fall back to focusedEntity
+    const entityId = appState.hoveredEntity || appState.focusedEntity
+    if (!entityId || !appState.entities[entityId]) return
+
+    const entity = appState.entities[entityId]
+
+    // Kill god process if it's a god
+    if (entity.type === 'god') {
+      killGod(entityId)
+    }
+
+    removeEntity(entityId)
+    saveState()
+    broadcastState()
   },
 }

@@ -1,37 +1,31 @@
-import fs from 'fs'
+/**
+ * God - Claude Code with bidirectional JSON streaming.
+ *
+ * Communicates with Claude Code via stdin/stdout using stream-json format.
+ */
+
+import { spawn } from 'child_process'
 import path from 'path'
 import os from 'os'
-import crypto from 'crypto'
-import { execSync, spawnSync } from 'child_process'
-import { SOCKET_DIR, PANTHEON, ZELLIJ_CONFIG_DIR, ZELLIJ_BIN, DEFAULT_PERMISSION_MODE, OAUTH_PORT } from './config.js'
+import fs from 'fs'
 import { createLogger } from './logger.js'
-import { getBaseGodName } from './state.js'
-
-const log = createLogger('gods')
-
-// Timing log file
-const TIMING_LOG = path.join(os.homedir(), '.local/share/iris/logs/spawn-timing.log')
-function logTiming(msg) {
-  const line = `[${new Date().toISOString()}] ${msg}\n`
-  log.log(msg)
-  try { fs.appendFileSync(TIMING_LOG, line) } catch {}
-}
 import { getComposedPrompt, getPersonalityMcpConfig } from './personalities.js'
 import { getProjectsContext } from './projects.js'
+import { OAUTH_PORT, DEFAULT_PERMISSION_MODE } from './config.js'
+import { appState, saveState, broadcastState } from './state.js'
 
-// Get Iris root directory for relative MCP paths
+const log = createLogger('god')
+
+// Get Iris root directory for MCP paths
 const __dirname = path.dirname(new URL(import.meta.url).pathname)
 const IRIS_ROOT = path.resolve(__dirname, '..')
-
-const SESSION_PREFIX = 'iris-'
 const HOME = os.homedir()
 
-// Strip ANSI escape codes from string
-function stripAnsi(str) {
-  return str.replace(/\x1b\[[0-9;]*m/g, '')
-}
+// Active god processes
+// godName -> { proc, clients: Set<WebSocket>, history: [], sessionId, buffer }
+const processes = new Map()
 
-// Build PATH with common locations for claude and other tools
+// Build PATH with common locations for claude
 function getExtendedPath() {
   const paths = [
     process.env.PATH,
@@ -41,7 +35,7 @@ function getExtendedPath() {
     `${HOME}/.bun/bin`,
   ]
 
-  // Add NVM node paths (check for existing versions)
+  // Add NVM node paths
   const nvmDir = `${HOME}/.nvm/versions/node`
   try {
     if (fs.existsSync(nvmDir)) {
@@ -50,7 +44,7 @@ function getExtendedPath() {
     }
   } catch {}
 
-  // Add mise paths (check for existing installs)
+  // Add mise paths
   const miseDir = `${HOME}/.local/share/mise/installs`
   try {
     if (fs.existsSync(miseDir)) {
@@ -68,362 +62,546 @@ function getExtendedPath() {
   return paths.filter(Boolean).join(':')
 }
 
-// Cross-runtime sleep (works with both Bun and Node)
-function sleepSync(ms) {
-  if (typeof Bun !== 'undefined' && Bun.sleepSync) {
-    Bun.sleepSync(ms)
-  } else {
-    const seconds = ms / 1000
-    try {
-      execSync(`sleep ${seconds}`, { stdio: 'ignore' })
-    } catch {
-      const end = Date.now() + ms
-      while (Date.now() < end) { /* spin */ }
-    }
+/**
+ * Encode a cwd path to Claude's project directory format.
+ * /home/user/Work/project -> -home-user-Work-project
+ */
+function encodeClaudePath(cwd) {
+  return cwd.replace(/\//g, '-')
+}
+
+/**
+ * Read session history from Claude's storage.
+ * Returns array of messages in our format, or empty array if not found.
+ */
+function readClaudeSessionHistory(sessionId, cwd) {
+  if (!sessionId || !cwd) return []
+  
+  const claudeDir = path.join(HOME, '.claude', 'projects', encodeClaudePath(cwd))
+  const sessionFile = path.join(claudeDir, `${sessionId}.jsonl`)
+  
+  log.log(`Reading session history from: ${sessionFile}`)
+  
+  if (!fs.existsSync(sessionFile)) {
+    log.log(`Session file not found: ${sessionFile}`)
+    return []
   }
-}
-
-let terminalCounter = 0
-
-export function sanitizeName(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '-')
-}
-
-// Get zellij session name for a god/terminal
-export function getSessionName(godName) {
-  return `${SESSION_PREFIX}${sanitizeName(godName)}`
-}
-
-// Legacy alias for socket path (now returns session name for compat)
-export function getSocketPath(godName) {
-  return getSessionName(godName)
-}
-
-// Check if zellij session exists
-export function sessionExists(name) {
-  const sessionName = getSessionName(name)
+  
   try {
-    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
-    return result.includes(sessionName)
-  } catch {
-    return false
-  }
-}
-
-// Check if session is active (not EXITED)
-export function isSessionActive(name) {
-  const sessionName = getSessionName(name)
-  try {
-    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
-    const line = result.split('\n').find(l => l.includes(sessionName))
-    // EXITED sessions show "(EXITED" in output
-    return line && !line.includes('EXITED')
-  } catch {
-    return false
-  }
-}
-
-// Backwards compat alias
-export function socketExists(godName) {
-  return sessionExists(godName)
-}
-
-// Re-export SOCKET_DIR for buffer file paths
-export { SOCKET_DIR }
-
-// List all iris zellij sessions
-export function listGodSessions() {
-  try {
-    const result = execSync(`"${ZELLIJ_BIN}" list-sessions 2>/dev/null || true`, { encoding: 'utf-8' })
-    const lines = result.trim().split('\n').filter(Boolean)
-
-    return lines
-      .filter(line => line.includes(SESSION_PREFIX))
-      .map(line => {
-        // Parse session name from zellij output (format: "session-name [Created ...]" or just "session-name")
-        // Strip ANSI codes first - zellij outputs colored text
-        const sessionName = stripAnsi(line.split(/\s+/)[0].trim())
-        if (!sessionName.startsWith(SESSION_PREFIX)) return null
-
-        const name = sessionName.replace(SESSION_PREFIX, '')
-        // Extract base name for PANTHEON lookup (zeus-2 → zeus)
-        const baseName = getBaseGodName(name)
-        const god = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
-
-        return {
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          sessionName,
-          socketPath: sessionName, // For backwards compat
-          color: god.color,
-          voice: god.voice,
-          status: 'working'
+    const content = fs.readFileSync(sessionFile, 'utf-8')
+    const lines = content.split('\n').filter(line => line.trim())
+    const history = []
+    
+    for (const line of lines) {
+      try {
+        const msg = JSON.parse(line)
+        
+        // Convert Claude's format to our format
+        if (msg.type === 'user' && msg.message) {
+          // User message
+          const text = msg.message.content?.[0]?.text || 
+                       (typeof msg.message.content === 'string' ? msg.message.content : '')
+          if (text) {
+            history.push({
+              type: 'user',
+              content: text,
+              timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now()
+            })
+          }
+        } else if (msg.type === 'assistant' && msg.message) {
+          // Assistant message
+          history.push({
+            type: 'assistant',
+            message: msg.message,
+            timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now()
+          })
         }
-      })
-      .filter(Boolean)
-  } catch {
+        // Skip summaries, file-history-snapshots, etc.
+      } catch (e) {
+        // Skip unparseable lines
+      }
+    }
+    
+    log.log(`Loaded ${history.length} messages from session history`)
+    return history
+  } catch (e) {
+    log.error(`Error reading session history:`, e.message)
     return []
   }
 }
 
-// Backwards compat alias
-export function listGodSockets() {
-  return listGodSessions()
-}
+/**
+ * Broadcast a message to all attached clients for a god.
+ */
+function broadcast(godName, event, data) {
+  const entry = processes.get(godName)
+  if (!entry) return
 
-export function createGodSession(name, task = '', projectRoot, options = {}) {
-  const startTime = Date.now()
-  const T = () => `T+${Date.now() - startTime}ms`
-  logTiming(`[gods] ${T()} createGodSession START for ${name}`)
-
-  const godKey = name.toLowerCase()
-  const sessionName = getSessionName(godKey)
-  // Extract base name for PANTHEON lookup (zeus-2 → zeus)
-  const baseName = getBaseGodName(name)
-  const god = PANTHEON[baseName] || { color: '#888', voice: 'emma' }
-  const { resumeSessionId, startPrompt, personality = 'god', permissionMode = DEFAULT_PERMISSION_MODE } = options
-
-  // Check if session already exists
-  if (sessionExists(godKey)) {
-    if (resumeSessionId || !isSessionActive(godKey)) {
-      // Resurrection OR dead session - clean up and recreate
-      killGodSession(godKey)
-    } else {
-      // Active session - reattach
-      return {
-        name,
-        sessionName,
-        socketPath: sessionName,
-        color: god.color,
-        voice: god.voice,
-        status: 'working',
-        exists: true
+  const msg = JSON.stringify({ event, godName, ...data })
+  for (const ws of entry.clients) {
+    try {
+      if (ws.readyState === 1) { // WebSocket.OPEN
+        ws.send(msg)
       }
+    } catch (e) {
+      log.error(`Broadcast error to ${godName}:`, e)
     }
   }
+}
 
-  // Generate session ID upfront (we control it, no detection needed)
-  const sessionId = resumeSessionId || crypto.randomUUID()
+/**
+ * Create a new God process.
+ */
+export function createGod(godName, options = {}) {
+  log.log(`createGod called for ${godName} with options:`, JSON.stringify(options))
+  const {
+    task,
+    project,
+    personality = 'god',
+    sessionId,
+    permissionMode = DEFAULT_PERMISSION_MODE
+  } = options
 
-  // Build claude command
-  let claudeArgs = ['--dangerously-skip-permissions']
-  let personalityTempFile = null
-  let mcpConfigJson = null
+  // Kill existing process if any
+  if (processes.has(godName)) {
+    killGod(godName)
+  }
 
-  // Load and apply personality (if not resuming)
-  // getComposedPrompt handles both legacy (MD) and trait-based (JSON) personalities
-  logTiming(`[gods] ${T()} Loading personality...`)
-  if (!resumeSessionId && personality && personality !== 'none') {
+  // Build claude args
+  const args = [
+    '-p',
+    '--input-format', 'stream-json',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+  ]
+
+  // Skip permissions for god (simpler for now)
+  args.push('--dangerously-skip-permissions')
+
+  // Resume existing session
+  if (sessionId) {
+    args.push('--resume', sessionId)
+  }
+
+  // Build system prompt from personality
+  let systemPrompt = ''
+  if (!sessionId && personality && personality !== 'none') {
     const personalityContent = getComposedPrompt(personality)
     const projectsContent = getProjectsContext()
 
-    // Combine personality and projects context
-    let systemContent = ''
-    if (personalityContent) {
-      systemContent += personalityContent
-    }
-    if (projectsContent) {
-      systemContent += '\n\n' + projectsContent
-    }
-
-    if (systemContent) {
-      // Write to temp file - content has complex chars (backticks, code blocks)
-      // that are hard to escape through multiple shell layers
-      personalityTempFile = path.join(os.tmpdir(), `iris-personality-${godKey}-${Date.now()}.md`)
-      fs.writeFileSync(personalityTempFile, systemContent)
-    }
-
-    // Get MCP config from personality
-    const mcpConfig = getPersonalityMcpConfig(personality, IRIS_ROOT)
-    if (mcpConfig) {
-      mcpConfigJson = JSON.stringify(mcpConfig)
-    }
+    if (personalityContent) systemPrompt += personalityContent
+    if (projectsContent) systemPrompt += '\n\n' + projectsContent
   }
 
-  // Build init prompt
-  let initPrompt = ''
-  if (!resumeSessionId) {
-    if (startPrompt) {
-      initPrompt += startPrompt + '\n\n'
-    }
-    if (task) {
-      initPrompt += task
-    }
+  if (systemPrompt) {
+    // Pass system prompt directly as argument
+    args.push('--system-prompt', systemPrompt)
   }
 
-  try {
-    logTiming(`[gods] ${T()} Personality loaded, building env...`)
-    // Pass everything via environment variables - no shell escaping needed
-    const zellijEnv = {
-      ...process.env,
-      PATH: getExtendedPath(),
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      GOD_NAME: name,
-      IRIS_HOME: IRIS_ROOT,
-      IRIS_API_PORT: String(OAUTH_PORT),
-      // Pass content via env vars - avoids all escaping issues
-      IRIS_SESSION_ID: resumeSessionId || sessionId,
-      IRIS_RESUME: resumeSessionId ? '1' : '',
-      IRIS_TASK: initPrompt || '',
-      IRIS_PERSONALITY: personalityTempFile ? fs.readFileSync(personalityTempFile, 'utf-8') : '',
-      IRIS_MCP_CONFIG: mcpConfigJson || '',
-      IRIS_PERMISSION_MODE: permissionMode || DEFAULT_PERMISSION_MODE
-    }
-
-    // Use permanent launcher script - no escaping issues
-    const launcherPath = path.join(__dirname, 'claude-launcher.cjs')
-
-    // Create layout that runs the launcher
-    const layoutFile = path.join(os.tmpdir(), `iris-layout-${godKey}-${Date.now()}.kdl`)
-    const layoutContent = `layout {
-    pane command="node" {
-        args "${launcherPath}"
-        cwd "${projectRoot}"
-    }
-}`
-    fs.writeFileSync(layoutFile, layoutContent)
-
-    // Create session with layout in background using shell subshell
-    // This runs zellij detached from the parent process, creating session + command atomically
-    // Capture errors to temp file for debugging
-    const errorLogFile = path.join(os.tmpdir(), `iris-zellij-${godKey}-${Date.now()}.log`)
-    // Use nohup + setsid (Linux) or just nohup (macOS) to fully detach zellij from the parent shell
-    // This prevents the process from being killed when execSync's shell exits
-    const detachPrefix = os.platform() === 'linux' ? 'setsid nohup' : 'nohup'
-    const bgCmd = `${detachPrefix} "${ZELLIJ_BIN}" --config-dir "${ZELLIJ_CONFIG_DIR}" --session "${sessionName}" --new-session-with-layout "${layoutFile}" < /dev/null > "${errorLogFile}" 2>&1 &`
-    logTiming(`[gods] ${T()} Spawning zellij: ${sessionName}`)
-    try {
-      execSync(bgCmd, {
-        cwd: projectRoot,
-        env: zellijEnv,
-        shell: true
-      })
-      logTiming(`[gods] ${T()} execSync completed`)
-    } catch (execErr) {
-      log.error(`execSync FAILED:`, execErr.message)
-      log.error(`execSync stderr:`, execErr.stderr?.toString())
-      log.error(`execSync stdout:`, execErr.stdout?.toString())
-      throw execErr
-    }
-    // Don't block waiting for session - attachPty() has async polling
-    // Clean up layout file after a short delay (zellij reads it async)
+  // MCP config
+  const mcpConfig = getPersonalityMcpConfig(personality, IRIS_ROOT)
+  if (mcpConfig) {
+    const mcpFile = path.join(os.tmpdir(), `iris-stream-mcp-${godName}-${Date.now()}.json`)
+    fs.writeFileSync(mcpFile, JSON.stringify(mcpConfig))
+    args.push('--mcp-config', mcpFile)
     setTimeout(() => {
-      try { fs.unlinkSync(layoutFile) } catch {}
-      try { fs.unlinkSync(errorLogFile) } catch {}
-    }, 2000)
-
-    // Delayed cleanup of personality temp file
-    // The $(cat ...) runs inside zellij pane asynchronously, so we wait
-    if (personalityTempFile) {
-      setTimeout(() => {
-        try { fs.unlinkSync(personalityTempFile) } catch {}
-      }, 5000)
-    }
-
-    logTiming(`[gods] ${T()} createGodSession DONE for ${name}`)
-    return {
-      name,
-      sessionName,
-      socketPath: sessionName,
-      color: god.color,
-      voice: god.voice,
-      status: 'working',
-      mission: task || null,
-      sessionId
-    }
-  } catch (e) {
-    log.error('Failed to create zellij session:', e)
-    // Clean up temp file on error (no async process started)
-    if (personalityTempFile) {
-      try { fs.unlinkSync(personalityTempFile) } catch {}
-    }
-    return null
-  }
-}
-
-export function createTerminalSession(options = {}, projectRoot) {
-  const { command, name: customName, color, cwd } = options
-
-  terminalCounter++
-  const displayName = customName || `Terminal ${terminalCounter}`
-  const sanitized = sanitizeName(displayName)
-  const name = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
-  const sessionName = getSessionName(sanitized)
-
-  // Check if session already exists
-  if (sessionExists(sanitized)) {
-    return {
-      name,
-      displayName,
-      sessionName,
-      socketPath: sessionName,
-      color: color || '#888888',
-      status: 'working',
-      exists: true
-    }
+      try { fs.unlinkSync(mcpFile) } catch {}
+    }, 30000)
   }
 
-  try {
-    const workDir = cwd || projectRoot
-    const shellCmd = command || 'bash'
+  // Environment
+  const env = {
+    ...process.env,
+    PATH: getExtendedPath(),
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    GOD_NAME: godName,
+    IRIS_HOME: IRIS_ROOT,
+    IRIS_API_PORT: String(OAUTH_PORT),
+  }
 
-    // Step 1: Create detached zellij session in background
-    const zellijEnv = {
-      ...process.env,
-      PATH: getExtendedPath(),
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor'
-    }
+  log.log(`Spawning ${godName}: claude ${args.slice(0, 5).join(' ')}...`)
 
-    spawnSync(ZELLIJ_BIN, ['--config-dir', ZELLIJ_CONFIG_DIR, 'attach', sessionName, '-b'], {
-      cwd: workDir,
-      env: zellijEnv,
-      stdio: 'ignore'
+  // Spawn claude process
+  const proc = spawn('claude', args, {
+    cwd: project || HOME,
+    env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  // Load history from Claude's session storage if resuming
+  const initialHistory = sessionId ? readClaudeSessionHistory(sessionId, project || HOME) : []
+
+  const entry = {
+    proc,
+    clients: new Set(),
+    history: initialHistory,
+    sessionId: sessionId || null,
+    buffer: '',
+    streaming: false,
+    currentPartialId: null,
+    // When resuming, skip adding old messages - only track new ones after this timestamp
+    startTime: Date.now(),
+    isResuming: !!sessionId,
+  }
+
+  processes.set(godName, entry)
+  log.log(`Registered ${godName} in processes map`)
+
+  // Send initial task immediately - Claude in -p mode waits for input before outputting init
+  // The init message comes WITH the response, not before
+  if (task && !sessionId) {
+    log.log(`Sending initial task for ${godName}: "${task.slice(0, 50)}"`)
+    entry.history.push({
+      type: 'user',
+      content: task,
+      timestamp: Date.now()
     })
 
-    // Wait for session to be ready
-    sleepSync(500)
+    // Format for Claude's stream-json input and send immediately
+    const msg = JSON.stringify({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: task }]
+      }
+    }) + '\n'
 
-    // Step 2: Run shell command in-place (replaces the default shell pane)
-    if (shellCmd !== 'bash') {
-      spawnSync('zellij', [
-        '--config-dir', ZELLIJ_CONFIG_DIR,
-        '-s', sessionName,
-        'run', '-i', '--',
-        'bash', '-c', `cd "${workDir}" && ${shellCmd}`
-      ], {
-        env: zellijEnv,
-        stdio: 'ignore'
+    try {
+      proc.stdin.write(msg)
+      entry.streaming = true
+      log.log(`Wrote initial task to ${godName} stdin`)
+    } catch (e) {
+      log.error(`Failed to write initial task to ${godName}:`, e)
+    }
+  } else {
+    log.log(`No initial task for ${godName} (task=${!!task}, sessionId=${sessionId})`)
+  }
+
+  // Parse NDJSON from stdout
+  proc.stdout.on('data', (chunk) => {
+    const data = chunk.toString()
+    // Don't log every chunk - too noisy and causes I/O blocking
+    entry.buffer += data
+    const lines = entry.buffer.split('\n')
+    entry.buffer = lines.pop() // Keep incomplete line
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const msg = JSON.parse(line)
+        handleClaudeMessage(godName, msg)
+      } catch (e) {
+        log.error(`Parse error for ${godName}:`, e.message, line.slice(0, 100))
+      }
+    }
+  })
+
+  // Log stderr and store for debugging
+  proc.stderr.on('data', (chunk) => {
+    const stderr = chunk.toString()
+    log.error(`${godName} stderr:`, stderr)
+
+    // Store stderr in history so frontend can show it
+    entry.history.push({
+      type: 'stderr',
+      content: stderr,
+      timestamp: Date.now()
+    })
+    broadcast(godName, 'god:stderr', { stderr })
+  })
+
+  // Handle process exit
+  proc.on('close', (code) => {
+    log.log(`God ${godName} exited with code ${code}`)
+    broadcast(godName, 'god:exited', { code })
+    processes.delete(godName)
+
+    // Update entity state
+    if (appState.entities[godName]) {
+      appState.entities[godName].readyState = code === 0 ? 'done' : 'scattered'
+      appState.entities[godName].status = `Exited with code ${code}`
+      saveState()
+      broadcastState()
+    }
+  })
+
+  proc.on('error', (err) => {
+    log.error(`God ${godName} error:`, err)
+    broadcast(godName, 'god:error', { error: err.message })
+
+    // Update entity state
+    if (appState.entities[godName]) {
+      appState.entities[godName].readyState = 'scattered'
+      appState.entities[godName].status = `Error: ${err.message}`
+      saveState()
+      broadcastState()
+    }
+  })
+
+  return { godName, sessionId }
+}
+
+/**
+ * Handle a message from Claude's stdout.
+ */
+function handleClaudeMessage(godName, msg) {
+  const entry = processes.get(godName)
+  if (!entry) return
+
+  // Extract session ID from init message
+  if (msg.type === 'system' && msg.subtype === 'init') {
+    log.log(`Init received for ${godName}`)
+    entry.sessionId = msg.session_id
+
+    // Persist sessionId to entity state for resumption after restart
+    if (appState.entities[godName]) {
+      appState.entities[godName].sessionId = msg.session_id
+      saveState()
+    }
+
+    broadcast(godName, 'god:init', {
+      sessionId: msg.session_id,
+      tools: msg.tools,
+      model: msg.model,
+    })
+    return
+  }
+
+  // Handle assistant messages
+  if (msg.type === 'assistant') {
+    const isPartial = msg.message?.stop_reason === null
+    entry.streaming = isPartial
+
+    // Skip adding to history if resuming (we already loaded from file)
+    // Only add new messages after user sends something
+    if (!entry.isResuming) {
+      // Store in history (replace partial with final)
+      if (isPartial) {
+        // Update or add partial
+        if (entry.currentPartialId) {
+          const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
+          if (idx >= 0) {
+            entry.history[idx] = { ...msg, id: entry.currentPartialId }
+          }
+        } else {
+          entry.currentPartialId = `partial-${Date.now()}`
+          entry.history.push({ ...msg, id: entry.currentPartialId })
+        }
+      } else {
+        // Final message - replace partial or add new
+        if (entry.currentPartialId) {
+          const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
+          if (idx >= 0) {
+            entry.history[idx] = msg
+          } else {
+            entry.history.push(msg)
+          }
+          entry.currentPartialId = null
+        } else {
+          entry.history.push(msg)
+        }
+      }
+    }
+
+    broadcast(godName, 'god:message', {
+      message: msg,
+      partial: isPartial,
+    })
+    return
+  }
+
+  // Handle result
+  if (msg.type === 'result') {
+    entry.streaming = false
+    entry.currentPartialId = null
+    broadcast(godName, 'god:result', {
+      result: msg.result,
+      success: msg.subtype === 'success',
+      cost: msg.total_cost_usd,
+      usage: msg.usage,
+      sessionId: msg.session_id,
+    })
+    return
+  }
+
+  // Handle user messages with tool results (auto-generated by Claude)
+  if (msg.type === 'user' && msg.message?.content) {
+    const hasToolResult = msg.message.content.some(c => c.type === 'tool_result')
+    if (hasToolResult && !entry.isResuming) {
+      entry.history.push({
+        type: 'user',
+        message: msg.message,
+        timestamp: Date.now()
       })
+      broadcast(godName, 'god:message', { message: { type: 'user', message: msg.message } })
     }
+    return
+  }
 
-    // Wait for session to initialize
-    sleepSync(300)
+  // Forward other message types
+  broadcast(godName, 'god:message', { message: msg })
+}
 
-    return {
-      name,
-      displayName,
-      sessionName,
-      socketPath: sessionName,
-      color: color || '#888888',
-      status: 'working'
+/**
+ * Send a user message to a god.
+ */
+export function sendUserMessage(godName, text, skipHistory = false) {
+  log.log(`sendUserMessage to ${godName}: "${text.slice(0, 50)}"`)
+  const entry = processes.get(godName)
+  if (!entry || !entry.proc) {
+    log.error(`Cannot send to ${godName}: not found (processes: ${Array.from(processes.keys()).join(', ')})`)
+    return false
+  }
+
+  // Clear resuming flag - new messages should be tracked
+  entry.isResuming = false
+
+  // Add to history (unless already added, e.g. for pending initial task)
+  if (!skipHistory) {
+    const userMsg = {
+      type: 'user',
+      content: text,
+      timestamp: Date.now(),
     }
+    entry.history.push(userMsg)
+
+    // Broadcast to clients (so sender sees their message)
+    broadcast(godName, 'god:user', { text })
+  }
+
+  // Format for Claude's stream-json input
+  const msg = JSON.stringify({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'text', text }]
+    }
+  }) + '\n'
+
+  try {
+    log.log(`Writing to ${godName} stdin:`, msg.slice(0, 100))
+    entry.proc.stdin.write(msg)
+    entry.streaming = true
+    return true
   } catch (e) {
-    log.error('Failed to create terminal session:', e)
-    return null
+    log.error(`Write error to ${godName}:`, e)
+    return false
   }
 }
 
-export function killGodSession(godName) {
-  const sessionName = getSessionName(godName)
+/**
+ * Attach a WebSocket client to a god.
+ */
+export function attachClient(godName, ws) {
+  const entry = processes.get(godName)
+  if (!entry) return null
+
+  entry.clients.add(ws)
+
+  // Send history to new client
+  ws.send(JSON.stringify({
+    event: 'god:history',
+    godName,
+    history: entry.history,
+    sessionId: entry.sessionId,
+    streaming: entry.streaming,
+  }))
+
+  return entry
+}
+
+/**
+ * Detach a WebSocket client from a god.
+ */
+export function detachClient(godName, ws) {
+  const entry = processes.get(godName)
+  if (entry) {
+    entry.clients.delete(ws)
+  }
+}
+
+/**
+ * Kill a god process.
+ */
+export function killGod(godName) {
+  const entry = processes.get(godName)
+  if (!entry) return false
 
   try {
-    execSync(`"${ZELLIJ_BIN}" delete-session "${sessionName}" --force 2>/dev/null || true`, { stdio: 'ignore' })
+    entry.proc.kill('SIGTERM')
   } catch {}
 
-  // Clean up any leftover buffer files
-  const bufferPath = path.join(SOCKET_DIR, `${sanitizeName(godName)}.buf`)
-  try { fs.unlinkSync(bufferPath) } catch {}
-
+  processes.delete(godName)
   return true
+}
+
+/**
+ * List all active gods.
+ */
+export function listGods() {
+  return Array.from(processes.keys()).map(godName => {
+    const entry = processes.get(godName)
+    return {
+      godName,
+      sessionId: entry.sessionId,
+      clientCount: entry.clients.size,
+      historyLength: entry.history.length,
+      streaming: entry.streaming,
+    }
+  })
+}
+
+/**
+ * Get a god entry (for handlers).
+ */
+export function getGod(godName) {
+  return processes.get(godName)
+}
+
+/**
+ * List god sockets (stub for compatibility with old Zellij-based code).
+ * Returns empty array since gods now run as direct processes.
+ */
+export function listGodSockets() {
+  return []
+}
+
+/**
+ * Create a god session (compatibility alias for createGod).
+ */
+export function createGodSession(godName, task, project, options = {}) {
+  const result = createGod(godName, {
+    task,
+    project,
+    ...options
+  })
+  return result ? { ...result, exists: false } : null
+}
+
+/**
+ * Create a terminal session (stub - terminals handled differently now).
+ */
+export function createTerminalSession(options = {}, projectRoot) {
+  // Generate terminal name
+  const existingTerminals = Object.keys(appState.entities)
+    .filter(id => appState.entities[id]?.type === 'terminal')
+  const num = existingTerminals.length + 1
+  const name = `Terminal-${num}`
+
+  return {
+    name,
+    displayName: `Terminal ${num}`,
+    color: options.color || '#888888',
+    exists: false
+  }
+}
+
+/**
+ * Get session name for a god (for compatibility).
+ */
+export function getSessionName(godName) {
+  const entry = processes.get(godName)
+  return entry?.sessionId || godName
 }

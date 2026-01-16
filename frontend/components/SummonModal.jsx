@@ -127,7 +127,9 @@ export default function SummonModal({
         onSubmit={handleSubmit}
         className="relative liquid-glass-modal w-96 p-5"
       >
-        <h3 className="liquid-glass-text text-lg mb-4">Summon a God</h3>
+        <h3 className="liquid-glass-text text-lg mb-4">
+          Summon a God
+        </h3>
 
         {/* God selector */}
         <div className="mb-4">

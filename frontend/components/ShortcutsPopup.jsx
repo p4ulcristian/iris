@@ -137,13 +137,13 @@ export default function ShortcutsPopup({ isOpen, onSpawnEntity, onOpenSummonModa
               {order.map(type => {
                 const entity = entityRegistry[type]
                 if (!entity) return null
-                const isGod = type === 'god'
+                const usesSummonModal = type === 'god'
                 return (
                   <EntityButton
                     key={type}
                     type={type}
                     label={entity.label}
-                    onClick={(e) => isGod ? onOpenSummonModal?.() : onSpawnEntity?.(type, {}, e)}
+                    onClick={(e) => usesSummonModal ? onOpenSummonModal?.(type) : onSpawnEntity?.(type, {}, e)}
                   />
                 )
               })}

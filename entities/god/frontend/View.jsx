@@ -1,412 +1,256 @@
-import { useEffect, useRef, useMemo, useState, useLayoutEffect, useCallback } from 'react'
-import { Terminal as XTerm } from '@xterm/xterm'
-import { ClipboardAddon } from '@xterm/addon-clipboard'
-import { generatePalette, getThemeTerminalSettings } from '@/themes'
-import { useStore } from '@/store'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import { WS_URL } from '@/config'
+import { MarkdownRenderer, ToolCard } from '../../_ui'
 
-// Convert hex color to RGB for ANSI escape codes
-function hexToRgb(hex) {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
-  if (!result) return '255;255;255'
-  return `${parseInt(result[1], 16)};${parseInt(result[2], 16)};${parseInt(result[3], 16)}`
-}
-
-// Approximate cell dimensions for initial sizing (before xterm renders)
-const APPROX_CELL_WIDTH = 9
-const APPROX_CELL_HEIGHT = 17
-
-// xterm has 4px padding on each side (see index.css .xterm)
-const XTERM_PADDING = 8
-
-// Resize polling interval (ms)
-const RESIZE_POLL_INTERVAL = 200
-// Debounce delay before sending resize to server (ms)
-const RESIZE_DEBOUNCE_DELAY = 300
-
-export default function TerminalContent({ entity, isFocused }) {
-  const containerRef = useRef(null)
-  const termRef = useRef(null)
-  const wsRef = useRef(null)
-  const cellDimsRef = useRef(null)
-  const lastSizeRef = useRef({ cols: 0, rows: 0 })
-  const lastPixelsRef = useRef({ width: 0, height: 0 })
-  const resizeDebounceRef = useRef(null)
-
-  const { name, displayName, color } = entity
-  const godName = name
-
-  // Track which container the terminal is attached to (for hot reload detection)
-  const attachedContainerRef = useRef(null)
-  const [remountKey, setRemountKey] = useState(0)
-
-  // Detect container change: force terminal remount if container DOM node changes
-  useLayoutEffect(() => {
-    if (attachedContainerRef.current && attachedContainerRef.current !== containerRef.current) {
-      console.warn(`[${godName}] Container changed! old=${attachedContainerRef.current?.className} new=${containerRef.current?.className}`)
-      setRemountKey(k => k + 1)
-    }
-    // Always update the attached ref
-    attachedContainerRef.current = containerRef.current
+function GodView({ entity, isFocused }) {
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [connected, setConnected] = useState(false)
+  const [status, setStatus] = useState(null)
+  const [streaming, setStreaming] = useState(false)
+  const [streamingText, setStreamingText] = useState('') // Accumulates text deltas
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('iris-god-viewMode') || 'pro'
   })
 
-  // Log mount/unmount
+  const wsRef = useRef(null)
+  const scrollRef = useRef(null)
+  const godName = entity?.id
+
+  // Auto-scroll on new content
   useEffect(() => {
-    console.warn(`[${godName}] Component mounted, remountKey=${remountKey}`)
-    return () => console.warn(`[${godName}] Component unmounting`)
-  }, [godName, remountKey])
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)
+  }, [messages, streamingText])
 
-  // Capture initial color for loading message (don't want color changes to recreate terminal)
-  const initialColorRef = useRef(color)
-
-  // Get god color from server - use custom color for terminals, theme color for gods
-  const godColors = useStore(s => s.godColors)
-  const godColor = displayName ? color : (godColors[name.toLowerCase()] || color)
-
-  // Get theme terminal settings and generate palette using theme-specific god color
-  const theme = useStore(s => s.theme)
-  const themeTerminalSettings = useMemo(() => getThemeTerminalSettings(theme), [theme])
-  const palette = useMemo(() => generatePalette(godColor, themeTerminalSettings), [godColor, themeTerminalSettings])
-
-  // Helper: calculate cols/rows from pixel dimensions
-  // Subtract xterm padding (8px total) from container size
-  const calcDimensions = (width, height) => {
-    const cellWidth = cellDimsRef.current?.width || APPROX_CELL_WIDTH
-    const cellHeight = cellDimsRef.current?.height || APPROX_CELL_HEIGHT
-    return {
-      cols: Math.floor((width - XTERM_PADDING) / cellWidth) || 80,
-      rows: Math.floor((height - XTERM_PADDING) / cellHeight) || 24
-    }
-  }
-
-  // Update terminal theme when palette changes (theme switch)
-  const isGod = !entity.displayName
+  // WebSocket
   useEffect(() => {
-    if (termRef.current) {
-      try {
-        const termTheme = isGod
-          ? { ...palette, cursor: 'transparent', cursorAccent: 'transparent' }
-          : palette
-        termRef.current.options.theme = termTheme
-        termRef.current.refresh(0, termRef.current.rows - 1)
-      } catch {}
-    }
-  }, [palette, isGod])
+    if (!godName) return
 
-
-  // Focus when becoming focused
-  useEffect(() => {
-    if (isFocused && termRef.current) {
-      const timeout = setTimeout(() => {
-        try {
-          termRef.current?.focus()
-        } catch {}
-      }, 100)
-      return () => clearTimeout(timeout)
-    }
-  }, [isFocused])
-
-  // Handle scroll events from App.jsx (Shift+Arrow) - forward to Zellij
-  useEffect(() => {
-    if (!isFocused) return
-
-    const handleScroll = (e) => {
-      const term = termRef.current
-      if (!term || wsRef.current?.readyState !== WebSocket.OPEN) return
-
-      // Determine scroll amount
-      let lines = 0
-      switch (e.detail.key) {
-        case 'ArrowUp': lines = -5; break
-        case 'ArrowDown': lines = 5; break
-        case 'PageUp': lines = -term.rows; break
-        case 'PageDown': lines = term.rows; break
-      }
-
-      // Forward to Zellij via SGR mouse sequences
-      const button = lines > 0 ? 65 : 64
-      const count = Math.abs(lines)
-      for (let i = 0; i < count; i++) {
-        wsRef.current.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
-      }
-    }
-
-    window.addEventListener('iris:scroll-terminal', handleScroll)
-    return () => window.removeEventListener('iris:scroll-terminal', handleScroll)
-  }, [isFocused, godName])
-
-
-
-  // Main terminal setup
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    console.warn(`[${godName}] Terminal effect running, container:`, containerRef.current)
-
-    // Track current container for hot reload detection
-    attachedContainerRef.current = containerRef.current
-
-    // Initial size from actual container measurement (use offset* to ignore transforms)
-    const { cols: initialCols, rows: initialRows } = calcDimensions(
-      containerRef.current.offsetWidth || 800,
-      containerRef.current.offsetHeight || 600
-    )
-
-    // Gods (no displayName) hide cursor, terminals show it
-    const termTheme = isGod
-      ? { ...palette, cursor: 'transparent', cursorAccent: 'transparent' }
-      : palette
-
-    const term = new XTerm({
-      cursorBlink: !isGod,
-      fontSize: 14,
-      fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
-      rows: initialRows,
-      cols: initialCols,
-      theme: termTheme,
-      allowTransparency: true,
-      scrollback: 0  // No xterm scrollback - Zellij manages history
-    })
-
-    term.open(containerRef.current)
-    termRef.current = term
-
-    // Load clipboard addon for OSC 52 support
-    const clipboardAddon = new ClipboardAddon()
-    term.loadAddon(clipboardAddon)
-
-    // Helper to measure and update cell dimensions
-    const updateCellDimensions = () => {
-      try {
-        const dims = term._core?._renderService?.dimensions
-        if (dims?.css?.cell) {
-          const newWidth = dims.css.cell.width
-          const newHeight = dims.css.cell.height
-          const current = cellDimsRef.current
-
-          // Only update if dimensions changed
-          if (!current || current.width !== newWidth || current.height !== newHeight) {
-            cellDimsRef.current = { width: newWidth, height: newHeight }
-            return true // dimensions changed
-          }
-        }
-      } catch {}
-      return false
-    }
-
-    // Capture cell dimensions after first render
-    const onFirstRender = term.onRender(() => {
-      onFirstRender.dispose()
-      updateCellDimensions()
-    })
-
-    // Re-measure after fonts load for precision
-    document.fonts.ready.then(() => {
-      if (updateCellDimensions()) {
-        // Fonts caused dimension change - refit terminal
-        const el = containerRef.current
-        if (el && el.offsetWidth > 50 && el.offsetHeight > 50) {
-          const { cols, rows } = calcDimensions(el.offsetWidth, el.offsetHeight)
-          if (cols > 0 && rows > 0 && (cols !== term.cols || rows !== term.rows)) {
-            term.resize(cols, rows)
-          }
-        }
-      }
-    })
-
-    const textarea = term.textarea
-
-    // Intercept keyboard shortcuts before xterm handles them
-    const handleShortcut = (e) => {
-      const key = e.key.toLowerCase()
-
-      // Cmd+C (macOS) or Ctrl+Shift+C (Linux) to copy selection
-      const isCopyShortcut = (e.metaKey && key === 'c') || (e.ctrlKey && e.shiftKey && key === 'c')
-      if (isCopyShortcut && term.hasSelection()) {
-        e.preventDefault()
-        e.stopPropagation()
-        navigator.clipboard.writeText(term.getSelection())
-        return
-      }
-
-      // Cmd+V (macOS) or Ctrl+Shift+V (Linux) to paste
-      const isPasteShortcut = (e.metaKey && key === 'v') || (e.ctrlKey && e.shiftKey && key === 'v')
-      if (isPasteShortcut) {
-        e.preventDefault()
-        e.stopPropagation()
-        navigator.clipboard.readText().then(text => {
-          if (text) {
-            term.paste(text)
-          }
-        }).catch(err => console.error('Paste failed:', err))
-        return
-      }
-
-      const isCtrlShortcut = e.ctrlKey && !e.shiftKey && ['n', 'k', 'f', 'l', 'd', 'r'].includes(key)
-      const isAltShortcut = e.altKey && (
-        ['n', 'k', 'f', ',', '.'].includes(key) ||
-        (e.key >= '1' && e.key <= '9')
-      )
-
-      if (isCtrlShortcut || isAltShortcut) {
-        e.preventDefault()
-        e.stopPropagation()
-        e.stopImmediatePropagation()
-        window.dispatchEvent(new KeyboardEvent('keydown', {
-          key: e.key,
-          code: e.code,
-          ctrlKey: e.ctrlKey,
-          altKey: e.altKey,
-          shiftKey: e.shiftKey,
-          bubbles: true
-        }))
-      }
-    }
-
-    if (textarea) {
-      textarea.addEventListener('keydown', handleShortcut, true)
-    }
-
-    const container = containerRef.current
-    container.addEventListener('keydown', handleShortcut, true)
-
-    // Simple polling for resize - reliable and self-healing
-    // Use offsetWidth/Height instead of getBoundingClientRect to ignore CSS transforms
-    // (Framer Motion uses scale/rotate which affects getBoundingClientRect)
-    const resizePoll = setInterval(() => {
-      try {
-        const width = container.offsetWidth
-        const height = container.offsetHeight
-        if (width < 50 || height < 50) return
-
-        // Skip if pixel dimensions unchanged (most common case)
-        if (width === lastPixelsRef.current.width &&
-            height === lastPixelsRef.current.height) {
-          return
-        }
-        lastPixelsRef.current = { width, height }
-
-        updateCellDimensions()
-        const { cols, rows } = calcDimensions(width, height)
-
-        // Only resize if cols/rows actually changed
-        if (cols > 0 && rows > 0 &&
-            (cols !== lastSizeRef.current.cols || rows !== lastSizeRef.current.rows)) {
-          lastSizeRef.current = { cols, rows }
-          term.resize(cols, rows)
-          console.warn(`[${godName}] Resize ${cols}x${rows}`)
-
-          // Debounce server resize - only send after size is stable
-          // This prevents rapid resize events from corrupting Zellij scrollback
-          if (resizeDebounceRef.current) {
-            clearTimeout(resizeDebounceRef.current)
-          }
-          resizeDebounceRef.current = setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              console.warn(`[${godName}] Sending debounced resize to server: ${cols}x${rows}`)
-              wsRef.current.send(JSON.stringify({
-                event: 'pty:resize',
-                godName,
-                cols,
-                rows
-              }))
-            }
-          }, RESIZE_DEBOUNCE_DELAY)
-        }
-      } catch {}
-    }, RESIZE_POLL_INTERVAL)
-
-    // Send user input to PTY
-    term.onData((data) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ event: 'pty:input', godName, data }))
-      }
-    })
-
-    // WebSocket connection
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
 
     ws.onopen = () => {
-      console.warn(`[TerminalContent] ${godName}: WebSocket opened, sending pty:attach`)
-      ws.send(JSON.stringify({ event: 'pty:attach', godName, cols: term.cols, rows: term.rows }))
+      console.log('[GodView] WebSocket connected, sending attach for:', godName)
+      setConnected(true)
+      ws.send(JSON.stringify({ event: 'god:attach', godName }))
     }
 
-    let isFirstMessage = true
-    ws.onmessage = (event) => {
+    ws.onclose = () => setConnected(false)
+
+    ws.onmessage = (e) => {
       try {
-        const msg = JSON.parse(event.data)
-        if (msg.event === 'pty:output' && msg.godName === godName) {
-          if (typeof msg.data === 'string') {
-            term.write(msg.data)
-            // After initial buffer replay, reset scroll state and log buffer info
-            if (isFirstMessage && msg.data.length > 500) {
-              isFirstMessage = false
-              console.warn(`[${godName}] Buffer received: ${msg.data.length} chars`)
-              setTimeout(() => {
-                const buffer = term.buffer?.active
-                console.warn(`[${godName}] After write: type=${buffer?.type}, base=${buffer?.baseY}, viewport=${buffer?.viewportY}, length=${buffer?.length}`)
-                term.scrollToBottom()
-                term.refresh(0, term.rows - 1)
-              }, 100)
+        const msg = JSON.parse(e.data)
+        if (msg.godName && msg.godName !== godName) return
+
+        if (msg.event === 'god:history') {
+          // Filter out stream_event from history, keep final messages
+          const filtered = (msg.history || []).filter(m => m.type !== 'stream_event')
+          setMessages(filtered)
+          setStreaming(msg.streaming || false)
+        } else if (msg.event === 'god:init') {
+          setStatus(`Connected: ${msg.model}`)
+        } else if (msg.event === 'god:message') {
+          const m = msg.message
+
+          // Handle streaming events - accumulate text deltas
+          if (m.type === 'stream_event') {
+            const evt = m.event
+            if (evt?.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+              setStreamingText(prev => prev + evt.delta.text)
+              setStreaming(true)
+            } else if (evt?.type === 'message_stop') {
+              // Stream complete, clear streaming text (final message will follow)
+              setStreamingText('')
             }
+            // Don't add stream_event to messages
+            return
+          }
+
+          // Final assistant message - add to messages
+          if (m.type === 'assistant') {
+            setStreamingText('') // Clear streaming text
+            setStreaming(false)
+          }
+
+          setMessages(prev => [...prev, m])
+          setStreaming(msg.partial || false)
+        } else if (msg.event === 'god:result') {
+          setStreaming(false)
+          setStreamingText('')
+          setStatus(msg.success ? `Done ($${msg.cost?.toFixed(4)})` : 'Error')
+        } else if (msg.event === 'god:stderr') {
+          setMessages(prev => [...prev, { type: 'stderr', content: msg.stderr }])
+        } else if (msg.event === 'god:error') {
+          setStatus(`Error: ${msg.error}`)
+        } else if (msg.event === 'god:exited') {
+          setStatus(`Exited (${msg.code})`)
+        } else if (msg.event === 'god:user') {
+          // User message from initial task or other source
+          setMessages(prev => [...prev, { type: 'user', content: msg.text }])
+          setStreaming(true)
+        }
+      } catch {}
+    }
+
+    return () => ws.close()
+  }, [godName])
+
+  const handleSend = () => {
+    if (!input.trim() || !wsRef.current || !connected) return
+    // Don't add to messages here - server broadcasts god:user which adds it
+    wsRef.current.send(JSON.stringify({ event: 'god:send', godName, text: input.trim() }))
+    setInput('')
+    setStreamingText('')
+  }
+
+  const renderMsg = (msg, i) => {
+    // JSON mode - show raw JSON for everything
+    if (viewMode === 'json') {
+      return (
+        <div key={i} className="mb-2">
+          <pre className="p-2 bg-black/40 rounded text-xs font-mono text-green-400 overflow-x-auto">
+            {JSON.stringify(msg, null, 2)}
+          </pre>
+        </div>
+      )
+    }
+
+    // Skip user messages with tool_result - they're shown inline with ToolCard
+    if (msg.type === 'user' && msg.message?.content) {
+      const hasToolResult = msg.message.content.some(c => c.type === 'tool_result')
+      if (hasToolResult) return null
+    }
+
+    // User message - right side bubble
+    if (msg.type === 'user' && msg.content) {
+      return (
+        <div key={i} className="flex justify-end mb-3">
+          <div className="max-w-[75%] px-4 py-2 rounded-2xl rounded-br-sm text-sm text-white shadow-lg" style={{ backgroundColor: '#2563eb' }}>
+            {msg.content}
+          </div>
+        </div>
+      )
+    }
+
+    // Stderr - centered warning
+    if (msg.type === 'stderr') {
+      return (
+        <div key={i} className="flex justify-center mb-3">
+          <pre className="max-w-[85%] p-2 bg-yellow-500/10 rounded-lg text-xs font-mono text-yellow-400">
+            {msg.content}
+          </pre>
+        </div>
+      )
+    }
+
+    // Assistant message - left side bubble
+    if (msg.type === 'assistant' && msg.message?.content) {
+      const text = msg.message.content.filter(c => c.type === 'text').map(c => c.text).join('')
+      const tools = msg.message.content.filter(c => c.type === 'tool_use')
+
+      // In chat mode, skip messages that have no text (only tool calls)
+      if (viewMode === 'chat' && !text) return null
+
+      // Find tool results from subsequent messages
+      const getToolResult = (toolUseId) => {
+        // Look in following messages for tool_result
+        for (let j = i + 1; j < messages.length; j++) {
+          const nextMsg = messages[j]
+          if (nextMsg.type === 'user' && nextMsg.message?.content) {
+            const results = nextMsg.message.content.filter(c => c.type === 'tool_result')
+            const match = results.find(r => r.tool_use_id === toolUseId)
+            if (match) return match
           }
         }
-      } catch (e) {
-        console.error(`[TerminalContent] ${godName}: error`, e)
+        return null
       }
+
+      return (
+        <div key={i} className="flex justify-start mb-3">
+          <div className="max-w-[85%]">
+            {text && (
+              <div className="px-4 py-2 bg-white/10 rounded-2xl rounded-bl-md text-sm">
+                <MarkdownRenderer content={text} />
+              </div>
+            )}
+            {viewMode === 'pro' && tools.map((t, j) => {
+              const result = getToolResult(t.id)
+              return (
+                <div key={j} className="mt-2">
+                  <ToolCard name={t.name} input={t.input} result={result} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )
     }
 
-    // Show loading state immediately
-    term.write(`\x1b[38;2;${hexToRgb(initialColorRef.current)}m⟡ ${entity.displayName ? 'Starting' : 'Summoning'} ${entity.displayName || name}...\x1b[0m\r\n\r\n`)
-
-    term.focus()
-
-    // Wheel handler - always forward to Zellij (no xterm scrollback)
-    // SGR mouse format: \x1b[<button;x;yM where button is 64 (up) or 65 (down)
-    const handleWheel = (e) => {
-      if (!container.contains(e.target)) return
-
-      const button = e.deltaY > 0 ? 65 : 64
-      const scrollCount = Math.max(1, Math.abs(Math.round(e.deltaY / 50)))
-      for (let i = 0; i < scrollCount; i++) {
-        wsRef.current?.send(JSON.stringify({ event: 'pty:input', godName, data: `\x1b[<${button};1;1M` }))
-      }
-      e.preventDefault()
-      e.stopPropagation()
-    }
-    window.addEventListener('wheel', handleWheel, { capture: true, passive: false })
-
-    return () => {
-      console.warn(`[${godName}] Terminal effect cleanup - disposing xterm`)
-      window.removeEventListener('wheel', handleWheel, { capture: true })
-      onFirstRender.dispose()
-      clearInterval(resizePoll)
-      if (resizeDebounceRef.current) {
-        clearTimeout(resizeDebounceRef.current)
-      }
-      if (textarea) {
-        textarea.removeEventListener('keydown', handleShortcut, true)
-      }
-      container.removeEventListener('keydown', handleShortcut, true)
-      term.dispose()
-      ws.close()
-    }
-  }, [godName, remountKey])
-
-
-  // Focus terminal when container is clicked (handles DOM focus loss)
-  const handleContainerClick = useCallback(() => {
-    if (termRef.current) {
-      termRef.current.focus()
-    }
-  }, [])
+    // Default fallback - centered
+    return (
+      <div key={i} className="flex justify-center mb-3">
+        <div className="text-sm text-white/50">{JSON.stringify(msg).slice(0, 200)}</div>
+      </div>
+    )
+  }
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 entity-content"
-      onClick={handleContainerClick}
-    />
+    <div className="h-full flex flex-col bg-black/20" style={{ userSelect: 'text', WebkitUserSelect: 'text' }}>
+      <div className="p-2 border-b border-white/10 flex justify-between items-center">
+        <div className="flex items-center gap-2 text-sm text-white/70">
+          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+          {entity?.name}
+          <button
+            onClick={() => {
+              const modes = ['chat', 'pro', 'json']
+              const next = modes[(modes.indexOf(viewMode) + 1) % modes.length]
+              setViewMode(next)
+              localStorage.setItem('iris-god-viewMode', next)
+            }}
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              viewMode === 'json'
+                ? 'bg-green-600 text-green-100'
+                : viewMode === 'pro'
+                  ? 'bg-purple-600 text-purple-100'
+                  : 'bg-blue-600 text-blue-100'
+            }`}
+          >
+            {viewMode === 'json' ? 'JSON' : viewMode === 'pro' ? 'Pro' : 'Chat'}
+          </button>
+          {streaming && <span className="text-purple-400 animate-pulse">...</span>}
+        </div>
+        {status && <span className="text-xs text-white/50">{status}</span>}
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3" style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text' }}>
+        {messages.length === 0 && !streamingText && (
+          <div className="text-white/30 text-sm text-center mt-4">Type a message to start</div>
+        )}
+        {useMemo(() => messages.map(renderMsg), [messages, viewMode])}
+
+        {/* Live streaming text - left side like Claude */}
+        {streamingText && (
+          <div className="flex justify-start mb-3">
+            <div className="max-w-[85%] px-4 py-2 bg-white/10 rounded-2xl rounded-bl-md text-sm border border-purple-500/30">
+              <MarkdownRenderer content={streamingText} />
+              <span className="inline-block w-2 h-4 bg-purple-400 ml-1 animate-pulse" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-2 border-t border-white/10">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSend()}
+          placeholder={connected ? "Message..." : "Connecting..."}
+          disabled={!connected}
+          className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 disabled:opacity-50"
+        />
+      </div>
+    </div>
   )
 }
+
+export default memo(GodView)

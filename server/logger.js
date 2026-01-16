@@ -20,11 +20,11 @@ function timestamp() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
-// Write to log file (only in dev)
+// Write to log file (only in dev) - async to avoid blocking
 function writeLog(component, message) {
   if (!isDev) return
   const line = `[${timestamp()}] [${component}] ${message}\n`
-  fs.appendFileSync(BACKEND_LOG, line)
+  fs.appendFile(BACKEND_LOG, line, () => {})
 }
 
 // Create logger for a specific component

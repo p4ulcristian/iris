@@ -2,6 +2,12 @@ import { forwardRef } from 'react'
 import { useStore } from '../store'
 import { hexToRgbCss } from '../../entities/_shared/colors'
 
+// Extract base god name from display name: "Apollo 1" → "apollo", "zeus-2" → "zeus"
+function getBaseGodName(name) {
+  if (!name) return ''
+  return name.toLowerCase().replace(/-?\d+$/, '').replace(/\s+\d+$/, '').trim()
+}
+
 const TileCard = forwardRef(function TileCard({
   entity,
   isFocused,
@@ -15,8 +21,10 @@ const TileCard = forwardRef(function TileCard({
   const entityRegistry = useStore(s => s.entityRegistry)
 
   // Use god color for gods, entity color for others, fall back to type default from registry
-  const entityColor = type === 'god'
-    ? (godColors[name?.toLowerCase()] || color || '#888')
+  // Extract base god name (e.g., "Apollo 1" → "apollo") to look up theme color
+  const baseGodName = getBaseGodName(name)
+  const entityColor = (type === 'god')
+    ? (godColors[baseGodName] || color || entityRegistry[type]?.color || '#888')
     : (color || entityRegistry[type]?.color || '#888888')
 
   const focusClass = isFocused ? 'tile-focused' : 'tile-unfocused'

@@ -11,7 +11,6 @@ import {
 } from '../state.js'
 import * as layout from '../layout.js'
 import { createGodSession, createTerminalSession } from '../gods.js'
-import { clearOutputBuffer } from '../pty.js'
 import {
   createEntityBase,
   addEntity,
@@ -72,7 +71,6 @@ export const handlers = {
         const entityId = generateGodId(baseName)
         const displayName = getGodDisplayName(entityId)
 
-        clearOutputBuffer(entityId)
         const god = createGodSession(entityId, '', projectRoot, {
           startPrompt: appState.settings?.startPrompt,
           userName: appState.settings?.userName
@@ -159,7 +157,6 @@ export const handlers = {
         const godEntityId = generateGodId(baseName)
         const displayName = getGodDisplayName(godEntityId)
 
-        clearOutputBuffer(godEntityId)
         const god = createGodSession(godEntityId, '', projectRoot, {
           startPrompt: appState.settings?.startPrompt,
           userName: appState.settings?.userName

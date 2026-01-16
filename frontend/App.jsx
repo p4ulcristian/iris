@@ -165,7 +165,7 @@ export default function App() {
   } = actions
 
   const [confirmModal, setConfirmModal] = useState(null)
-  const [summonModalOpen, setSummonModalOpen] = useState(false)
+  const [summonModalType, setSummonModalType] = useState(null) // null = closed, 'god'
   const [showShortcuts, setShowShortcuts] = useState(false)
 
   // Sidebar width state with localStorage persistence
@@ -401,7 +401,9 @@ export default function App() {
     const direction = event?.shiftKey ? 'vertical' : (data.direction || getSmartDirection())
 
     // god and terminal have their own spawn events
-    const eventName = type === 'terminal' ? 'terminal:spawn' : 'entity:spawn'
+    const eventName = type === 'terminal' ? 'terminal:spawn'
+      : type === 'god' ? 'god:spawn'
+      : 'entity:spawn'
     send({ event: eventName, type, ...data, mode, direction })
   }, [send, getSmartDirection])
 
@@ -496,11 +498,11 @@ export default function App() {
       // Ignore inputs unless it's an app shortcut
       if (!isAppShortcut && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return
 
-      // Cmd+N (Mac) / Alt+N: Open summon modal (new god)
+      // Cmd+N (Mac) / Alt+N: Open summon modal
       if (isModifierPressed(e) && code === 'KeyN') {
         e.preventDefault()
         e.stopPropagation()
-        setSummonModalOpen(true)
+        setSummonModalType('god')
         return
       }
 
@@ -628,7 +630,7 @@ export default function App() {
       if ((isMacOS && e.key === 'Meta') || (!isMacOS && e.key === 'Alt')) {
         e.preventDefault()
         // Show shortcuts when modifier is held (but not if a modal is open)
-        if (!summonModalOpen && !confirmModal) {
+        if (!summonModalType && !confirmModal) {
           // Small delay to avoid flickering on modifier+key combos
           modifierHeldTimer = setTimeout(() => setShowShortcuts(true), 150)
         }
@@ -664,7 +666,7 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp, true)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [summonModalOpen, confirmModal])
+  }, [summonModalType, confirmModal])
 
   // Get ALL gods for persistent terminal rendering
   const allGods = getAllGods()
@@ -761,7 +763,7 @@ export default function App() {
                     send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
                   }}
                   onSpawnEntity={handleSpawnEntity}
-                  onOpenSummonModal={() => setSummonModalOpen(true)}
+                  onOpenSummonModal={(type = 'god') => setSummonModalType(type)}
                   width={sidebarWidth}
                   onWidthChange={handleSidebarResize}
                 />
@@ -857,19 +859,19 @@ export default function App() {
 
       {/* Summon modal */}
       <SummonModal
-        isOpen={summonModalOpen}
+        isOpen={!!summonModalType}
         onSummon={(name, task, personality, project, permissionMode, event) => {
           handleSummonGod(name, task, personality, project, permissionMode, event)
-          setSummonModalOpen(false)
+          setSummonModalType(null)
         }}
-        onCancel={() => setSummonModalOpen(false)}
+        onCancel={() => setSummonModalType(null)}
       />
 
       {/* Shortcuts popup (shown while Alt is held) */}
       <ShortcutsPopup
         isOpen={showShortcuts}
         onSpawnEntity={handleSpawnEntity}
-        onOpenSummonModal={() => setSummonModalOpen(true)}
+        onOpenSummonModal={(type = 'god') => setSummonModalType(type)}
       />
     </div>
     </DragProvider>

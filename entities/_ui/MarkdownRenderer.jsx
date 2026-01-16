@@ -1,5 +1,6 @@
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+// import CodeBlock from './CodeBlock' // TODO: re-enable for tool cards
 
 // Styled markdown components for consistent rendering across the app
 const markdownComponents = {

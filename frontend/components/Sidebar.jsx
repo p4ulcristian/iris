@@ -788,13 +788,13 @@ function SpawnRow({ onSpawnEntity, onOpenSummonModal }) {
         {entityRegistry._order?.map(type => {
           const entity = entityRegistry[type]
           if (!entity) return null
-          const isGod = type === 'god'
+          const usesSummonModal = type === 'god'
           return (
             <div key={type} className="sidebar-spawn-btn flex-shrink-0 w-12 aspect-square">
               <DraggableTypeButton
                 entityType={type}
                 title={`${entity.label} (Shift: vertical, Ctrl: new stage)`}
-                onClick={isGod ? onOpenSummonModal : (e) => onSpawnEntity(type, {}, e)}
+                onClick={usesSummonModal ? () => onOpenSummonModal(type) : (e) => onSpawnEntity(type, {}, e)}
                 showLabel
               />
             </div>

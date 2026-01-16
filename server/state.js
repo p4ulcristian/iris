@@ -1,8 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { STATE_FILE, SOCKET_DIR, GOD_COLORS } from './config.js'
-import { listGodSockets } from './gods.js'
+import { STATE_FILE, GOD_COLORS } from './config.js'
 import * as layout from './layout.js'
 import { loadEntities, getClientRegistry } from './entityLoader.js'
 import { createLogger } from './logger.js'
@@ -65,7 +64,15 @@ export const appState = {
     linearApiKey: '',
     userName: '',
     startPrompt: '',
-    powers: true           // Enable voice services (speak, hear)
+    powers: true,          // Enable voice services (speak, hear)
+    mcpTools: {            // MCP tool category toggles (restart Claude Code after changing)
+      code: true,          // iris_read, iris_edit, open_code, highlight_code, clear_highlights
+      terminal: true,      // run_terminal, peek_run, peek_terminal, push_to_terminal
+      gods: true,          // spawn_god, peek_god, push_to_god
+      ui: true,            // set_title, set_ready, list_entities
+      browse: true,        // browse, open_markdown
+      speak: true          // speak, greet
+    }
   }
 }
 
@@ -118,65 +125,8 @@ export function loadState() {
     appState.entityCounter = 0
   }
 
-  // Merge with discovered sessions (gods/terminals with active zellij sessions)
-  const sockets = listGodSockets()
-  const socketNameMap = new Map(sockets.map(s => [s.name.toLowerCase(), s.name]))
-
-  // Reconcile entities with sockets (case-insensitive, preserve data)
-  Object.keys(appState.entities).forEach(id => {
-    const entity = appState.entities[id]
-    if (entity.type !== 'god' && entity.type !== 'terminal') return
-
-    const canonicalName = socketNameMap.get(id.toLowerCase())
-    if (!canonicalName) {
-      // No matching socket - remove entity
-      delete appState.entities[id]
-    } else if (canonicalName !== id) {
-      // Case mismatch - migrate entity to canonical name (preserving all data)
-      const migrated = { ...entity, id: canonicalName, name: canonicalName }
-      delete appState.entities[id]
-      appState.entities[canonicalName] = migrated
-    }
-  })
-
-  // Clean up orphaned buffer files (buffers without active sockets)
-  try {
-    const files = fs.readdirSync(SOCKET_DIR)
-    const activeSocketNames = new Set(files.filter(f => f.endsWith('.sock')).map(f => f.replace('.sock', '')))
-    files
-      .filter(f => f.endsWith('.buf'))
-      .forEach(bufFile => {
-        const name = bufFile.replace('.buf', '')
-        if (!activeSocketNames.has(name)) {
-          try {
-            fs.unlinkSync(path.join(SOCKET_DIR, bufFile))
-          } catch {}
-        }
-      })
-  } catch {}
-
   // Get the first valid tab ID (never assume tab 1 exists)
   const getFirstTabId = () => appState.tabs[0]?.id || appState.activeTabId || 1
-
-  // Add new sockets to first tab (entities already normalized to canonical names above)
-  sockets.forEach(sock => {
-    if (!appState.entities[sock.name]) {
-      const firstTabId = getFirstTabId()
-      // Calculate next order inline (getNextOrder may not be available during load)
-      const ordersInTab = Object.values(appState.entities)
-        .filter(e => e.tabId === firstTabId)
-        .map(e => e.order ?? 0)
-      const nextOrder = ordersInTab.length > 0 ? Math.max(...ordersInTab) + 1 : 0
-
-      appState.entities[sock.name] = {
-        id: sock.name,
-        type: 'god',
-        name: sock.name,
-        tabId: firstTabId,
-        order: nextOrder
-      }
-    }
-  })
 
   // Recover orphaned entities (entities whose tabId doesn't exist)
   const validTabIds = new Set(appState.tabs.map(t => t.id))
@@ -408,12 +358,17 @@ function maskApiKey(key) {
   return '••••••••' + key.slice(-4)
 }
 
+// Debounced async save to avoid blocking
+let saveTimeout = null
 export function saveState() {
-  try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(appState, null, 2))
-  } catch (e) {
-    log.error('Failed to save state:', e)
-  }
+  // Debounce saves - don't write more than once per 100ms
+  if (saveTimeout) return
+  saveTimeout = setTimeout(() => {
+    saveTimeout = null
+    fs.writeFile(STATE_FILE, JSON.stringify(appState, null, 2), (err) => {
+      if (err) log.error('Failed to save state:', err)
+    })
+  }, 100)
 }
 
 export function getStateForBroadcast() {
@@ -437,17 +392,9 @@ export function getStateForBroadcast() {
     }
   }
 
-  // Transform entities: merge socket info for gods/terminals
-  const sockets = listGodSockets()
-  const socketMap = Object.fromEntries(sockets.map(s => [s.name, s]))
-
-  state.entities = Object.values(appState.entities).map(entity => {
-    const sock = socketMap[entity.id]
-    if ((entity.type === 'god' || entity.type === 'terminal') && sock) {
-      return { ...entity, color: entity.color || sock.color, voice: sock.voice }
-    }
-    return entity
-  }).sort((a, b) => (a.order || 0) - (b.order || 0))
+  // Transform entities to array sorted by order
+  state.entities = Object.values(appState.entities)
+    .sort((a, b) => (a.order || 0) - (b.order || 0))
 
   // Transform settings: mask secrets, add computed flags
   state.settings = {
@@ -456,6 +403,7 @@ export function getStateForBroadcast() {
     userName: appState.settings?.userName || '',
     startPrompt: appState.settings?.startPrompt || '',
     powers: appState.settings?.powers ?? true,
+    mcpTools: appState.settings?.mcpTools || { code: true, terminal: true, gods: true, ui: true, browse: true, speak: true },
     googleClientId: maskApiKey(appState.settings?.googleClientId),
     hasGoogleClientId: !!appState.settings?.googleClientId,
     googleClientSecret: maskApiKey(appState.settings?.googleClientSecret),
@@ -493,8 +441,16 @@ export function getStateForBroadcast() {
   return state
 }
 
+// Trailing-edge debounce - broadcasts immediately, then ignores calls for 16ms
+let broadcastTimeout = null
 export function broadcastState() {
+  if (broadcastTimeout) return
+  // Broadcast immediately
   broadcast('state:sync', getStateForBroadcast())
+  // Then block subsequent calls for 16ms
+  broadcastTimeout = setTimeout(() => {
+    broadcastTimeout = null
+  }, 16)
 }
 
 // Generate a unique entity ID
@@ -595,7 +551,7 @@ export function getNextGodNumber(baseName) {
 
 // Generate a unique god entity ID (Zeus, Zeus-2, Zeus-3, etc.)
 // Prefers base name if available, otherwise numbers from 2
-// IDs are capitalized to match socket names from listGodSockets()
+// IDs are capitalized (e.g., "Zeus", "Athena")
 export function generateGodId(baseName) {
   const base = baseName.toLowerCase()
   const capitalized = base.charAt(0).toUpperCase() + base.slice(1)

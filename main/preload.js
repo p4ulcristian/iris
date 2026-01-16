@@ -1,8 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron')
-const ports = require('../ports.json')
+
+// Get ws port from additionalArguments (sandboxed preloads can't require JSON files)
+const wsPortArg = process.argv.find(arg => arg.startsWith('--ws-port='))
+const wsPort = wsPortArg ? wsPortArg.split('=')[1] : '4243'
 
 contextBridge.exposeInMainWorld('iris', {
-  wsUrl: `ws://localhost:${ports.ws}`,
+  wsUrl: `ws://localhost:${wsPort}`,
   // Window controls
   windowControl: (action) => ipcRenderer.send('window-control', action),
   isFullscreen: () => ipcRenderer.invoke('window-is-fullscreen'),

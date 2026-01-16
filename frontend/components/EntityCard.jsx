@@ -135,8 +135,11 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
 
   // Get entity color - theme color for gods, custom color for others
   const godColors = useStore(s => s.godColors)
-  const entityColor = type === 'god'
-    ? (godColors[name?.toLowerCase()] || color || '#888')
+  const isGodType = type === 'god'
+  // Extract base god name (e.g., "Apollo 1" → "apollo") to look up theme color
+  const baseGodName = name?.toLowerCase().replace(/-?\d+$/, '').replace(/\s+\d+$/, '').trim() || ''
+  const entityColor = isGodType
+    ? (godColors[baseGodName] || color || '#888')
     : (color || '#888')
 
   // Title: the goal (set via focus skill) or initial mission

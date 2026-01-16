@@ -1,29 +1,33 @@
 /**
- * God lifecycle and management handlers.
+ * WebSocket handlers for God entities.
  */
 
 import { PANTHEON } from '../config.js'
 import {
   appState, saveState, broadcastState,
-  getNextOrder, normalizeTabOrder,
-  generateGodId, getGodDisplayName, getBaseGodName
+  getNextOrder, generateGodId, getGodDisplayName, getBaseGodName
 } from '../state.js'
-import { createGodSession, createTerminalSession, killGodSession, listGodSockets } from '../gods.js'
-import { killPty, getOutputBuffer, clearOutputBuffer } from '../pty.js'
-import { listSessions } from '../history.js'
-import * as projects from '../projects.js'
+import {
+  createGod,
+  sendUserMessage,
+  attachClient,
+  detachClient,
+  killGod,
+  listGods,
+  getGod
+} from '../gods.js'
 import {
   createEntityBase,
   addEntity,
   createStageForEntity,
   splitIntoTile,
   finalizeSpawn,
-  removeEntity,
-  moveToTab,
-  moveToNewTab,
-  addToCemetery,
-  getRandomRealmName
+  removeEntity
 } from '../../entities/_shared/index.js'
+import * as projects from '../projects.js'
+import { createLogger } from '../logger.js'
+
+const log = createLogger('god-handler')
 
 // Helper to place entity based on mode
 function placeEntity(entityId, tabId, mode, direction) {
@@ -35,12 +39,15 @@ function placeEntity(entityId, tabId, mode, direction) {
 }
 
 export const handlers = {
+  /**
+   * Spawn a new god.
+   */
   'god:spawn': (ws, data, projectRoot) => {
-    // Spawn mode: 'split' (default) or 'stage'
+    console.log('[GOD-HANDLER] god:spawn received:', JSON.stringify(data))
     const mode = data.mode || 'split'
     const direction = data.direction || 'horizontal'
 
-    // If no name provided, pick from unused gods first, then random if all taken
+    // Pick god name from pantheon if not specified
     let baseName = data.name?.toLowerCase()
     if (!baseName) {
       const pantheonNames = Object.keys(PANTHEON)
@@ -55,20 +62,23 @@ export const handlers = {
         : pantheonNames[Math.floor(Math.random() * pantheonNames.length)]
     }
 
-    // Generate unique entity ID (zeus, zeus-2, zeus-3, etc.)
+    // Generate unique entity ID
     const entityId = generateGodId(baseName)
     const displayName = getGodDisplayName(entityId)
 
-    // Determine working directory - use selected project path if provided
+    // Determine working directory
     let workingDir = projectRoot
+    log.log(`data.project=${data.project}, projectRoot=${projectRoot}`)
     if (data.project) {
       const projectConfig = projects.loadProject(data.project)
+      log.log(`projectConfig=${JSON.stringify(projectConfig)}`)
       if (projectConfig?.path) {
         workingDir = projectConfig.path.replace(/^~/, process.env.HOME || '')
       }
     }
+    log.log(`Final workingDir=${workingDir}`)
 
-    // STEP 1: Add entity immediately with 'spawning' state
+    // Add entity with 'spawning' state
     appState.entities[entityId] = {
       id: entityId,
       type: 'god',
@@ -82,265 +92,127 @@ export const handlers = {
       readyState: 'spawning'
     }
 
-    // Place entity based on mode (split by default, or new stage)
+    // Place entity
     placeEntity(entityId, appState.activeTabId, mode, direction)
     appState.focusedEntity = entityId
     saveState()
-    broadcastState()
+    broadcastState()  // Tile appears immediately
 
-    // STEP 2: Create the zellij session
-    clearOutputBuffer(entityId)
-    let god
-    try {
-      god = createGodSession(entityId, data.task, workingDir, {
-        startPrompt: appState.settings?.startPrompt,
-        userName: appState.settings?.userName,
-        personality: data.personality,
-        permissionMode: data.permissionMode
-      })
-    } catch (err) {
-      // Session creation failed
-    }
+    // Create god process async so tile renders first
+    const task = data.task
+    const personality = data.personality
+    const permissionMode = data.permissionMode
 
-    // STEP 3: Update state based on result
-    if (!god) {
-      appState.entities[entityId].readyState = 'failed'
-      appState.entities[entityId].status = 'Session failed to start'
-      saveState()
-      broadcastState()
-      return
-    }
+    setImmediate(() => {
+      log.log(`Creating god with task="${task}"`)
+      try {
+        const result = createGod(entityId, {
+          task,
+          project: workingDir,
+          personality,
+          permissionMode
+        })
 
-    // Success - update to working state
-    appState.entities[entityId].readyState = 'working'
-    appState.entities[entityId].sessionId = god.sessionId || null
-    saveState()
-    broadcastState()
+        // Update state
+        appState.entities[entityId].readyState = 'working'
+        appState.entities[entityId].sessionId = result.sessionId || null
+        saveState()
+        broadcastState()
+
+        // Auto-attach this WebSocket
+        attachClient(entityId, ws)
+
+      } catch (err) {
+        appState.entities[entityId].readyState = 'failed'
+        appState.entities[entityId].status = 'Failed to start: ' + err.message
+        saveState()
+        broadcastState()
+      }
+    })
   },
 
-  'terminal:spawn': (ws, data, projectRoot) => {
-    // Spawn mode: 'split' (default) or 'stage'
-    const mode = data.mode || 'split'
-    const direction = data.direction || 'horizontal'
+  /**
+   * Send a user message to a god.
+   */
+  'god:send': (ws, data) => {
+    console.log('[GOD-HANDLER] god:send received:', JSON.stringify(data))
+    const { godName, text } = data
+    if (!godName || !text) return
 
-    if (data.name) {
-      clearOutputBuffer(data.name)
-    }
-    const terminal = createTerminalSession({
-      command: data.command,
-      name: data.name,
-      color: data.color,
-      cwd: data.cwd
-    }, projectRoot)
-
-    if (terminal && !terminal.exists) {
-      const entity = createEntityBase(terminal.name, 'terminal', {
-        name: terminal.displayName || terminal.name,
-        extra: { color: terminal.color }
-      })
-      addEntity(terminal.name, entity)
-      placeEntity(terminal.name, appState.activeTabId, mode, direction)
-      finalizeSpawn(terminal.name)
-    } else if (terminal?.exists) {
-      ws.send(JSON.stringify({ event: 'god:spawned', ...terminal }))
+    const success = sendUserMessage(godName, text)
+    if (!success) {
+      ws.send(JSON.stringify({
+        event: 'god:error',
+        godName,
+        error: 'Failed to send message'
+      }))
     }
   },
 
+  /**
+   * Attach to a god (subscribe to updates).
+   * Auto-respawns if entity exists but process died (e.g., after restart).
+   */
+  'god:attach': (ws, data) => {
+    console.log('[GOD-HANDLER] god:attach received:', JSON.stringify(data))
+    const { godName } = data
+    if (!godName) return
+
+    let entry = attachClient(godName, ws)
+    console.log('[GOD-HANDLER] attachClient result:', entry ? 'found' : 'not found')
+
+    // If no process but entity exists, respawn it with session resumption
+    if (!entry && appState.entities[godName]?.type === 'god') {
+      const entity = appState.entities[godName]
+      console.log(`[GOD] Auto-respawning ${godName} (sessionId: ${entity.sessionId || 'none'})`)
+
+      createGod(godName, {
+        project: entity.project,
+        sessionId: entity.sessionId, // Resume existing session if available
+        // Don't re-send task on respawn - session has history
+      })
+
+      // Try attach again
+      entry = attachClient(godName, ws)
+    }
+
+    if (!entry) {
+      ws.send(JSON.stringify({
+        event: 'god:error',
+        godName,
+        error: 'God not found'
+      }))
+    }
+  },
+
+  /**
+   * Detach from a god.
+   */
+  'god:detach': (ws, data) => {
+    const { godName } = data
+    if (godName) {
+      detachClient(godName, ws)
+    }
+  },
+
+  /**
+   * Kill a god.
+   */
   'god:kill': (ws, data) => {
-    handlers['entity:kill'](ws, data)
-  },
+    const entityId = data.entityId || data.godName
+    if (!entityId) return
 
-  'entity:kill': (ws, data) => {
-    const entityId = data.entityId || data.godName || data.name
-    const entity = appState.entities[entityId]
-
-    // Add god to cemetery before banishing
-    if (entity?.type === 'god') {
-      addToCemetery(entity)
-    }
-
-    // For god/terminal types, clean up PTY
-    if (entity?.type === 'god' || entity?.type === 'terminal') {
-      killPty(entityId)
-      killGodSession(entityId)
-      clearOutputBuffer(entityId)
-    }
-
-    // Remove entity (handles layout, focus, cleanup)
+    killGod(entityId)
     removeEntity(entityId)
     saveState()
     broadcastState()
   },
 
-  // Kill hovered entity (server determines target - avoids client-side race condition)
-  'entity:kill-hovered': (ws, data) => {
-    // Prefer hovered (what mouse is on), fall back to focused
-    const entityId = appState.hoveredEntity || appState.focusedEntity
-    if (!entityId) return
-
-    // Delegate to existing kill handler
-    handlers['entity:kill'](ws, { entityId })
-  },
-
+  /**
+   * List active gods.
+   */
   'god:list': (ws) => {
-    const gods = listGodSockets()
+    const gods = listGods()
     ws.send(JSON.stringify({ event: 'god:list', gods }))
-  },
-
-  'god:set-title': (ws, data) => {
-    handlers['entity:set-title'](ws, data)
-  },
-
-  'entity:set-title': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    const title = data.title
-    if (entityId && appState.entities[entityId]) {
-      appState.entities[entityId].title = title
-      saveState()
-      broadcastState()
-    }
-  },
-
-  'god:set-status': (ws, data) => {
-    handlers['entity:set-status'](ws, data)
-  },
-
-  'entity:set-status': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    const status = data.status
-    if (entityId && appState.entities[entityId]) {
-      appState.entities[entityId].status = status
-      saveState()
-      broadcastState()
-    }
-  },
-
-  'god:set-ready': (ws, data) => {
-    handlers['entity:set-ready'](ws, data)
-  },
-
-  'entity:set-ready': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    const readyState = data.readyState
-    if (entityId && appState.entities[entityId]) {
-      appState.entities[entityId].readyState = readyState
-      saveState()
-      broadcastState()
-    }
-  },
-
-  'god:peek': (ws, data) => {
-    handlers['entity:peek'](ws, data)
-  },
-
-  'entity:peek': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    const lines = data.lines || 50
-    const output = getOutputBuffer(entityId, lines)
-    ws.send(JSON.stringify({
-      event: 'entity:peek:response',
-      entityId,
-      output,
-      lines: output.split('\n').length
-    }))
-  },
-
-  'god:move': (ws, data) => {
-    handlers['entity:move'](ws, data)
-  },
-
-  'entity:move': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    if (!appState.entities[entityId]) return
-    moveToTab(entityId, data.tabId)
-  },
-
-  'god:move-to-new-tab': (ws, data) => {
-    handlers['entity:move-to-new-tab'](ws, data)
-  },
-
-  'entity:move-to-new-tab': (ws, data) => {
-    const entityId = data.entityId || data.godName
-    if (!appState.entities[entityId]) return
-    moveToNewTab(entityId, getRandomRealmName)
-  },
-
-  // History management
-  'history:list': (ws, data, projectRoot) => {
-    listSessions(projectRoot, data.limit || 20, data.offset || 0).then(sessions => {
-      ws.send(JSON.stringify({ event: 'history:list', sessions }))
-    }).catch(() => {
-      ws.send(JSON.stringify({ event: 'history:list', sessions: [], error: 'Failed to list sessions' }))
-    })
-  },
-
-  'history:resume': (ws, data, projectRoot) => {
-    const god = createGodSession(data.name, '', projectRoot, { resumeSessionId: data.sessionId })
-    if (god && !god.exists) {
-      const entity = createEntityBase(god.name, 'god', {
-        name: god.name,
-        extra: { mission: data.summary || null, project: projectRoot }
-      })
-      addEntity(god.name, entity)
-      createStageForEntity(god.name)
-      finalizeSpawn(god.name)
-    } else if (god?.exists) {
-      ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
-    }
-  },
-
-  // Cemetery management
-  'cemetery:resurrect': (ws, data, projectRoot) => {
-    const { godId, sessionId, name, mission, title } = data
-    if (!sessionId) return
-
-    const godName = godId || name
-    if (!godName) return
-
-    // If there's an existing entity with this name, clean it up first
-    const existingEntity = appState.entities[godName]
-    if (existingEntity) {
-      if (existingEntity.type === 'god') {
-        addToCemetery(existingEntity)
-      }
-      killPty(godName)
-      clearOutputBuffer(godName)
-      removeEntity(godName)
-    }
-
-    // Resume the session with the god's name
-    const god = createGodSession(godName, '', projectRoot, { resumeSessionId: sessionId })
-    if (god && !god.exists) {
-      const entity = createEntityBase(god.name, 'god', {
-        name: god.name,
-        extra: {
-          mission: mission || null,
-          title: title || null,
-          sessionId: sessionId,
-          project: projectRoot
-        }
-      })
-      addEntity(god.name, entity)
-      createStageForEntity(god.name)
-
-      appState.cemetery = appState.cemetery.filter(f => f.sessionId !== sessionId)
-      finalizeSpawn(god.name)
-    } else if (god?.exists) {
-      ws.send(JSON.stringify({ event: 'god:spawned', ...god }))
-    }
-  },
-
-  'cemetery:remove': (ws, data) => {
-    const { sessionId } = data
-    if (!sessionId) return
-    appState.cemetery = appState.cemetery.filter(f => f.sessionId !== sessionId)
-    saveState()
-    broadcastState()
-  },
-
-  'cemetery:clear': () => {
-    appState.cemetery = []
-    saveState()
-    broadcastState()
   },
 }

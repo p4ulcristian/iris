@@ -64,6 +64,7 @@ export default function Surface({
     const isMaximized = maximizedTile === node.id
     return (
       <Tile
+        key={node.id}
         tileId={node.id}
         entityId={node.entityId}
         entityIds={node.entityIds}  // Legacy support

@@ -2,8 +2,9 @@
   {
     "type": "god",
     "label": "God",
-    "description": "Divine worker",
-    "color": null,
+    "description": "Claude with rich chat UI",
+    "faIcon": "faComments",
+    "color": "#AA44FF",
     "category": "process"
   },
   {
@@ -88,35 +89,11 @@
     "category": "media"
   },
   {
-    "type": "personalities",
-    "label": "Personalities",
-    "description": "Manage Claude personalities",
-    "faIcon": "faDna",
-    "color": "#AA44FF",
-    "category": "system"
-  },
-  {
     "type": "settings",
     "label": "Settings",
     "description": "App settings",
     "faIcon": "faGear",
     "color": "#6B7280",
-    "category": "system"
-  },
-  {
-    "type": "history",
-    "label": "History",
-    "description": "Session history",
-    "faIcon": "faClockRotateLeft",
-    "color": "#8B5CF6",
-    "category": "system"
-  },
-  {
-    "type": "cemetery",
-    "label": "Cemetery",
-    "description": "Fallen gods",
-    "faIcon": "faSkull",
-    "color": "#1F2937",
     "category": "system"
   }
 ]

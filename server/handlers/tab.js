@@ -3,8 +3,7 @@
  */
 
 import { appState, saveState, broadcastState, normalizeTabOrder } from '../state.js'
-import { killGodSession } from '../gods.js'
-import { killPty, clearOutputBuffer } from '../pty.js'
+import { killGod } from '../gods.js'
 import { addToCemetery, getRandomRealmName } from '../../entities/_shared/index.js'
 
 export const handlers = {
@@ -32,12 +31,7 @@ export const handlers = {
         // Add gods to cemetery before banishing
         if (entity.type === 'god') {
           addToCemetery(entity)
-        }
-
-        if (entity.type === 'god' || entity.type === 'terminal') {
-          killPty(id)
-          killGodSession(id)
-          clearOutputBuffer(id)
+          killGod(id)
         }
         delete appState.entities[id]
       }

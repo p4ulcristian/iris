@@ -9,7 +9,6 @@ import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
 import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getStateForBroadcast, broadcastState } from './state.js'
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
 import { setBroadcast as setChronicleBroadcast, startWatcher as startChronicleWatcher, stopWatcher as stopChronicleWatcher } from './chronicle.js'
-import { detachAllFromClient, killAllPty, startTitlePolling, stopTitlePolling } from './pty.js'
 import { handleMessage } from './handlers/index.js'
 import { setupApi } from './api.js'
 import * as calendar from './calendar.js'
@@ -137,7 +136,6 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     wsClients.delete(ws)
-    detachAllFromClient(ws)
     wsLog.log(`Client disconnected (${wsClients.size} total)`)
   })
 })
@@ -237,10 +235,9 @@ oauthServer.listen(OAUTH_PORT, () => {
   log.log(`OAuth callback server on :${OAUTH_PORT}`)
 })
 
-// Start health checks, chronicle watcher, and terminal title polling
+// Start health checks and chronicle watcher
 startHealthChecks()
 startChronicleWatcher()
-startTitlePolling()
 
 // Cleanup on exit
 process.on('SIGTERM', cleanup)
@@ -260,8 +257,6 @@ function cleanup() {
   log.log('Shutting down server...')
   stopHealthChecks()
   stopChronicleWatcher()
-  stopTitlePolling()
-  killAllPty()
 
   // Close WebSocket server and wait for connections to drain
   wss.close(() => {
