@@ -129,29 +129,17 @@ export default function EditCard({ filePath, oldString, newString, result, onReq
             <div className="flex text-xs font-mono">
               {/* Old (left) */}
               <div className="flex-1 border-r border-white/10 overflow-hidden">
-                <div className="px-2 py-1 bg-red-500/20 text-red-400 text-[10px] font-medium border-b border-white/10">
-                  OLD
-                </div>
                 <div className="max-h-48 overflow-y-auto overflow-x-auto">
                   {oldString?.split('\n').map((line, i) => (
-                    <div key={i} className="flex bg-red-500/20 border-b border-red-500/10">
-                      <span className="text-red-400 select-none w-6 px-1 text-right bg-red-500/30 shrink-0">-</span>
-                      <pre className="px-2 py-0.5 text-red-200 whitespace-pre">{line || ' '}</pre>
-                    </div>
+                    <pre key={i} className="px-2 py-0.5 bg-red-500/25 text-red-100 whitespace-pre border-b border-red-500/10">{line || ' '}</pre>
                   ))}
                 </div>
               </div>
               {/* New (right) */}
               <div className="flex-1 overflow-hidden">
-                <div className="px-2 py-1 bg-green-500/20 text-green-400 text-[10px] font-medium border-b border-white/10">
-                  NEW
-                </div>
                 <div className="max-h-48 overflow-y-auto overflow-x-auto">
                   {newString?.split('\n').map((line, i) => (
-                    <div key={i} className="flex bg-green-500/20 border-b border-green-500/10">
-                      <span className="text-green-400 select-none w-6 px-1 text-right bg-green-500/30 shrink-0">+</span>
-                      <pre className="px-2 py-0.5 text-green-200 whitespace-pre">{line || ' '}</pre>
-                    </div>
+                    <pre key={i} className="px-2 py-0.5 bg-green-500/25 text-green-100 whitespace-pre border-b border-green-500/10">{line || ' '}</pre>
                   ))}
                 </div>
               </div>

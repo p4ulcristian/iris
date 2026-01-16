@@ -2,6 +2,18 @@
 /* Base theme (obsidian) is defined in @theme block in index.css */
 /* These classes override the base when applied to html element */
 
+/* Divine Void - deep space with subtle purple/blue hints */
+.theme-divine-void {
+  --color-bg-primary: #050508;
+  --color-bg-secondary: #0c0c10;
+  --color-bg-tertiary: #141418;
+  --color-text-primary: #d0d0e0;
+  --color-text-secondary: #8080a0;
+  --color-text-tertiary: #505060;
+  --color-border: #202030;
+  --color-accent: #9090b0;
+}
+
 .theme-obsidian {
   --color-bg-primary: #0a0a0a;
   --color-bg-secondary: #111111;

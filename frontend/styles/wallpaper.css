@@ -1,0 +1,411 @@
+/* ============================================
+   WALLPAPER - Reactive Glass Background
+   ============================================
+
+   Features:
+   - Animated blobs with chromatic aberration (RGB split)
+   - Caustic light refraction overlay
+   - Specular highlights following mouse
+   - Blobs influenced by mouse position
+
+   Performance:
+   - All animations use transform/opacity only (GPU)
+   - No border-radius morphing (causes layout thrashing)
+   - Blur is static, not animated
+   - Mouse reactivity via CSS custom properties
+*/
+
+/* ============================================
+   SVG Filters (defined once, referenced by CSS)
+   ============================================ */
+
+/* This filter is applied via URL reference in the caustics layer */
+
+/* ============================================
+   Container
+   ============================================ */
+
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+
+  /* Mouse position from JS (0-1 range) */
+  --mouse-x: 0.5;
+  --mouse-y: 0.5;
+}
+
+/* Base background color */
+.wallpaper-base {
+  position: absolute;
+  inset: 0;
+  background: var(--wallpaper-base, #050508);
+}
+
+/* ============================================
+   Caustics - Dancing Light Refraction
+   ============================================ */
+
+.wallpaper-caustics {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0.08;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+
+  /* Animated caustic pattern using CSS */
+  background:
+    repeating-conic-gradient(
+      from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(255, 255, 255, 0.03) 1deg,
+      transparent 2deg
+    );
+
+  /* Slow rotation for organic movement */
+  animation: caustics-move 60s linear infinite;
+  filter: blur(30px);
+}
+
+@keyframes caustics-move {
+  0% {
+    transform: translate(-25%, -25%) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate(-25%, -25%) rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: translate(-25%, -25%) rotate(360deg) scale(1);
+  }
+}
+
+/* Secondary caustics layer for complexity */
+.wallpaper-caustics::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-conic-gradient(
+      from 45deg at 30% 70%,
+      transparent 0deg,
+      rgba(255, 255, 255, 0.02) 2deg,
+      transparent 4deg
+    );
+  animation: caustics-move-reverse 45s linear infinite;
+}
+
+@keyframes caustics-move-reverse {
+  0% {
+    transform: rotate(0deg) scale(1.1);
+  }
+  50% {
+    transform: rotate(-180deg) scale(1);
+  }
+  100% {
+    transform: rotate(-360deg) scale(1.1);
+  }
+}
+
+/* ============================================
+   Blob Layer Container
+   ============================================ */
+
+.blob-layer {
+  position: absolute;
+  inset: 0;
+  /* Mouse influence on all blobs */
+  transform:
+    translate(
+      calc((var(--mouse-x) - 0.5) * 20px),
+      calc((var(--mouse-y) - 0.5) * 20px)
+    );
+  transition: transform 0.3s ease-out;
+}
+
+/* ============================================
+   Individual Blobs with Chromatic Aberration
+   ============================================ */
+
+.blob {
+  position: absolute;
+  /* Reduced blur for sharper edges */
+  filter: blur(25px);
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+
+/* Chromatic aberration - RGB split layers */
+.blob-r,
+.blob-g,
+.blob-b {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0%, transparent 70%);
+}
+
+.blob-r {
+  color: var(--blob-color-r, #ff000030);
+  transform: translate(-3px, -2px);
+}
+
+.blob-g {
+  color: var(--blob-color-g, #00ff0030);
+  transform: translate(0, 0);
+}
+
+.blob-b {
+  color: var(--blob-color-b, #0000ff30);
+  transform: translate(3px, 2px);
+}
+
+/* Blob 1 - Large, primary */
+.blob-1 {
+  width: 50vmax;
+  height: 50vmax;
+  --blob-color-r: color-mix(in srgb, var(--blob-1, #505050) 60%, #ff0000 40%);
+  --blob-color-g: var(--blob-1, #505050);
+  --blob-color-b: color-mix(in srgb, var(--blob-1, #505050) 60%, #0000ff 40%);
+  animation: blob-1-move 30s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Blob 2 - Medium, secondary */
+.blob-2 {
+  width: 45vmax;
+  height: 45vmax;
+  --blob-color-r: color-mix(in srgb, var(--blob-2, #404040) 60%, #ff0000 40%);
+  --blob-color-g: var(--blob-2, #404040);
+  --blob-color-b: color-mix(in srgb, var(--blob-2, #404040) 60%, #0000ff 40%);
+  animation: blob-2-move 38s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: -12s;
+}
+
+/* Blob 3 - Medium, accent */
+.blob-3 {
+  width: 40vmax;
+  height: 40vmax;
+  --blob-color-r: color-mix(in srgb, var(--blob-3, #606060) 60%, #ff0000 40%);
+  --blob-color-g: var(--blob-3, #606060);
+  --blob-color-b: color-mix(in srgb, var(--blob-3, #606060) 60%, #0000ff 40%);
+  animation: blob-3-move 25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: -5s;
+}
+
+/* Blob 4 - Smaller, background */
+.blob-4 {
+  width: 35vmax;
+  height: 35vmax;
+  --blob-color-r: color-mix(in srgb, var(--blob-4, #383838) 60%, #ff0000 40%);
+  --blob-color-g: var(--blob-4, #383838);
+  --blob-color-b: color-mix(in srgb, var(--blob-4, #383838) 60%, #0000ff 40%);
+  animation: blob-4-move 42s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: -20s;
+}
+
+/* ============================================
+   Blob Movement Keyframes
+   ============================================
+   Only using transform and opacity (GPU-friendly)
+   No border-radius morphing
+*/
+
+@keyframes blob-1-move {
+  0% {
+    transform: translate(-10vw, 80vh) scale(1);
+    opacity: 0.5;
+  }
+  25% {
+    transform: translate(5vw, 30vh) scale(1.1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(20vw, -10vh) scale(0.95);
+    opacity: 0.6;
+  }
+  75% {
+    transform: translate(10vw, 40vh) scale(1.05);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-10vw, 80vh) scale(1);
+    opacity: 0.5;
+  }
+}
+
+@keyframes blob-2-move {
+  0% {
+    transform: translate(80vw, 70vh) scale(1.05);
+    opacity: 0.45;
+  }
+  25% {
+    transform: translate(60vw, 20vh) scale(0.9);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate(40vw, -5vh) scale(1.1);
+    opacity: 0.55;
+  }
+  75% {
+    transform: translate(70vw, 50vh) scale(0.95);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(80vw, 70vh) scale(1.05);
+    opacity: 0.45;
+  }
+}
+
+@keyframes blob-3-move {
+  0% {
+    transform: translate(30vw, 90vh) scale(0.95);
+    opacity: 0.45;
+  }
+  33% {
+    transform: translate(45vw, 40vh) scale(1.1);
+    opacity: 0.7;
+  }
+  66% {
+    transform: translate(35vw, 10vh) scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(30vw, 90vh) scale(0.95);
+    opacity: 0.45;
+  }
+}
+
+@keyframes blob-4-move {
+  0% {
+    transform: translate(60vw, 85vh) scale(1);
+    opacity: 0.4;
+  }
+  25% {
+    transform: translate(45vw, 55vh) scale(1.08);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(25vw, 25vh) scale(0.92);
+    opacity: 0.6;
+  }
+  75% {
+    transform: translate(40vw, 60vh) scale(1.05);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate(60vw, 85vh) scale(1);
+    opacity: 0.4;
+  }
+}
+
+/* ============================================
+   Specular Highlight - Mouse-following shine
+   ============================================ */
+
+.wallpaper-specular {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  /* Radial gradient positioned by mouse */
+  background: radial-gradient(
+    ellipse 40% 30% at var(--specular-x, 50%) var(--specular-y, 50%),
+    rgba(255, 255, 255, 0.03) 0%,
+    transparent 70%
+  );
+
+  /* Secondary highlight for depth */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      ellipse 20% 15% at var(--specular-x, 50%) var(--specular-y, 50%),
+      rgba(255, 255, 255, 0.05) 0%,
+      transparent 50%
+    );
+  }
+}
+
+/* ============================================
+   Reduced Motion
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .wallpaper-caustics {
+    animation: none;
+  }
+
+  .wallpaper-caustics::after {
+    animation: none;
+  }
+
+  .blob {
+    animation-duration: 120s !important;
+  }
+
+  .blob-layer {
+    transform: none;
+    transition: none;
+  }
+
+  .wallpaper-specular {
+    display: none;
+  }
+}
+
+/* ============================================
+   Theme Colors
+   ============================================ */
+
+/* Divine Void - deep space with subtle purple/blue hints */
+.theme-divine-void {
+  --wallpaper-base: #050508;
+  --blob-1: #2a2a3a;
+  --blob-2: #1e1e2e;
+  --blob-3: #3a3a4a;
+  --blob-4: #181828;
+}
+
+.theme-obsidian {
+  --wallpaper-base: #0a0a0a;
+  --blob-1: #404040;
+  --blob-2: #303030;
+  --blob-3: #505050;
+  --blob-4: #282828;
+}
+
+.theme-charcoal {
+  --wallpaper-base: #121212;
+  --blob-1: #484848;
+  --blob-2: #383838;
+  --blob-3: #585858;
+  --blob-4: #303030;
+}
+
+.theme-slate {
+  --wallpaper-base: #161616;
+  --blob-1: #505050;
+  --blob-2: #404040;
+  --blob-3: #606060;
+  --blob-4: #383838;
+}
+
+.theme-graphite {
+  --wallpaper-base: #1c1c1c;
+  --blob-1: #585858;
+  --blob-2: #484848;
+  --blob-3: #686868;
+  --blob-4: #404040;
+}
+
+.theme-ash {
+  --wallpaper-base: #202020;
+  --blob-1: #606060;
+  --blob-2: #505050;
+  --blob-3: #707070;
+  --blob-4: #484848;
+}

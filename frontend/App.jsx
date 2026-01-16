@@ -8,6 +8,7 @@ import SummonModal from './components/SummonModal'
 import ShortcutsPopup from './components/ShortcutsPopup'
 import Surface from './components/Surface'
 import RootDropZone from './components/RootDropZone'
+import Wallpaper from './components/Wallpaper'
 import { DragProvider } from './contexts/DragContext'
 import { useWebSocket } from './hooks/useWebSocket'
 import { useStore } from './store'
@@ -716,15 +717,8 @@ export default function App() {
   return (
     <DragProvider>
     <div className={`flex flex-col h-screen theme-${theme}`}>
-      {/* Animated wallpaper - uses theme colors */}
-      <div className="wallpaper">
-        <div className="blob blob-1" />
-        <div className="blob blob-2" />
-        <div className="blob blob-3" />
-        <div className="blob blob-4" />
-        <div className="blob blob-5" />
-        <div className="blob blob-6" />
-      </div>
+      {/* Animated wallpaper - reactive glass background */}
+      <Wallpaper />
 
       {/* Main layout: horizontal sliding tabs */}
       <div ref={mainContainerRef} className="flex-1 min-h-0 overflow-hidden">
