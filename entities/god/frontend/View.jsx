@@ -46,13 +46,6 @@ function GodView({ entity, isFocused }) {
       try {
         const msg = JSON.parse(event.data)
         if (msg.event === 'god:state' && msg.godName === godName) {
-          console.log(`[GodView] Received god:state for ${godName}:`, msg.history?.length, 'messages')
-          // Debug: show each message type and tool_use presence
-          msg.history?.forEach((m, i) => {
-            const hasToolUse = m.message?.content?.some(c => c.type === 'tool_use')
-            const hasToolResult = m.message?.content?.some(c => c.type === 'tool_result')
-            console.log(`  [${i}] type=${m.type}, tool_use=${hasToolUse}, tool_result=${hasToolResult}`)
-          })
           setGodState({
             history: msg.history || [],
             streaming: msg.streaming || false,
