@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect, Children } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect, Children, memo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
@@ -71,15 +71,86 @@ function TabSlider({ tabs, activeTabId, children }) {
   )
 }
 
-// Stage slider - snaps between stages vertically
+// Custom comparison for TabStages - only re-render when stage IDs or activeStageId change
+function tabStagesAreEqual(prevProps, nextProps) {
+  if (prevProps.activeStageId !== nextProps.activeStageId) return false
+  if (prevProps.tabId !== nextProps.tabId) return false
+
+  // Compare stage IDs, not object references
+  const prevIds = prevProps.stages.map(s => s.stageId).join(',')
+  const nextIds = nextProps.stages.map(s => s.stageId).join(',')
+  return prevIds === nextIds
+}
+
+// Memoized component for rendering tab stages
+// Prevents re-renders during stage animations
+const TabStages = memo(function TabStages({ stages, activeStageId, tabId }) {
+  // Filter out empty stages
+  const nonEmptyStages = useMemo(
+    () => stages.filter(item => !item.isEmpty),
+    [stages]
+  )
+
+  if (nonEmptyStages.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
+          <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
+        </div>
+        <div className="flex flex-col gap-3 text-sm">
+          <p className="flex items-center gap-3">
+            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+            <span>Summon a god</span>
+          </p>
+          <p className="flex items-center gap-3">
+            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
+            <span>Open terminal</span>
+          </p>
+          <p className="flex items-center gap-3">
+            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
+            <span>New realm</span>
+          </p>
+        </div>
+        <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="absolute inset-0">
+      <StageSlider stages={nonEmptyStages} activeStageId={activeStageId}>
+        {nonEmptyStages.map((stageItem) => (
+          <div
+            key={stageItem.stageId}
+            className="w-full h-full py-3"
+          >
+            <Surface
+              node={stageItem.stage.layout}
+              tabId={tabId}
+            />
+          </div>
+        ))}
+      </StageSlider>
+    </div>
+  )
+}, tabStagesAreEqual)
+
+// Stage slider - simple CSS transform with transition
 function StageSlider({ stages, activeStageId, children }) {
   const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
   const idx = stageIndex === -1 ? 0 : stageIndex
-  const translateY = -idx * 100
 
   return (
     <div className="h-full w-full overflow-hidden">
-      <div className="w-full" style={{ height: `${stages.length * 100}vh`, transform: `translateY(${translateY}vh)` }}>
+      <div
+        className="w-full"
+        style={{
+          height: `${stages.length * 100}vh`,
+          transform: `translateY(${-idx * 100}vh)`,
+          transition: 'transform 200ms ease-out'
+        }}
+      >
         {Children.map(children, (child) => (
           <div style={{ height: '100vh' }}>{child}</div>
         ))}
@@ -753,59 +824,11 @@ export default function App() {
                 {/* Stage for this tab */}
                 <main className="flex-1 min-h-0 overflow-hidden relative">
                   <RootDropZone tabId={tab.id} hasLayout={!!tab.stages?.length}>
-                    {(() => {
-                      // Filter same as sidebar to ensure matching indices
-                      const nonEmptyStages = tabStages.filter(item => !item.isEmpty)
-
-                      if (nonEmptyStages.length === 0) {
-                        // Welcome screen when no stages
-                        return (
-                          <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
-                            <div className="text-center">
-                              <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
-                              <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
-                            </div>
-                            <div className="flex flex-col gap-3 text-sm">
-                              <p className="flex items-center gap-3">
-                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
-                                <span>Summon a god</span>
-                              </p>
-                              <p className="flex items-center gap-3">
-                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
-                                <span>Open terminal</span>
-                              </p>
-                              <p className="flex items-center gap-3">
-                                <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
-                                <span>New realm</span>
-                              </p>
-                            </div>
-                            <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
-                          </div>
-                        )
-                      }
-
-                      return (
-                        <div className="absolute inset-0">
-                          <StageSlider stages={nonEmptyStages} activeStageId={tab.activeStageId}>
-                            {nonEmptyStages.map((stageItem) => (
-                              <div
-                                key={stageItem.stageId}
-                                className="w-full h-full py-3"
-                              >
-                                <Surface
-                                  node={stageItem.stage.layout}
-                                  tabId={tab.id}
-                                  entities={entities}
-                                  focusedTile={focusedTile}
-                                  focusedEntity={focusedEntity}
-                                  maximizedTile={maximizedTile}
-                                />
-                              </div>
-                            ))}
-                          </StageSlider>
-                        </div>
-                      )
-                    })()}
+                    <TabStages
+                      stages={tabStages}
+                      activeStageId={tab.activeStageId}
+                      tabId={tab.id}
+                    />
                   </RootDropZone>
                 </main>
               </div>

@@ -1,23 +1,8 @@
-import { useMemo, useCallback } from 'react'
+import { memo, useCallback } from 'react'
 import Tile from './Tile'
 import Resizer from './Resizer'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { WS_URL } from '../config'
-
-/**
- * Find a tile by ID in the layout tree
- */
-function findTileInLayout(node, tileId) {
-  if (!node) return null
-  if (node.type === 'tile' && node.id === tileId) return node
-  if (node.type === 'split') {
-    for (const child of node.children) {
-      const found = findTileInLayout(child, tileId)
-      if (found) return found
-    }
-  }
-  return null
-}
 
 /**
  * Surface - Recursively renders a layout tree
@@ -27,15 +12,14 @@ function findTileInLayout(node, tileId) {
  * - SplitNode: { type: 'split', id, direction: 'horizontal' | 'vertical', ratio: number, children: [LayoutNode, LayoutNode] }
  *
  * Each tile holds exactly ONE entity. Stacking is achieved via stages.
+ *
+ * NOTE: This component only receives stable props (node, tabId, depth).
+ * Dynamic state (entities, focus, etc.) is accessed via store in child components.
  */
-export default function Surface({
+function Surface({
   node,
   tabId,
-  depth = 0,
-  entities,
-  focusedTile,
-  focusedEntity,
-  maximizedTile
+  depth = 0
 }) {
   const { send } = useWebSocket(WS_URL)
 
@@ -56,25 +40,17 @@ export default function Surface({
     )
   }
 
-  // Maximized mode is now handled via CSS in Tile component
-  // We render the full layout and let the maximized tile expand via CSS
-
   // Tile node - render the Tile component
+  // Tile reads its own state from the store
   if (node.type === 'tile') {
-    const isMaximized = maximizedTile === node.id
     return (
       <Tile
         key={node.id}
         tileId={node.id}
         entityId={node.entityId}
         entityIds={node.entityIds}  // Legacy support
-        focusedEntityId={node.focusedEntityId}  // Legacy support
-        isFocused={focusedTile === node.id}
         isChapter={depth > 0}  // Has parent split = is a chapter
-        isMaximized={isMaximized}
-        entities={entities}
         tabId={tabId}
-        globalFocusedEntity={focusedEntity}
       />
     )
   }
@@ -106,10 +82,6 @@ export default function Surface({
             node={children[0]}
             tabId={tabId}
             depth={depth + 1}
-            entities={entities}
-            focusedTile={focusedTile}
-            focusedEntity={focusedEntity}
-            maximizedTile={maximizedTile}
           />
         </div>
 
@@ -134,10 +106,6 @@ export default function Surface({
             node={children[1]}
             tabId={tabId}
             depth={depth + 1}
-            entities={entities}
-            focusedTile={focusedTile}
-            focusedEntity={focusedEntity}
-            maximizedTile={maximizedTile}
           />
         </div>
       </div>
@@ -146,3 +114,6 @@ export default function Surface({
 
   return null
 }
+
+// Memoize to prevent unnecessary re-renders when parent updates
+export default memo(Surface)

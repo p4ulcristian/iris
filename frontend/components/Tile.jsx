@@ -12,24 +12,33 @@ import { useStore } from '../store'
 /**
  * Tile - A single tile in a surface layout containing ONE entity
  * (Stacking is now achieved via stages, not entity arrays in tiles)
+ *
+ * NOTE: Dynamic state (entities, focus, maximized) is read from store,
+ * not passed as props. This prevents unnecessary re-renders during animations.
  */
 export default function Tile({
   tileId,
   entityId,  // Single entity ID (new format)
   entityIds,  // Legacy: array of entity IDs (backwards compat)
-  focusedEntityId,  // Legacy: kept for backwards compat
-  isFocused,
   isChapter = false,  // True when tile has a parent split (is part of a chapter)
-  isMaximized = false,  // True when this tile is in maximized (fullscreen) mode
-  entities,
-  tabId,
-  globalFocusedEntity
+  tabId
 }) {
   const { send, connected } = useWebSocket(WS_URL)
   const ref = useRef(null)  // Original tile position
   const portalRef = useRef(null)  // Portal element for maximized view
   const [dropState, setDropState] = useState({ isDraggedOver: false, closestEdge: null, isRearrange: false })
   const [isDragging, setIsDragging] = useState(false)
+
+  // Read dynamic state from store
+  const entities = useStore(s => s.entities)
+  const focusedTile = useStore(s => s.focusedTile)
+  const focusedEntity = useStore(s => s.focusedEntity)
+  const maximizedTile = useStore(s => s.maximizedTile)
+
+  // Derived state
+  const isFocused = focusedTile === tileId
+  const isMaximized = maximizedTile === tileId
+  const globalFocusedEntity = focusedEntity
 
   // FLIP animation for maximize/restore
   const prevMaximizedRef = useRef(isMaximized)
