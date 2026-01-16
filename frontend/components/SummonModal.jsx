@@ -24,7 +24,7 @@ export default function SummonModal({
   const inputRef = useRef(null)
   const godColors = useStore(s => s.godColors)
   const entities = useStore(s => s.entities)
-  const { send, lastMessage } = useWebSocket(WS_URL)
+  const { send, lastMessage } = useWebSocket(WS_URL, { trackMessages: true })
 
   // All gods always available (infinite gods with numbering)
   const allGods = Object.keys(godColors)

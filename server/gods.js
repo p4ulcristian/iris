@@ -130,6 +130,92 @@ function isProcessAlive(godName) {
 }
 
 /**
+ * Interrupt a running Claude task by killing and respawning with --resume.
+ * This is the only reliable way to interrupt Claude in stream-json mode.
+ */
+export function interruptGod(godName) {
+  const entry = processes.get(godName)
+  if (!entry) {
+    log.log(`No entry for ${godName}, cannot interrupt`)
+    return false
+  }
+
+  const sessionId = entry.sessionId
+  const project = entry.project
+
+  if (!sessionId) {
+    log.log(`No session_id for ${godName}, cannot resume after interrupt`)
+    return false
+  }
+
+  log.log(`Interrupting ${godName} (session: ${sessionId}) - will kill and respawn`)
+
+  // Save clients to re-attach after respawn
+  const clients = new Set(entry.clients)
+
+  // Close streams
+  if (entry.outputStream) {
+    try { entry.outputStream.destroy() } catch {}
+  }
+  if (entry.inputFd !== undefined) {
+    try { fs.closeSync(entry.inputFd) } catch {}
+  }
+
+  // Kill the process
+  const pidFile = getPidFile(godName)
+  if (fs.existsSync(pidFile)) {
+    try {
+      const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10)
+      log.log(`Killing Claude process ${pid} for ${godName}`)
+      process.kill(pid, 'SIGKILL')  // Force kill
+    } catch (e) {
+      log.log(`Process already dead: ${e.message}`)
+    }
+    try { fs.unlinkSync(pidFile) } catch {}
+  }
+
+  // Clean up FIFOs
+  cleanupFifos(godName)
+
+  // Reset state and broadcast before removing from map
+  entry.streaming = false
+  entry.currentPartial = null
+  entry.error = null
+  entry.result = { success: false, interrupted: true }
+  broadcastGodState(godName)
+
+  // Remove from processes map
+  processes.delete(godName)
+
+  // Respawn with resume after a short delay (let process fully die)
+  setTimeout(() => {
+    log.log(`Respawning ${godName} with --resume ${sessionId}`)
+    createGod(godName, {
+      sessionId,
+      project,
+      personality: 'god',
+    })
+
+    // Re-attach all clients after respawn
+    setTimeout(() => {
+      const newEntry = processes.get(godName)
+      if (newEntry) {
+        clients.forEach(ws => {
+          if (ws.readyState === 1) {  // WebSocket.OPEN
+            newEntry.clients.add(ws)
+            log.log(`Re-attached client to ${godName}`)
+          }
+        })
+        // Broadcast new state to reconnected clients
+        broadcastGodState(godName)
+      }
+    }, 1000)  // Wait for createGod to finish setting up
+  }, 500)
+
+  return true
+}
+
+/**
  * Create a persistent Claude process with FIFOs.
  * Uses setsid for process persistence across Iris restarts.
  */

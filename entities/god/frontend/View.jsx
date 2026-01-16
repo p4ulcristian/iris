@@ -1,9 +1,52 @@
-import { useState, useEffect, useRef, useMemo, memo } from 'react'
+import { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
-import { MarkdownRenderer, ToolCard, TodoCard, EditCard } from '../../_ui'
+import { MarkdownRenderer, ToolCard, TodoCard, EditCard, WriteCard } from '../../_ui'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
+
+// Isolated input component - doesn't re-render when parent state changes
+const InputBar = memo(function InputBar({ connected, onSend, isFocused, onType, onInterrupt }) {
+  const [input, setInput] = useState('')
+  const inputRef = useRef(null)
+
+  // Auto-focus when pane is focused
+  useEffect(() => {
+    if (isFocused && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isFocused])
+
+  const handleSend = () => {
+    if (!input.trim() || !connected) return
+    onSend(input.trim())
+    setInput('')
+  }
+
+  const handleChange = (e) => {
+    setInput(e.target.value)
+    onType()
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSend()
+    if (e.key === 'Escape') onInterrupt()
+  }
+
+  return (
+    <div className="p-2 border-t border-white/10">
+      <input
+        ref={inputRef}
+        value={input}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        placeholder={connected ? "Message..." : "Connecting..."}
+        disabled={!connected}
+        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 disabled:opacity-50"
+      />
+    </div>
+  )
+})
 
 function GodView({ entity, isFocused }) {
   // Server state - single source of truth
@@ -15,7 +58,6 @@ function GodView({ entity, isFocused }) {
     exited: null,
   })
 
-  const [input, setInput] = useState('')
   const [viewMode, setViewMode] = useState('pro')
 
   const scrollRef = useRef(null)
@@ -37,6 +79,36 @@ function GodView({ entity, isFocused }) {
     if (godName) {
       const saved = localStorage.getItem(`iris-god-viewMode-${godName}`)
       if (saved) setViewMode(saved)
+    }
+  }, [godName])
+
+  // Restore scroll position on mount
+  useEffect(() => {
+    if (godName && scrollRef.current) {
+      const saved = localStorage.getItem(`iris-god-scroll-${godName}`)
+      if (saved) {
+        scrollRef.current.scrollTop = parseInt(saved, 10)
+      }
+    }
+  }, [godName])
+
+  // Save scroll position on scroll (debounced)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !godName) return
+
+    let timeout
+    const handleScroll = () => {
+      clearTimeout(timeout)
+      timeout = setTimeout(() => {
+        localStorage.setItem(`iris-god-scroll-${godName}`, el.scrollTop.toString())
+      }, 200)
+    }
+
+    el.addEventListener('scroll', handleScroll)
+    return () => {
+      clearTimeout(timeout)
+      el.removeEventListener('scroll', handleScroll)
     }
   }, [godName])
 
@@ -116,11 +188,17 @@ function GodView({ entity, isFocused }) {
     send({ event: 'god:attach', godName })
   }, [godName, connected, send])
 
-  const handleSend = () => {
-    if (!input.trim() || !connected) return
-    send({ event: 'god:send', godName, text: input.trim() })
-    setInput('')
-  }
+  const handleSend = useCallback((text) => {
+    send({ event: 'god:send', godName, text })
+  }, [send, godName])
+
+  const scrollToBottom = useCallback(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+  }, [])
+
+  const handleInterrupt = useCallback(() => {
+    send({ event: 'god:interrupt', godName })
+  }, [send, godName])
 
   // Status from server state
   const status = godState.result
@@ -191,8 +269,8 @@ function GodView({ entity, isFocused }) {
       }
 
       return (
-        <div key={i} className="flex justify-start mb-3">
-          <div className="max-w-[85%]">
+        <div key={i} className="flex justify-start mb-3 min-w-0">
+          <div className="max-w-[85%] min-w-0 overflow-hidden">
             {text && (
               <div className="px-4 py-2 bg-white/10 rounded-2xl rounded-bl-md text-sm">
                 <MarkdownRenderer content={text} />
@@ -211,6 +289,17 @@ function GodView({ entity, isFocused }) {
                         newString={t.input?.new_string}
                         result={result}
                         onRequestFile={requestFile}
+                      />
+                    </div>
+                  )
+                }
+                if (t.name === 'Write') {
+                  return (
+                    <div key={j} className="mt-2">
+                      <WriteCard
+                        filePath={t.input?.file_path}
+                        content={t.input?.content}
+                        result={result}
                       />
                     </div>
                   )
@@ -263,7 +352,7 @@ function GodView({ entity, isFocused }) {
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3" style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text' }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden p-3" style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text' }}>
         {messages.length === 0 && (
           <div className="text-white/30 text-sm text-center mt-4">Type a message to start</div>
         )}
@@ -276,16 +365,7 @@ function GodView({ entity, isFocused }) {
         </div>
       )}
 
-      <div className="p-2 border-t border-white/10">
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleSend()}
-          placeholder={connected ? "Message..." : "Connecting..."}
-          disabled={!connected}
-          className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-white/30 disabled:opacity-50"
-        />
-      </div>
+      <InputBar connected={connected} onSend={handleSend} isFocused={isFocused} onType={scrollToBottom} onInterrupt={handleInterrupt} />
     </div>
   )
 }

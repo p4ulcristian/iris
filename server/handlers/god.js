@@ -14,7 +14,8 @@ import {
   detachClient,
   killGod,
   listGods,
-  getGod
+  getGod,
+  interruptGod
 } from '../gods.js'
 import {
   createEntityBase,
@@ -224,5 +225,15 @@ export const handlers = {
   'god:list': (ws) => {
     const gods = listGods()
     ws.send(JSON.stringify({ event: 'god:list', gods }))
+  },
+
+  /**
+   * Interrupt a running god (like Ctrl+C).
+   */
+  'god:interrupt': (ws, data) => {
+    const { godName } = data
+    if (godName) {
+      interruptGod(godName)
+    }
   },
 }

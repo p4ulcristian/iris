@@ -124,7 +124,7 @@ function ensureConnection(url) {
   window.__irisWs = ws
 }
 
-export function useWebSocket(url) {
+export function useWebSocket(url, { trackMessages = false } = {}) {
   const [connected, setConnected] = useState(sharedConnected)
   const [lastMessage, setLastMessage] = useState(null)
 
@@ -133,17 +133,20 @@ export function useWebSocket(url) {
     const onConnectionChange = (isConnected) => setConnected(isConnected)
     connectionListeners.add(onConnectionChange)
 
-    // Message handler - registered globally so it works across reconnects
-    const onMessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        setLastMessage(data)
-      } catch (e) {
-        console.error('Invalid WebSocket message:', e)
-        reportError(e, 'websocket', { type: 'parse', data: event.data?.slice(0, 200) })
+    // Message handler - only track if opt-in (avoids re-renders during streaming)
+    let onMessage = null
+    if (trackMessages) {
+      onMessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          setLastMessage(data)
+        } catch (e) {
+          console.error('Invalid WebSocket message:', e)
+          reportError(e, 'websocket', { type: 'parse', data: event.data?.slice(0, 200) })
+        }
       }
+      messageListeners.add(onMessage)
     }
-    messageListeners.add(onMessage)
 
     // Ensure we have a connection
     ensureConnection(url)
@@ -153,9 +156,9 @@ export function useWebSocket(url) {
 
     return () => {
       connectionListeners.delete(onConnectionChange)
-      messageListeners.delete(onMessage)
+      if (onMessage) messageListeners.delete(onMessage)
     }
-  }, [url])
+  }, [url, trackMessages])
 
   const send = useCallback((data) => {
     if (sharedWs?.readyState === WebSocket.OPEN) {
