@@ -1,11 +1,12 @@
 /**
  * God - Claude Code with bidirectional JSON streaming.
  *
+ * Uses Zellij + named pipes (FIFOs) for persistence across Iris restarts.
  * History is owned by Claude (stored in ~/.claude/projects/).
  * We read from Claude's storage on restore, and track in-memory during session.
  */
 
-import { spawn } from 'child_process'
+import { spawn, execSync, spawnSync } from 'child_process'
 import path from 'path'
 import os from 'os'
 import fs from 'fs'
@@ -20,10 +21,280 @@ const log = createLogger('god')
 const __dirname = path.dirname(new URL(import.meta.url).pathname)
 const IRIS_ROOT = path.resolve(__dirname, '..')
 const HOME = os.homedir()
+const FIFO_DIR = '/tmp/iris-fifos'
 
-// Active god processes
-// godName -> { proc, clients, history, currentPartial, sessionId, ... }
+// Active god connections (not processes - those live in Zellij)
+// godName -> { inputStream, outputStream, clients, history, currentPartial, sessionId, ... }
 const processes = new Map()
+
+// ============================================================================
+// FIFO Management
+// ============================================================================
+
+/**
+ * Get FIFO paths for a god.
+ */
+function getFifoPaths(godName) {
+  return {
+    inPipe: path.join(FIFO_DIR, `${godName}-in`),
+    outPipe: path.join(FIFO_DIR, `${godName}-out`),
+  }
+}
+
+/**
+ * Create FIFOs for a god if they don't exist.
+ */
+function createFifos(godName) {
+  const { inPipe, outPipe } = getFifoPaths(godName)
+
+  // Ensure FIFO directory exists
+  if (!fs.existsSync(FIFO_DIR)) {
+    fs.mkdirSync(FIFO_DIR, { recursive: true })
+  }
+
+  // Create FIFOs if they don't exist
+  for (const fifo of [inPipe, outPipe]) {
+    if (!fs.existsSync(fifo)) {
+      try {
+        execSync(`mkfifo "${fifo}"`, { stdio: 'ignore' })
+        log.log(`Created FIFO: ${fifo}`)
+      } catch (e) {
+        log.error(`Failed to create FIFO ${fifo}:`, e.message)
+      }
+    }
+  }
+
+  return { inPipe, outPipe }
+}
+
+/**
+ * Clean up FIFOs for a god.
+ */
+function cleanupFifos(godName) {
+  const { inPipe, outPipe } = getFifoPaths(godName)
+
+  for (const fifo of [inPipe, outPipe]) {
+    try {
+      if (fs.existsSync(fifo)) {
+        fs.unlinkSync(fifo)
+        log.log(`Removed FIFO: ${fifo}`)
+      }
+    } catch (e) {
+      log.error(`Failed to remove FIFO ${fifo}:`, e.message)
+    }
+  }
+}
+
+// ============================================================================
+// Zellij Session Management
+// ============================================================================
+
+/**
+ * Get Zellij session name for a god.
+ */
+function getZellijSessionName(godName) {
+  return `iris-${godName}`
+}
+
+/**
+ * Check if a Claude process exists for a god.
+ */
+function zellijSessionExists(godName) {
+  // Check PID file and if process is alive
+  return isProcessAlive(godName)
+}
+
+/**
+ * Get PID file path for a god.
+ */
+function getPidFile(godName) {
+  return path.join(FIFO_DIR, `${godName}.pid`)
+}
+
+/**
+ * Check if a Claude process is still running for a god.
+ */
+function isProcessAlive(godName) {
+  const pidFile = getPidFile(godName)
+  if (!fs.existsSync(pidFile)) return false
+
+  try {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10)
+    // Check if process exists
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    // Process doesn't exist or we can't signal it
+    return false
+  }
+}
+
+/**
+ * Create a persistent Claude process with FIFOs.
+ * Uses setsid for process persistence across Iris restarts.
+ */
+function createZellijSession(godName, options = {}) {
+  const { inPipe, outPipe } = createFifos(godName)
+  const sessionName = getZellijSessionName(godName)
+  const pidFile = getPidFile(godName)
+  const {
+    project,
+    sessionId,
+    personality = 'god',
+    task,
+  } = options
+
+  // Build claude args
+  const claudeArgs = [
+    '-p',
+    '--input-format', 'stream-json',
+    '--output-format', 'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--dangerously-skip-permissions',
+  ]
+
+  if (sessionId) {
+    claudeArgs.push('--resume', sessionId)
+  }
+
+  // System prompt (only for new sessions)
+  let systemPrompt = ''
+  if (!sessionId && personality && personality !== 'none') {
+    const personalityContent = getComposedPrompt(personality)
+    const projectsContent = getProjectsContext()
+    if (personalityContent) systemPrompt += personalityContent
+    if (projectsContent) systemPrompt += '\n\n' + projectsContent
+  }
+  if (systemPrompt) {
+    // Escape for shell - use base64 to avoid escaping issues
+    const encoded = Buffer.from(systemPrompt).toString('base64')
+    claudeArgs.push('--system-prompt', `$(echo ${encoded} | base64 -d)`)
+  }
+
+  // MCP config
+  const mcpConfig = getPersonalityMcpConfig(personality, IRIS_ROOT)
+  let mcpFile = null
+  if (mcpConfig) {
+    mcpFile = path.join(os.tmpdir(), `iris-mcp-${godName}-${Date.now()}.json`)
+    fs.writeFileSync(mcpFile, JSON.stringify(mcpConfig))
+    claudeArgs.push('--mcp-config', mcpFile)
+  }
+
+  // Build the shell script that runs Claude with FIFOs
+  // setsid creates a new session, making the process independent of Iris
+  // Use <> mode to open FIFOs in read-write mode to avoid blocking
+  const scriptContent = `#!/bin/bash
+cd "${project || HOME}"
+export PATH="${getExtendedPath()}"
+export TERM=xterm-256color
+export COLORTERM=truecolor
+export GOD_NAME="${godName}"
+export IRIS_HOME="${IRIS_ROOT}"
+export IRIS_API_PORT="${OAUTH_PORT}"
+
+# Write our PID
+echo $$ > "${pidFile}"
+
+# Open FIFOs in read-write mode to avoid blocking
+# The <> mode opens for both reading and writing, preventing FIFO deadlocks
+exec 3<>"${inPipe}"   # Open inPipe for read-write on fd 3
+exec 4<>"${outPipe}"  # Open outPipe for read-write on fd 4 (prevents blocking)
+
+# Run Claude with file descriptors
+exec claude ${claudeArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')} <&3 >&4 2>/tmp/iris-${godName}-stderr.log
+`
+
+  // Write the script to a temp file
+  const scriptFile = path.join(os.tmpdir(), `iris-claude-${godName}.sh`)
+  fs.writeFileSync(scriptFile, scriptContent, { mode: 0o755 })
+
+  log.log(`Creating Claude process: ${sessionName}`)
+  log.log(`Script file: ${scriptFile}`)
+
+  try {
+    // Use setsid to create a new session (process group) so Claude survives Iris restarts
+    // The process runs completely detached from Iris
+    const child = spawn('setsid', ['-f', 'bash', scriptFile], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: project || HOME,
+    })
+    child.unref()
+
+    log.log(`Claude process started for ${godName}`)
+
+    // If there's an initial task, send it after a delay
+    if (task && !sessionId) {
+      setTimeout(() => {
+        try {
+          const msg = JSON.stringify({
+            type: 'user',
+            message: { role: 'user', content: [{ type: 'text', text: task }] }
+          }) + '\n'
+          const fd = fs.openSync(inPipe, 'a')
+          fs.writeSync(fd, msg)
+          fs.closeSync(fd)
+          log.log(`Sent initial task to ${godName}`)
+        } catch (e) {
+          log.error(`Failed to send initial task:`, e.message)
+        }
+      }, 1000)  // Give Claude time to start
+    }
+
+    // Clean up MCP file after delay
+    if (mcpFile) {
+      setTimeout(() => {
+        try { fs.unlinkSync(mcpFile) } catch {}
+      }, 30000)
+    }
+
+    // Clean up script file after delay
+    setTimeout(() => {
+      try { fs.unlinkSync(scriptFile) } catch {}
+    }, 5000)
+
+    return true
+  } catch (e) {
+    log.error(`Failed to create Claude process:`, e.message)
+    return false
+  }
+}
+
+/**
+ * Kill a Claude process for a god.
+ */
+function killZellijSession(godName) {
+  const pidFile = getPidFile(godName)
+  if (!fs.existsSync(pidFile)) {
+    log.log(`No PID file for ${godName}`)
+    return true
+  }
+
+  try {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10)
+    log.log(`Killing Claude process ${pid} for ${godName}`)
+    process.kill(pid, 'SIGTERM')
+
+    // Give it a moment to die gracefully
+    setTimeout(() => {
+      try {
+        process.kill(pid, 0)  // Check if still alive
+        process.kill(pid, 'SIGKILL')  // Force kill if still alive
+      } catch {}
+    }, 1000)
+
+    // Remove PID file
+    try { fs.unlinkSync(pidFile) } catch {}
+
+    return true
+  } catch (e) {
+    // Process might already be dead
+    log.log(`Process for ${godName} already dead or error: ${e.message}`)
+    try { fs.unlinkSync(pidFile) } catch {}
+    return true
+  }
+}
 
 // Build PATH with common locations for claude
 function getExtendedPath() {
@@ -180,7 +451,94 @@ function broadcastGodState(godName) {
 }
 
 /**
- * Create a new God process.
+ * Connect to FIFOs for a god (for reading output).
+ * This sets up the output stream reader for parsing Claude's responses.
+ *
+ * FIFO handling is tricky because:
+ * 1. FIFOs block on open until both ends are connected
+ * 2. Claude opens inPipe for reading, outPipe for writing
+ * 3. We need to open inPipe for writing (to unblock Claude) and outPipe for reading
+ *
+ * To avoid deadlock:
+ * - We keep a write file descriptor to inPipe open (stored in entry.inputFd)
+ * - This unblocks Claude's read
+ * - Then we can read from outPipe
+ */
+function connectToFifos(godName, entry) {
+  const { inPipe, outPipe } = getFifoPaths(godName)
+
+  log.log(`Connecting to FIFOs for ${godName}`)
+
+  try {
+    // First, open inPipe for writing to unblock Claude's stdin
+    // Use O_WRONLY | O_NONBLOCK to avoid blocking if Claude hasn't started yet
+    // Then switch to blocking mode for actual writes
+    try {
+      // Open in non-blocking mode first
+      entry.inputFd = fs.openSync(inPipe, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)
+      log.log(`Opened input FIFO for ${godName}`)
+    } catch (e) {
+      // If ENXIO (no reader), Claude hasn't started yet - retry after delay
+      if (e.code === 'ENXIO') {
+        log.log(`Claude not ready yet for ${godName}, retrying...`)
+        setTimeout(() => connectToFifos(godName, entry), 500)
+        return false
+      }
+      throw e
+    }
+
+    // Now open output pipe for reading
+    // This might block briefly until Claude opens it for writing
+    entry.outputStream = fs.createReadStream(outPipe, { encoding: 'utf-8' })
+
+    entry.outputStream.on('data', (chunk) => {
+      entry.buffer += chunk
+      const lines = entry.buffer.split('\n')
+      entry.buffer = lines.pop()
+
+      for (const line of lines) {
+        if (!line.trim()) continue
+        try {
+          handleClaudeMessage(godName, JSON.parse(line))
+        } catch (e) {
+          log.error(`Parse error:`, e.message, line.slice(0, 100))
+        }
+      }
+    })
+
+    entry.outputStream.on('error', (err) => {
+      log.error(`${godName} output stream error:`, err.message)
+      entry.error = err.message
+      broadcastGodState(godName)
+    })
+
+    entry.outputStream.on('end', () => {
+      log.log(`${godName} output stream ended`)
+      entry.streaming = false
+      entry.currentPartial = null
+      entry.exited = 0
+      broadcastGodState(godName)
+
+      // Clean up
+      if (entry.outputStream) {
+        entry.outputStream = null
+      }
+      if (entry.inputFd !== undefined) {
+        try { fs.closeSync(entry.inputFd) } catch {}
+        entry.inputFd = undefined
+      }
+    })
+
+    log.log(`Connected to FIFOs for ${godName}`)
+    return true
+  } catch (e) {
+    log.error(`Failed to connect to FIFOs for ${godName}:`, e.message)
+    return false
+  }
+}
+
+/**
+ * Create a new God process (or reconnect to existing Zellij session).
  */
 export function createGod(godName, options = {}) {
   log.log(`createGod: ${godName}`, JSON.stringify(options))
@@ -192,157 +550,81 @@ export function createGod(godName, options = {}) {
     permissionMode = DEFAULT_PERMISSION_MODE
   } = options
 
+  // If we already have a connection, clean it up
   if (processes.has(godName)) {
-    killGod(godName)
+    const existing = processes.get(godName)
+    if (existing.outputStream) {
+      try { existing.outputStream.destroy() } catch {}
+    }
+    processes.delete(godName)
   }
-
-  // Build claude args
-  const args = [
-    '-p',
-    '--input-format', 'stream-json',
-    '--output-format', 'stream-json',
-    '--verbose',
-    '--include-partial-messages',
-    '--dangerously-skip-permissions',
-  ]
-
-  if (sessionId) {
-    args.push('--resume', sessionId)
-  }
-
-  // System prompt (only for new sessions)
-  let systemPrompt = ''
-  if (!sessionId && personality && personality !== 'none') {
-    const personalityContent = getComposedPrompt(personality)
-    const projectsContent = getProjectsContext()
-    if (personalityContent) systemPrompt += personalityContent
-    if (projectsContent) systemPrompt += '\n\n' + projectsContent
-  }
-  if (systemPrompt) {
-    args.push('--system-prompt', systemPrompt)
-  }
-
-  // MCP config
-  const mcpConfig = getPersonalityMcpConfig(personality, IRIS_ROOT)
-  if (mcpConfig) {
-    const mcpFile = path.join(os.tmpdir(), `iris-mcp-${godName}-${Date.now()}.json`)
-    fs.writeFileSync(mcpFile, JSON.stringify(mcpConfig))
-    args.push('--mcp-config', mcpFile)
-    setTimeout(() => { try { fs.unlinkSync(mcpFile) } catch {} }, 30000)
-  }
-
-  const env = {
-    ...process.env,
-    PATH: getExtendedPath(),
-    TERM: 'xterm-256color',
-    COLORTERM: 'truecolor',
-    GOD_NAME: godName,
-    IRIS_HOME: IRIS_ROOT,
-    IRIS_API_PORT: String(OAUTH_PORT),
-  }
-
-  log.log(`Spawning: claude ${args.slice(0, 5).join(' ')}...`)
-
-  const proc = spawn('claude', args, {
-    cwd: project || HOME,
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  })
 
   // Load history from Claude's storage (for resumed sessions)
   const initialHistory = sessionId ? readClaudeHistory(sessionId, project || HOME) : []
 
-  const entry = {
-    proc,
-    clients: new Set(),
-    history: initialHistory,      // Finalized messages only
-    currentPartial: null,         // Current streaming message (display only)
-    sessionId: sessionId || null,
-    buffer: '',
-    streaming: false,
-    result: null,
-    error: null,
-    exited: null,
-  }
-
-  processes.set(godName, entry)
-
-  // Send initial task
+  // If there's an initial task, add it to history
   if (task && !sessionId) {
-    log.log(`Sending initial task: "${task.slice(0, 50)}"`)
-    entry.history.push({
+    initialHistory.push({
       type: 'user',
       content: task,
       timestamp: Date.now()
     })
+  }
 
-    const msg = JSON.stringify({
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: task }] }
-    }) + '\n'
+  const entry = {
+    outputStream: null,
+    clients: new Set(),
+    history: initialHistory,
+    currentPartial: null,
+    sessionId: sessionId || null,
+    buffer: '',
+    streaming: task ? true : false,  // Streaming if we're sending a task
+    result: null,
+    error: null,
+    exited: null,
+    project: project || HOME,
+  }
 
-    try {
-      proc.stdin.write(msg)
-      entry.streaming = true
-    } catch (e) {
-      log.error(`Failed to write initial task:`, e)
+  processes.set(godName, entry)
+
+  // Check if Zellij session already exists
+  if (zellijSessionExists(godName)) {
+    log.log(`Zellij session exists for ${godName}, reconnecting to FIFOs`)
+
+    // Just connect to existing FIFOs
+    const { inPipe, outPipe } = getFifoPaths(godName)
+    if (fs.existsSync(inPipe) && fs.existsSync(outPipe)) {
+      connectToFifos(godName, entry)
+      return { godName, sessionId }
+    } else {
+      // Session exists but FIFOs don't - orphaned session, clean it up
+      log.log(`Orphaned Zellij session ${godName}, cleaning up`)
+      killZellijSession(godName)
     }
   }
 
-  // Parse NDJSON from stdout
-  proc.stdout.on('data', (chunk) => {
-    entry.buffer += chunk.toString()
-    const lines = entry.buffer.split('\n')
-    entry.buffer = lines.pop()
-
-    for (const line of lines) {
-      if (!line.trim()) continue
-      try {
-        handleClaudeMessage(godName, JSON.parse(line))
-      } catch (e) {
-        log.error(`Parse error:`, e.message, line.slice(0, 100))
-      }
-    }
+  // Create new Zellij session with FIFOs
+  log.log(`Creating new Zellij session for ${godName}`)
+  const created = createZellijSession(godName, {
+    project,
+    sessionId,
+    personality,
+    task,
   })
 
-  proc.stderr.on('data', (chunk) => {
-    const stderr = chunk.toString()
-    log.error(`${godName} stderr:`, stderr)
-    entry.history.push({ type: 'stderr', content: stderr, timestamp: Date.now() })
+  if (!created) {
+    entry.error = 'Failed to create Zellij session'
     broadcastGodState(godName)
-  })
+    return { godName, sessionId, error: 'Failed to create session' }
+  }
 
-  proc.on('close', (code) => {
-    log.log(`${godName} exited with code ${code}`)
-    const exitingEntry = processes.get(godName)
-    if (exitingEntry) {
-      exitingEntry.streaming = false
-      exitingEntry.currentPartial = null
-      exitingEntry.exited = code
-      broadcastGodState(godName)
+  // Give Zellij a moment to start, then connect to FIFOs
+  // The FIFOs will block until Claude opens them, so we need a small delay
+  setTimeout(() => {
+    if (processes.has(godName)) {
+      connectToFifos(godName, processes.get(godName))
     }
-    processes.delete(godName)
-
-    if (appState.entities[godName]) {
-      appState.entities[godName].readyState = code === 0 ? 'done' : 'scattered'
-      appState.entities[godName].status = `Exited (${code})`
-      saveState()
-    }
-  })
-
-  proc.on('error', (err) => {
-    log.error(`${godName} error:`, err)
-    const errorEntry = processes.get(godName)
-    if (errorEntry) {
-      errorEntry.error = err.message
-      broadcastGodState(godName)
-    }
-    if (appState.entities[godName]) {
-      appState.entities[godName].readyState = 'scattered'
-      appState.entities[godName].status = `Error: ${err.message}`
-      saveState()
-    }
-  })
+  }, 500)
 
   return { godName, sessionId }
 }
@@ -361,7 +643,13 @@ function handleClaudeMessage(godName, msg) {
     entry.sessionId = msg.session_id
     if (appState.entities[godName]) {
       appState.entities[godName].sessionId = msg.session_id
+      // Transition from spawning to working
+      if (appState.entities[godName].readyState === 'spawning') {
+        appState.entities[godName].readyState = 'working'
+      }
       saveState()
+      // Force broadcast after debounce window to ensure state update reaches frontend
+      setTimeout(() => broadcastState(), 50)
     }
     broadcastGodState(godName)
     return
@@ -388,7 +676,11 @@ function handleClaudeMessage(godName, msg) {
   // Result message
   if (msg.type === 'result') {
     entry.streaming = false
-    entry.currentPartial = null
+    // Save currentPartial to history before clearing (it's the final response)
+    if (entry.currentPartial) {
+      entry.history.push(entry.currentPartial)
+      entry.currentPartial = null
+    }
     entry.result = {
       success: msg.subtype === 'success',
       cost: msg.total_cost_usd,
@@ -417,13 +709,22 @@ function handleClaudeMessage(godName, msg) {
 }
 
 /**
- * Send a user message to a god.
+ * Send a user message to a god via FIFO.
  */
 export function sendUserMessage(godName, text) {
   log.log(`sendUserMessage: ${godName} "${text.slice(0, 50)}"`)
   const entry = processes.get(godName)
-  if (!entry?.proc) {
+  if (!entry) {
     log.error(`Cannot send: ${godName} not found`)
+    return false
+  }
+
+  // Check if Claude process is still alive
+  if (!zellijSessionExists(godName)) {
+    log.error(`Cannot send: Claude process for ${godName} not found`)
+    entry.error = 'Claude session has ended'
+    entry.exited = 1
+    broadcastGodState(godName)
     return false
   }
 
@@ -442,17 +743,31 @@ export function sendUserMessage(godName, text) {
   entry.streaming = true
   broadcastGodState(godName)
 
-  // Send to Claude
+  // Send to Claude via FIFO
   const msg = JSON.stringify({
     type: 'user',
     message: { role: 'user', content: [{ type: 'text', text }] }
   }) + '\n'
 
   try {
-    entry.proc.stdin.write(msg)
+    // Use the already-open file descriptor if available
+    if (entry.inputFd !== undefined) {
+      fs.writeSync(entry.inputFd, msg)
+      log.log(`Sent message to ${godName} via open FD`)
+      return true
+    }
+
+    // Fallback: open, write, close
+    const { inPipe } = getFifoPaths(godName)
+    const fd = fs.openSync(inPipe, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)
+    fs.writeSync(fd, msg)
+    fs.closeSync(fd)
+    log.log(`Sent message to ${godName} via FIFO`)
     return true
   } catch (e) {
     log.error(`Write error:`, e)
+    entry.error = `Failed to send: ${e.message}`
+    broadcastGodState(godName)
     return false
   }
 }
@@ -495,13 +810,28 @@ export function detachClient(godName, ws) {
 }
 
 /**
- * Kill a god process.
+ * Kill a god's Claude process and clean up resources.
  */
 export function killGod(godName) {
   const entry = processes.get(godName)
-  if (!entry) return false
-  try { entry.proc.kill('SIGTERM') } catch {}
-  processes.delete(godName)
+
+  // Clean up local resources
+  if (entry) {
+    if (entry.outputStream) {
+      try { entry.outputStream.destroy() } catch {}
+    }
+    if (entry.inputFd !== undefined) {
+      try { fs.closeSync(entry.inputFd) } catch {}
+    }
+    processes.delete(godName)
+  }
+
+  // Kill Claude process
+  killZellijSession(godName)
+
+  // Clean up FIFOs
+  cleanupFifos(godName)
+
   return true
 }
 
@@ -517,6 +847,8 @@ export function listGods() {
       clientCount: entry.clients.size,
       historyLength: entry.history.length,
       streaming: entry.streaming,
+      connected: entry.outputStream !== null,
+      processAlive: isProcessAlive(godName),
     }
   })
 }
@@ -550,4 +882,61 @@ export function createTerminalSession(options = {}, projectRoot) {
 
 export function getSessionName(godName) {
   return processes.get(godName)?.sessionId || godName
+}
+
+/**
+ * Check if a Zellij session exists for a god (exported for handlers).
+ */
+export { zellijSessionExists }
+
+/**
+ * Clean up orphaned resources on startup.
+ * - FIFOs without corresponding running processes
+ * - Stale PID files
+ */
+export function cleanupOrphanedSessions() {
+  log.log('Cleaning up orphaned sessions on startup')
+
+  if (!fs.existsSync(FIFO_DIR)) {
+    log.log('No FIFO directory, nothing to clean up')
+    return
+  }
+
+  const files = fs.readdirSync(FIFO_DIR)
+
+  // Get all god names from FIFOs and PID files
+  const godNames = new Set()
+  for (const f of files) {
+    if (f.endsWith('-in') || f.endsWith('-out')) {
+      godNames.add(f.replace(/-in$|-out$/, ''))
+    } else if (f.endsWith('.pid')) {
+      godNames.add(f.replace(/\.pid$/, ''))
+    }
+  }
+
+  log.log(`Found ${godNames.size} potential god processes:`, Array.from(godNames))
+
+  // Check each god
+  for (const godName of godNames) {
+    const alive = isProcessAlive(godName)
+
+    if (!alive) {
+      // Process is dead - clean up its FIFOs and PID file
+      log.log(`Cleaning up dead process resources for ${godName}`)
+      cleanupFifos(godName)
+      const pidFile = getPidFile(godName)
+      try { if (fs.existsSync(pidFile)) fs.unlinkSync(pidFile) } catch {}
+    } else {
+      log.log(`Process for ${godName} is alive, ready for reconnection`)
+
+      // Update app state to indicate it's reconnectable
+      if (appState.entities[godName]?.type === 'god') {
+        if (appState.entities[godName].readyState === 'spawning') {
+          appState.entities[godName].readyState = 'working'
+        }
+      }
+    }
+  }
+
+  log.log('Orphaned session cleanup complete')
 }

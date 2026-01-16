@@ -14,6 +14,7 @@ import { handleMessage } from './handlers/index.js'
 import { setupApi } from './api.js'
 import * as calendar from './calendar.js'
 import { createLogger, clearLog } from './logger.js'
+import { cleanupOrphanedSessions } from './gods.js'
 
 import os from 'os'
 
@@ -92,6 +93,9 @@ setSystemClaudeBroadcast(broadcast)
 
 // Load persisted state
 loadState()
+
+// Clean up orphaned Zellij sessions and FIFOs
+cleanupOrphanedSessions()
 
 // Load entity registry from app/entities/
 loadEntityRegistry().then(() => {

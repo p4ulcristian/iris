@@ -109,7 +109,8 @@ export const useStore = create(
 
         // System Claudes (all running Claude processes on the system)
         if (serverState.systemClaudes !== undefined) {
-          state.systemClaudes = serverState.systemClaudes
+          // Spread to ensure new reference for React reactivity
+          state.systemClaudes = [...serverState.systemClaudes]
         }
       }),
 

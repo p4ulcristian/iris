@@ -102,4 +102,21 @@ export const handlers = {
     saveState()
     broadcastState()
   },
+
+  // Kill a specific entity by ID
+  'entity:kill': (ws, data) => {
+    const entityId = data.entityId
+    if (!entityId || !appState.entities[entityId]) return
+
+    const entity = appState.entities[entityId]
+
+    // Kill god process if it's a god
+    if (entity.type === 'god') {
+      killGod(entityId)
+    }
+
+    removeEntity(entityId)
+    saveState()
+    broadcastState()
+  },
 }

@@ -119,11 +119,11 @@ export const handlers = {
         // Now attach the client - the entry exists
         attachClient(entityId, ws)
 
-        // Update state
-        appState.entities[entityId].readyState = 'working'
-        appState.entities[entityId].sessionId = result.sessionId || null
-        saveState()
-        broadcastState()
+        // Update sessionId if returned (readyState transitions in gods.js on init)
+        if (result.sessionId) {
+          appState.entities[entityId].sessionId = result.sessionId
+          saveState()
+        }
 
       } catch (err) {
         appState.entities[entityId].readyState = 'failed'
@@ -175,6 +175,13 @@ export const handlers = {
       // Try attach again
       entry = attachClient(godName, ws)
       console.log(`[GOD] After respawn, attachClient result: ${entry ? `found with ${entry.history?.length} history items` : 'NOT FOUND'}`)
+
+      // Update readyState after successful reconnection
+      if (entry && appState.entities[godName]) {
+        appState.entities[godName].readyState = 'working'
+        saveState()
+        broadcastState()
+      }
     }
 
     if (!entry) {
