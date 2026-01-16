@@ -13,11 +13,12 @@ if (isDev && !fs.existsSync(PROJECT_LOGS_DIR)) {
   fs.mkdirSync(PROJECT_LOGS_DIR, { recursive: true })
 }
 
-// Format timestamp as [YYYY-MM-DD HH:MM:SS]
+// Format timestamp as [YYYY-MM-DD HH:MM:SS.mmm]
 function timestamp() {
   const now = new Date()
   const pad = n => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  const pad3 = n => String(n).padStart(3, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${pad3(now.getMilliseconds())}`
 }
 
 // Write to log file (only in dev) - async to avoid blocking

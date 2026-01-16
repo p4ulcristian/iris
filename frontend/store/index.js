@@ -37,6 +37,7 @@ export const useStore = create(
       services: { speak: false, hear: false, chronicle: false, mcp: false },
       chronicleDetails: null,  // { running, paused, volume, vad, start_time, ... }
       speakDetails: null,  // { volume, muted }
+      systemClaudes: [],  // [{ pid, cwd, tty, project, isIrisManaged }]
 
       // ============================================
       // LOCAL UI STATE (not synced to server)
@@ -104,6 +105,11 @@ export const useStore = create(
         // Speak details (volume, muted)
         if (serverState.speakDetails !== undefined) {
           state.speakDetails = serverState.speakDetails
+        }
+
+        // System Claudes (all running Claude processes on the system)
+        if (serverState.systemClaudes !== undefined) {
+          state.systemClaudes = serverState.systemClaudes
         }
       }),
 

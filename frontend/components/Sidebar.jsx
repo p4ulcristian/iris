@@ -12,7 +12,8 @@ import {
   faPlug,
   faTerminal,
   faTrash,
-  faEye
+  faEye,
+  faDatabase
 } from '@fortawesome/free-solid-svg-icons'
 import IconButton from './ui/IconButton'
 import DraggableTypeButton from './DraggableTypeButton'
@@ -433,6 +434,63 @@ function LogsButton({ send }) {
   )
 }
 
+function StateButton() {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  // Get state from store
+  const tabs = useStore(s => s.tabs)
+  const entities = useStore(s => s.entities)
+  const activeTabId = useStore(s => s.activeTabId)
+  const focusedEntity = useStore(s => s.focusedEntity)
+  const settings = useStore(s => s.settings)
+  const services = useStore(s => s.services)
+
+  const state = {
+    tabs,
+    entities,
+    activeTabId,
+    focusedEntity,
+    settings,
+    services
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <IconButton
+        icon={faDatabase}
+        size="md"
+        variant="ghost"
+        onClick={() => setOpen(!open)}
+        title="Server state"
+      />
+      {open && (
+        <div className="absolute left-full top-0 ml-2 w-[500px] max-h-[70vh] liquid-glass-popup flex flex-col z-50">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+            <span className="text-xs text-white/70 font-medium">Server State</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 min-h-[300px] max-h-[calc(70vh-40px)] font-mono text-[10px]">
+            <pre className="text-white/60 whitespace-pre-wrap break-all">
+              {JSON.stringify(state, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ServicesDropdown({ connected, services, servicesLoading, onToggle, speakDetails, onVolumeChange }) {
   const [open, setOpen] = useState(false)
   const [localVolume, setLocalVolume] = useState(100)
@@ -557,6 +615,61 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
               </span>
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// System Claudes panel - shows all Claude processes running on the system
+function SystemClaudesPanel() {
+  const [expanded, setExpanded] = useState(true)
+  const systemClaudes = useStore(s => s.systemClaudes)
+
+  if (!systemClaudes || systemClaudes.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="border-b border-white/10 py-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-1 flex items-center justify-between text-xs text-white/60 hover:text-white/80 transition-colors"
+      >
+        <span className="font-medium">System Claudes ({systemClaudes.length})</span>
+        <span className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-2 py-1 space-y-0.5">
+          {systemClaudes.map(proc => (
+            <div
+              key={proc.pid}
+              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              {/* Status indicator */}
+              <span className={proc.isIrisManaged ? 'text-purple-400' : 'text-green-400'}>
+                {proc.isIrisManaged ? '◆' : '●'}
+              </span>
+
+              {/* TTY or 'iris' */}
+              <span className="text-white/50 font-mono text-[10px] w-10 shrink-0">
+                {proc.tty || 'iris'}
+              </span>
+
+              {/* Project name */}
+              <span className="text-white/70 text-xs truncate flex-1" title={proc.cwd}>
+                {proc.project}
+              </span>
+
+              {/* PID */}
+              <span className="text-white/30 text-[10px] font-mono">
+                {proc.pid}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -853,6 +966,9 @@ function AppTitle({ connected, send }) {
               {/* Logs */}
               <LogsButton send={send} />
 
+              {/* State */}
+              <StateButton />
+
               {/* Chronicle */}
               {powers && <ChronicleButton />}
             </div>
@@ -960,6 +1076,9 @@ export default function Sidebar({
         loadStage={loadStage}
         initialLoadDone={initialLoadDone}
       />
+
+      {/* System Claudes panel */}
+      <SystemClaudesPanel />
 
       {/* Entity cards in middle (scrollable) */}
       <EntityCardsSection

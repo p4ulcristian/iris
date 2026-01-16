@@ -43,7 +43,8 @@ export const handlers = {
    * Spawn a new god.
    */
   'god:spawn': (ws, data, projectRoot) => {
-    console.log('[GOD-HANDLER] god:spawn received:', JSON.stringify(data))
+    const t0 = performance.now()
+    log.log(`god:spawn START`)
     const mode = data.mode || 'split'
     const direction = data.direction || 'horizontal'
 
@@ -68,15 +69,12 @@ export const handlers = {
 
     // Determine working directory
     let workingDir = projectRoot
-    log.log(`data.project=${data.project}, projectRoot=${projectRoot}`)
     if (data.project) {
       const projectConfig = projects.loadProject(data.project)
-      log.log(`projectConfig=${JSON.stringify(projectConfig)}`)
       if (projectConfig?.path) {
         workingDir = projectConfig.path.replace(/^~/, process.env.HOME || '')
       }
     }
-    log.log(`Final workingDir=${workingDir}`)
 
     // Add entity with 'spawning' state
     appState.entities[entityId] = {
@@ -95,8 +93,11 @@ export const handlers = {
     // Place entity
     placeEntity(entityId, appState.activeTabId, mode, direction)
     appState.focusedEntity = entityId
+    log.log(`god:spawn placeEntity done +${(performance.now() - t0).toFixed(1)}ms`)
     saveState()
+    log.log(`god:spawn saveState done +${(performance.now() - t0).toFixed(1)}ms`)
     broadcastState()  // Tile appears immediately
+    log.log(`god:spawn broadcast done +${(performance.now() - t0).toFixed(1)}ms`)
 
     // Create god process async so tile renders first
     const task = data.task
@@ -106,6 +107,8 @@ export const handlers = {
     setImmediate(() => {
       log.log(`Creating god with task="${task}"`)
       try {
+        // CRITICAL: Attach client BEFORE creating god to receive all messages
+        // createGod will create the entry if it doesn't exist yet
         const result = createGod(entityId, {
           task,
           project: workingDir,
@@ -113,14 +116,14 @@ export const handlers = {
           permissionMode
         })
 
+        // Now attach the client - the entry exists
+        attachClient(entityId, ws)
+
         // Update state
         appState.entities[entityId].readyState = 'working'
         appState.entities[entityId].sessionId = result.sessionId || null
         saveState()
         broadcastState()
-
-        // Auto-attach this WebSocket
-        attachClient(entityId, ws)
 
       } catch (err) {
         appState.entities[entityId].readyState = 'failed'
@@ -154,32 +157,32 @@ export const handlers = {
    * Auto-respawns if entity exists but process died (e.g., after restart).
    */
   'god:attach': (ws, data) => {
-    console.log('[GOD-HANDLER] god:attach received:', JSON.stringify(data))
     const { godName } = data
     if (!godName) return
 
     let entry = attachClient(godName, ws)
-    console.log('[GOD-HANDLER] attachClient result:', entry ? 'found' : 'not found')
 
     // If no process but entity exists, respawn it with session resumption
     if (!entry && appState.entities[godName]?.type === 'god') {
       const entity = appState.entities[godName]
-      console.log(`[GOD] Auto-respawning ${godName} (sessionId: ${entity.sessionId || 'none'})`)
+      console.log(`[GOD] Auto-respawning ${godName} (sessionId: ${entity.sessionId || 'none'}, project: ${entity.project})`)
 
       createGod(godName, {
         project: entity.project,
-        sessionId: entity.sessionId, // Resume existing session if available
-        // Don't re-send task on respawn - session has history
+        sessionId: entity.sessionId,
       })
 
       // Try attach again
       entry = attachClient(godName, ws)
+      console.log(`[GOD] After respawn, attachClient result: ${entry ? `found with ${entry.history?.length} history items` : 'NOT FOUND'}`)
     }
 
     if (!entry) {
       ws.send(JSON.stringify({
-        event: 'god:error',
+        event: 'god:state',
         godName,
+        history: [],
+        streaming: false,
         error: 'God not found'
       }))
     }

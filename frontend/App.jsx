@@ -205,8 +205,11 @@ export default function App() {
 
     switch (event) {
       case 'state:sync': {
+        const t0 = performance.now()
+        const latency = data._serverTime ? Date.now() - data._serverTime : null
         const isFirstLoad = !initialLoadDone
         syncState(data)
+        console.log(`[App] state:sync processed in ${(performance.now() - t0).toFixed(1)}ms, latency: ${latency}ms`)
         setInitialLoadDone(true)
         // Trigger staged reveal animation on first load
         if (isFirstLoad) {
@@ -221,6 +224,11 @@ export default function App() {
           services: data.services,
           chronicleDetails: data.chronicleDetails || null
         })
+        break
+
+      case 'system-claude:status':
+        // System Claude processes update
+        syncState({ systemClaudes: data.processes || [] })
         break
 
       case 'chronicle:line':

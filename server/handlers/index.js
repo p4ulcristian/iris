@@ -40,9 +40,9 @@ const allHandlers = {
 export function handleMessage(ws, msg, projectRoot) {
   const { event, ...data } = msg
 
-  // Debug: log service events
-  if (event?.startsWith('service:')) {
-    console.log('[handleMessage] Service event:', event, data)
+  // Debug: log god events
+  if (event?.startsWith('god:')) {
+    console.log('[handleMessage] God event:', event, data)
   }
 
   const handler = allHandlers[event]
@@ -54,7 +54,7 @@ export function handleMessage(ws, msg, projectRoot) {
       ws.send(JSON.stringify({ event: 'error', message: err.message }))
     }
   } else {
-    // Forward unknown events to all clients (like original default case)
+    console.log('[handleMessage] No handler for:', event)
     broadcast(event, data)
   }
 }

@@ -372,6 +372,7 @@ export function saveState() {
 }
 
 export function getStateForBroadcast() {
+  const t0 = performance.now()
   // Fields to exclude from broadcast (internal counters, server-only state)
   const EXCLUDE_FIELDS = new Set([
     'entityCounter',
@@ -437,17 +438,18 @@ export function getStateForBroadcast() {
   state.entityRegistry = getClientRegistry(entityRegistry)
   state.godColors = GOD_COLORS
   state.version = APP_VERSION
+  state._serverTime = Date.now()  // For latency calculation
 
+  log.log(`getStateForBroadcast took ${(performance.now() - t0).toFixed(1)}ms`)
   return state
 }
 
-// Trailing-edge debounce - broadcasts immediately, then ignores calls for 16ms
+// Leading-edge debounce - broadcasts immediately, then ignores calls for 16ms
 let broadcastTimeout = null
 export function broadcastState() {
   if (broadcastTimeout) return
-  // Broadcast immediately
   broadcast('state:sync', getStateForBroadcast())
-  // Then block subsequent calls for 16ms
+  // Block subsequent calls for 16ms
   broadcastTimeout = setTimeout(() => {
     broadcastTimeout = null
   }, 16)

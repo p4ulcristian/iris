@@ -1,110 +1,111 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_URL } from '@/config'
 import { MarkdownRenderer, ToolCard } from '../../_ui'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 
 function GodView({ entity, isFocused }) {
-  const [messages, setMessages] = useState([])
+  // Server state - single source of truth
+  const [godState, setGodState] = useState({
+    history: [],
+    streaming: false,
+    result: null,
+    error: null,
+    exited: null,
+  })
+
   const [input, setInput] = useState('')
-  const [connected, setConnected] = useState(false)
-  const [status, setStatus] = useState(null)
-  const [streaming, setStreaming] = useState(false)
-  const [streamingText, setStreamingText] = useState('') // Accumulates text deltas
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('iris-god-viewMode') || 'pro'
   })
 
-  const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const godName = entity?.id
+  const { connected, send } = useWebSocket(WS_URL)
+
+  // Filter out stream_event from history
+  const messages = useMemo(() =>
+    (godState.history || []).filter(m => m.type !== 'stream_event'),
+    [godState.history]
+  )
 
   // Auto-scroll on new content
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)
-  }, [messages, streamingText])
+  }, [messages])
 
-  // WebSocket
+  // Subscribe directly to god:state messages for THIS god
+  // (Can't use lastMessage because state:sync overwrites it)
   useEffect(() => {
     if (!godName) return
 
-    const ws = new WebSocket(WS_URL)
-    wsRef.current = ws
+    let currentWs = null
 
-    ws.onopen = () => {
-      console.log('[GodView] WebSocket connected, sending attach for:', godName)
-      setConnected(true)
-      ws.send(JSON.stringify({ event: 'god:attach', godName }))
-    }
-
-    ws.onclose = () => setConnected(false)
-
-    ws.onmessage = (e) => {
+    const handler = (event) => {
       try {
-        const msg = JSON.parse(e.data)
-        if (msg.godName && msg.godName !== godName) return
-
-        if (msg.event === 'god:history') {
-          // Filter out stream_event from history, keep final messages
-          const filtered = (msg.history || []).filter(m => m.type !== 'stream_event')
-          setMessages(filtered)
-          setStreaming(msg.streaming || false)
-        } else if (msg.event === 'god:init') {
-          setStatus(`Connected: ${msg.model}`)
-        } else if (msg.event === 'god:message') {
-          const m = msg.message
-
-          // Handle streaming events - accumulate text deltas
-          if (m.type === 'stream_event') {
-            const evt = m.event
-            if (evt?.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-              setStreamingText(prev => prev + evt.delta.text)
-              setStreaming(true)
-            } else if (evt?.type === 'message_stop') {
-              // Stream complete, clear streaming text (final message will follow)
-              setStreamingText('')
-            }
-            // Don't add stream_event to messages
-            return
-          }
-
-          // Final assistant message - add to messages
-          if (m.type === 'assistant') {
-            setStreamingText('') // Clear streaming text
-            setStreaming(false)
-          }
-
-          setMessages(prev => [...prev, m])
-          setStreaming(msg.partial || false)
-        } else if (msg.event === 'god:result') {
-          setStreaming(false)
-          setStreamingText('')
-          setStatus(msg.success ? `Done ($${msg.cost?.toFixed(4)})` : 'Error')
-        } else if (msg.event === 'god:stderr') {
-          setMessages(prev => [...prev, { type: 'stderr', content: msg.stderr }])
-        } else if (msg.event === 'god:error') {
-          setStatus(`Error: ${msg.error}`)
-        } else if (msg.event === 'god:exited') {
-          setStatus(`Exited (${msg.code})`)
-        } else if (msg.event === 'god:user') {
-          // User message from initial task or other source
-          setMessages(prev => [...prev, { type: 'user', content: msg.text }])
-          setStreaming(true)
+        const msg = JSON.parse(event.data)
+        if (msg.event === 'god:state' && msg.godName === godName) {
+          console.log(`[GodView] Received god:state for ${godName}:`, msg.history?.length, 'messages')
+          // Debug: show each message type and tool_use presence
+          msg.history?.forEach((m, i) => {
+            const hasToolUse = m.message?.content?.some(c => c.type === 'tool_use')
+            const hasToolResult = m.message?.content?.some(c => c.type === 'tool_result')
+            console.log(`  [${i}] type=${m.type}, tool_use=${hasToolUse}, tool_result=${hasToolResult}`)
+          })
+          setGodState({
+            history: msg.history || [],
+            streaming: msg.streaming || false,
+            result: msg.result || null,
+            error: msg.error || null,
+            exited: msg.exited,
+          })
         }
-      } catch {}
+      } catch (e) {}
     }
 
-    return () => ws.close()
+    const checkWs = () => {
+      const ws = window.__irisWs
+      if (ws !== currentWs) {
+        if (currentWs) currentWs.removeEventListener('message', handler)
+        if (ws) ws.addEventListener('message', handler)
+        currentWs = ws
+      }
+    }
+
+    checkWs()
+    const interval = setInterval(checkWs, 500)
+
+    return () => {
+      clearInterval(interval)
+      if (currentWs) currentWs.removeEventListener('message', handler)
+    }
   }, [godName])
 
+  // Attach to god on mount or reconnect
+  useEffect(() => {
+    if (!godName || !connected) return
+    console.log(`[GodView] Attaching to ${godName}`)
+    send({ event: 'god:attach', godName })
+  }, [godName, connected, send])
+
   const handleSend = () => {
-    if (!input.trim() || !wsRef.current || !connected) return
-    // Don't add to messages here - server broadcasts god:user which adds it
-    wsRef.current.send(JSON.stringify({ event: 'god:send', godName, text: input.trim() }))
+    if (!input.trim() || !connected) return
+    send({ event: 'god:send', godName, text: input.trim() })
     setInput('')
-    setStreamingText('')
   }
 
+  // Status from server state
+  const status = godState.result
+    ? (godState.result.success ? `Done ($${godState.result.cost?.toFixed(4)})` : 'Error')
+    : godState.error
+      ? `Error: ${godState.error}`
+      : godState.exited !== null && godState.exited !== undefined
+        ? `Exited (${godState.exited})`
+        : null
+
   const renderMsg = (msg, i) => {
-    // JSON mode - show raw JSON for everything
+    // JSON mode
     if (viewMode === 'json') {
       return (
         <div key={i} className="mb-2">
@@ -115,13 +116,13 @@ function GodView({ entity, isFocused }) {
       )
     }
 
-    // Skip user messages with tool_result - they're shown inline with ToolCard
+    // Skip user messages with tool_result
     if (msg.type === 'user' && msg.message?.content) {
       const hasToolResult = msg.message.content.some(c => c.type === 'tool_result')
       if (hasToolResult) return null
     }
 
-    // User message - right side bubble
+    // User message
     if (msg.type === 'user' && msg.content) {
       return (
         <div key={i} className="flex justify-end mb-3">
@@ -132,7 +133,7 @@ function GodView({ entity, isFocused }) {
       )
     }
 
-    // Stderr - centered warning
+    // Stderr
     if (msg.type === 'stderr') {
       return (
         <div key={i} className="flex justify-center mb-3">
@@ -143,17 +144,14 @@ function GodView({ entity, isFocused }) {
       )
     }
 
-    // Assistant message - left side bubble
+    // Assistant message
     if (msg.type === 'assistant' && msg.message?.content) {
       const text = msg.message.content.filter(c => c.type === 'text').map(c => c.text).join('')
       const tools = msg.message.content.filter(c => c.type === 'tool_use')
 
-      // In chat mode, skip messages that have no text (only tool calls)
       if (viewMode === 'chat' && !text) return null
 
-      // Find tool results from subsequent messages
       const getToolResult = (toolUseId) => {
-        // Look in following messages for tool_result
         for (let j = i + 1; j < messages.length; j++) {
           const nextMsg = messages[j]
           if (nextMsg.type === 'user' && nextMsg.message?.content) {
@@ -186,12 +184,7 @@ function GodView({ entity, isFocused }) {
       )
     }
 
-    // Default fallback - centered
-    return (
-      <div key={i} className="flex justify-center mb-3">
-        <div className="text-sm text-white/50">{JSON.stringify(msg).slice(0, 200)}</div>
-      </div>
-    )
+    return null
   }
 
   return (
@@ -217,27 +210,23 @@ function GodView({ entity, isFocused }) {
           >
             {viewMode === 'json' ? 'JSON' : viewMode === 'pro' ? 'Pro' : 'Chat'}
           </button>
-          {streaming && <span className="text-purple-400 animate-pulse">...</span>}
+          {godState.streaming && <span className="text-purple-400 animate-pulse">...</span>}
         </div>
         {status && <span className="text-xs text-white/50">{status}</span>}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3" style={{ userSelect: 'text', WebkitUserSelect: 'text', cursor: 'text' }}>
-        {messages.length === 0 && !streamingText && (
+        {messages.length === 0 && (
           <div className="text-white/30 text-sm text-center mt-4">Type a message to start</div>
         )}
-        {useMemo(() => messages.map(renderMsg), [messages, viewMode])}
-
-        {/* Live streaming text - left side like Claude */}
-        {streamingText && (
-          <div className="flex justify-start mb-3">
-            <div className="max-w-[85%] px-4 py-2 bg-white/10 rounded-2xl rounded-bl-md text-sm border border-purple-500/30">
-              <MarkdownRenderer content={streamingText} />
-              <span className="inline-block w-2 h-4 bg-purple-400 ml-1 animate-pulse" />
-            </div>
-          </div>
-        )}
+        {messages.map(renderMsg)}
       </div>
+
+      {godState.streaming && (
+        <div className="flex justify-center py-2">
+          <FontAwesomeIcon icon={faSpinner} className="text-purple-400 animate-spin" />
+        </div>
+      )}
 
       <div className="p-2 border-t border-white/10">
         <input

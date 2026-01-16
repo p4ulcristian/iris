@@ -9,6 +9,7 @@ import { WS_PORT, SOCKET_DIR, OAUTH_PORT, ZELLIJ_BIN } from './config.js'
 import { setBroadcast as setStateBroadcast, loadState, loadEntityRegistry, getStateForBroadcast, broadcastState } from './state.js'
 import { setBroadcast as setServicesBroadcast, serviceStatus, startHealthChecks, stopHealthChecks } from './services.js'
 import { setBroadcast as setChronicleBroadcast, startWatcher as startChronicleWatcher, stopWatcher as stopChronicleWatcher } from './chronicle.js'
+import { setBroadcast as setSystemClaudeBroadcast, startScanner as startSystemClaudeScanner, stopScanner as stopSystemClaudeScanner, getSystemClaudes } from './system-claude.js'
 import { handleMessage } from './handlers/index.js'
 import { setupApi } from './api.js'
 import * as calendar from './calendar.js'
@@ -81,13 +82,13 @@ function broadcast(event, data = {}) {
       sent++
     }
   })
-  broadcastLog.log(`Sent to ${sent}/${wsClients.size} clients`)
 }
 
-// Wire up broadcast to state, services, and chronicle modules
+// Wire up broadcast to state, services, chronicle, and system-claude modules
 setStateBroadcast(broadcast)
 setServicesBroadcast(broadcast)
 setChronicleBroadcast(broadcast)
+setSystemClaudeBroadcast(broadcast)
 
 // Load persisted state
 loadState()
@@ -103,7 +104,11 @@ loadEntityRegistry().then(() => {
 const wss = new WebSocketServer({ port: WS_PORT })
 
 const wsLog = createLogger('websocket')
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // Disable Nagle's algorithm for lower latency
+  if (req.socket) {
+    req.socket.setNoDelay(true)
+  }
   wsClients.add(ws)
   wsLog.log(`Client connected (${wsClients.size} total)`)
 
@@ -112,7 +117,8 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
     event: 'state:sync',
     ...stateData,
-    services: serviceStatus
+    services: serviceStatus,
+    systemClaudes: getSystemClaudes()
   }))
 
   // Warn if zellij is missing
@@ -235,9 +241,10 @@ oauthServer.listen(OAUTH_PORT, () => {
   log.log(`OAuth callback server on :${OAUTH_PORT}`)
 })
 
-// Start health checks and chronicle watcher
+// Start health checks, chronicle watcher, and system claude scanner
 startHealthChecks()
 startChronicleWatcher()
+startSystemClaudeScanner()
 
 // Cleanup on exit
 process.on('SIGTERM', cleanup)
@@ -257,6 +264,7 @@ function cleanup() {
   log.log('Shutting down server...')
   stopHealthChecks()
   stopChronicleWatcher()
+  stopSystemClaudeScanner()
 
   // Close WebSocket server and wait for connections to drain
   wss.close(() => {

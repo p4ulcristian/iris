@@ -21,6 +21,18 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname)
 const IRIS_ROOT = path.resolve(__dirname, '..')
 const HOME = os.homedir()
 
+// Iris history directory - our own history files that we control
+const IRIS_HISTORY_DIR = path.join(HOME, '.iris', 'history')
+
+// Ensure history directory exists
+try {
+  if (!fs.existsSync(IRIS_HISTORY_DIR)) {
+    fs.mkdirSync(IRIS_HISTORY_DIR, { recursive: true })
+  }
+} catch (e) {
+  log.error('Failed to create history directory:', e)
+}
+
 // Active god processes
 // godName -> { proc, clients: Set<WebSocket>, history: [], sessionId, buffer }
 const processes = new Map()
@@ -68,6 +80,77 @@ function getExtendedPath() {
  */
 function encodeClaudePath(cwd) {
   return cwd.replace(/\//g, '-')
+}
+
+/**
+ * Get the Iris history file path for a god.
+ */
+function getIrisHistoryPath(godName) {
+  // Sanitize godName for filename (replace any problematic chars)
+  const safeName = godName.replace(/[^a-zA-Z0-9-_]/g, '_')
+  return path.join(IRIS_HISTORY_DIR, `${safeName}.json`)
+}
+
+/**
+ * Save history to our own file for reliable restoration.
+ */
+function saveIrisHistory(godName, history, sessionId) {
+  try {
+    const historyPath = getIrisHistoryPath(godName)
+    const data = {
+      godName,
+      sessionId,
+      savedAt: Date.now(),
+      history
+    }
+    fs.writeFileSync(historyPath, JSON.stringify(data, null, 2))
+  } catch (e) {
+    log.error(`Failed to save Iris history for ${godName}:`, e.message)
+  }
+}
+
+/**
+ * Load history from our own file.
+ */
+function loadIrisHistory(godName) {
+  try {
+    const historyPath = getIrisHistoryPath(godName)
+    if (fs.existsSync(historyPath)) {
+      const data = JSON.parse(fs.readFileSync(historyPath, 'utf-8'))
+      const history = data.history || []
+      log.log(`Loaded ${history.length} messages from Iris history for ${godName}`)
+      // Debug: show types and tool_use presence
+      history.forEach((msg, i) => {
+        const hasToolUse = msg.message?.content?.some(c => c.type === 'tool_use')
+        const hasToolResult = msg.message?.content?.some(c => c.type === 'tool_result')
+        log.log(`  [${i}] type=${msg.type}, tool_use=${hasToolUse}, tool_result=${hasToolResult}`)
+      })
+      return history
+    }
+  } catch (e) {
+    log.error(`Failed to load Iris history for ${godName}:`, e.message)
+  }
+  return []
+}
+
+/**
+ * Debounced save of history for a god.
+ * Saves 500ms after the last change to avoid excessive writes.
+ */
+function debouncedSaveHistory(godName) {
+  const entry = processes.get(godName)
+  if (!entry) return
+
+  // Clear existing timeout
+  if (entry.historySaveTimeout) {
+    clearTimeout(entry.historySaveTimeout)
+  }
+
+  // Schedule save
+  entry.historySaveTimeout = setTimeout(() => {
+    saveIrisHistory(godName, entry.history, entry.sessionId)
+    entry.historySaveTimeout = null
+  }, 500)
 }
 
 /**
@@ -131,21 +214,41 @@ function readClaudeSessionHistory(sessionId, cwd) {
 }
 
 /**
- * Broadcast a message to all attached clients for a god.
+ * Broadcast full state to all attached clients for a god.
+ * Simple: any change = send everything.
  */
-function broadcast(godName, event, data) {
+function broadcastGodState(godName) {
   const entry = processes.get(godName)
   if (!entry) return
 
-  const msg = JSON.stringify({ event, godName, ...data })
+  const msg = JSON.stringify({
+    event: 'god:state',
+    godName,
+    history: entry.history,
+    sessionId: entry.sessionId,
+    streaming: entry.streaming,
+    result: entry.result,
+    error: entry.error,
+    exited: entry.exited,
+  })
+
+  // Clean up dead clients and send to live ones
+  const deadClients = []
   for (const ws of entry.clients) {
     try {
-      if (ws.readyState === 1) { // WebSocket.OPEN
+      if (ws.readyState === 1) {
         ws.send(msg)
+      } else if (ws.readyState >= 2) {
+        deadClients.push(ws)
       }
     } catch (e) {
       log.error(`Broadcast error to ${godName}:`, e)
+      deadClients.push(ws)
     }
+  }
+
+  for (const ws of deadClients) {
+    entry.clients.delete(ws)
   }
 }
 
@@ -230,8 +333,13 @@ export function createGod(godName, options = {}) {
     stdio: ['pipe', 'pipe', 'pipe'],
   })
 
-  // Load history from Claude's session storage if resuming
-  const initialHistory = sessionId ? readClaudeSessionHistory(sessionId, project || HOME) : []
+  // Load history - try our own storage first, then Claude's session storage
+  let initialHistory = loadIrisHistory(godName)
+  if (initialHistory.length === 0 && sessionId) {
+    log.log(`No Iris history for ${godName}, trying Claude session storage...`)
+    initialHistory = readClaudeSessionHistory(sessionId, project || HOME)
+  }
+  log.log(`Loaded ${initialHistory.length} history messages for ${godName}`)
 
   const entry = {
     proc,
@@ -244,6 +352,8 @@ export function createGod(godName, options = {}) {
     // When resuming, skip adding old messages - only track new ones after this timestamp
     startTime: Date.now(),
     isResuming: !!sessionId,
+    // Debounce history saving
+    historySaveTimeout: null,
   }
 
   processes.set(godName, entry)
@@ -258,6 +368,7 @@ export function createGod(godName, options = {}) {
       content: task,
       timestamp: Date.now()
     })
+    debouncedSaveHistory(godName)
 
     // Format for Claude's stream-json input and send immediately
     const msg = JSON.stringify({
@@ -303,40 +414,53 @@ export function createGod(godName, options = {}) {
     const stderr = chunk.toString()
     log.error(`${godName} stderr:`, stderr)
 
-    // Store stderr in history so frontend can show it
     entry.history.push({
       type: 'stderr',
       content: stderr,
       timestamp: Date.now()
     })
-    broadcast(godName, 'god:stderr', { stderr })
+    debouncedSaveHistory(godName)
+    broadcastGodState(godName)
   })
 
   // Handle process exit
   proc.on('close', (code) => {
     log.log(`God ${godName} exited with code ${code}`)
-    broadcast(godName, 'god:exited', { code })
+
+    // Save history immediately before process entry is deleted
+    const exitingEntry = processes.get(godName)
+    if (exitingEntry?.history?.length > 0) {
+      saveIrisHistory(godName, exitingEntry.history, exitingEntry.sessionId)
+    }
+
+    // Broadcast final state before deleting
+    if (exitingEntry) {
+      exitingEntry.streaming = false
+      exitingEntry.exited = code
+      broadcastGodState(godName)
+    }
     processes.delete(godName)
 
-    // Update entity state
     if (appState.entities[godName]) {
       appState.entities[godName].readyState = code === 0 ? 'done' : 'scattered'
       appState.entities[godName].status = `Exited with code ${code}`
       saveState()
-      broadcastState()
     }
   })
 
   proc.on('error', (err) => {
     log.error(`God ${godName} error:`, err)
-    broadcast(godName, 'god:error', { error: err.message })
 
-    // Update entity state
+    const errorEntry = processes.get(godName)
+    if (errorEntry) {
+      errorEntry.error = err.message
+      broadcastGodState(godName)
+    }
+
     if (appState.entities[godName]) {
       appState.entities[godName].readyState = 'scattered'
       appState.entities[godName].status = `Error: ${err.message}`
       saveState()
-      broadcastState()
     }
   })
 
@@ -345,6 +469,7 @@ export function createGod(godName, options = {}) {
 
 /**
  * Handle a message from Claude's stdout.
+ * Simple: update state, broadcast state.
  */
 function handleClaudeMessage(godName, msg) {
   const entry = processes.get(godName)
@@ -354,18 +479,11 @@ function handleClaudeMessage(godName, msg) {
   if (msg.type === 'system' && msg.subtype === 'init') {
     log.log(`Init received for ${godName}`)
     entry.sessionId = msg.session_id
-
-    // Persist sessionId to entity state for resumption after restart
     if (appState.entities[godName]) {
       appState.entities[godName].sessionId = msg.session_id
       saveState()
     }
-
-    broadcast(godName, 'god:init', {
-      sessionId: msg.session_id,
-      tools: msg.tools,
-      model: msg.model,
-    })
+    broadcastGodState(godName)
     return
   }
 
@@ -374,41 +492,35 @@ function handleClaudeMessage(godName, msg) {
     const isPartial = msg.message?.stop_reason === null
     entry.streaming = isPartial
 
-    // Skip adding to history if resuming (we already loaded from file)
-    // Only add new messages after user sends something
-    if (!entry.isResuming) {
-      // Store in history (replace partial with final)
-      if (isPartial) {
-        // Update or add partial
-        if (entry.currentPartialId) {
-          const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
-          if (idx >= 0) {
-            entry.history[idx] = { ...msg, id: entry.currentPartialId }
-          }
-        } else {
-          entry.currentPartialId = `partial-${Date.now()}`
-          entry.history.push({ ...msg, id: entry.currentPartialId })
-        }
-      } else {
-        // Final message - replace partial or add new
-        if (entry.currentPartialId) {
-          const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
-          if (idx >= 0) {
-            entry.history[idx] = msg
-          } else {
-            entry.history.push(msg)
-          }
-          entry.currentPartialId = null
-        } else {
-          entry.history.push(msg)
-        }
-      }
+    // Debug: log tool_use in assistant messages
+    const hasToolUse = msg.message?.content?.some(c => c.type === 'tool_use')
+    if (hasToolUse) {
+      log.log(`[${godName}] Assistant message has tool_use, isPartial=${isPartial}`)
     }
 
-    broadcast(godName, 'god:message', {
-      message: msg,
-      partial: isPartial,
-    })
+    if (isPartial) {
+      // Update or add partial
+      if (entry.currentPartialId) {
+        const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
+        if (idx >= 0) entry.history[idx] = { ...msg, id: entry.currentPartialId }
+      } else {
+        entry.currentPartialId = `partial-${Date.now()}`
+        entry.history.push({ ...msg, id: entry.currentPartialId })
+      }
+    } else {
+      // Final message - replace partial or add new
+      if (entry.currentPartialId) {
+        const idx = entry.history.findIndex(h => h.id === entry.currentPartialId)
+        if (idx >= 0) entry.history[idx] = msg
+        else entry.history.push(msg)
+        entry.currentPartialId = null
+      } else {
+        entry.history.push(msg)
+      }
+      debouncedSaveHistory(godName)
+    }
+
+    broadcastGodState(godName)
     return
   }
 
@@ -416,32 +528,33 @@ function handleClaudeMessage(godName, msg) {
   if (msg.type === 'result') {
     entry.streaming = false
     entry.currentPartialId = null
-    broadcast(godName, 'god:result', {
-      result: msg.result,
+    entry.result = {
       success: msg.subtype === 'success',
       cost: msg.total_cost_usd,
-      usage: msg.usage,
-      sessionId: msg.session_id,
-    })
+    }
+    if (appState.entities[godName]) {
+      appState.entities[godName].readyState = 'done'
+      saveState()
+    }
+    debouncedSaveHistory(godName)
+    broadcastGodState(godName)
     return
   }
 
-  // Handle user messages with tool results (auto-generated by Claude)
+  // Handle user messages with tool results
   if (msg.type === 'user' && msg.message?.content) {
     const hasToolResult = msg.message.content.some(c => c.type === 'tool_result')
-    if (hasToolResult && !entry.isResuming) {
+    if (hasToolResult) {
       entry.history.push({
         type: 'user',
         message: msg.message,
         timestamp: Date.now()
       })
-      broadcast(godName, 'god:message', { message: { type: 'user', message: msg.message } })
+      debouncedSaveHistory(godName)
+      broadcastGodState(godName)
     }
     return
   }
-
-  // Forward other message types
-  broadcast(godName, 'god:message', { message: msg })
 }
 
 /**
@@ -458,17 +571,23 @@ export function sendUserMessage(godName, text, skipHistory = false) {
   // Clear resuming flag - new messages should be tracked
   entry.isResuming = false
 
+  // Set working state when user sends a message
+  if (appState.entities[godName] && appState.entities[godName].readyState === 'done') {
+    appState.entities[godName].readyState = 'working'
+    saveState()
+    broadcastState()
+  }
+
   // Add to history (unless already added, e.g. for pending initial task)
   if (!skipHistory) {
-    const userMsg = {
+    entry.history.push({
       type: 'user',
       content: text,
       timestamp: Date.now(),
-    }
-    entry.history.push(userMsg)
-
-    // Broadcast to clients (so sender sees their message)
-    broadcast(godName, 'god:user', { text })
+    })
+    entry.streaming = true
+    debouncedSaveHistory(godName)
+    broadcastGodState(godName)
   }
 
   // Format for Claude's stream-json input
@@ -493,21 +612,36 @@ export function sendUserMessage(godName, text, skipHistory = false) {
 
 /**
  * Attach a WebSocket client to a god.
+ * Simple: add client, send current state.
  */
 export function attachClient(godName, ws) {
   const entry = processes.get(godName)
   if (!entry) return null
 
   entry.clients.add(ws)
+  log.log(`Client attached to ${godName}, ${entry.history.length} messages, streaming=${entry.streaming}`)
 
-  // Send history to new client
-  ws.send(JSON.stringify({
-    event: 'god:history',
+  // Debug: show what we're sending
+  entry.history.forEach((msg, i) => {
+    const hasToolUse = msg.message?.content?.some(c => c.type === 'tool_use')
+    const hasToolResult = msg.message?.content?.some(c => c.type === 'tool_result')
+    log.log(`  [${i}] type=${msg.type}, tool_use=${hasToolUse}, tool_result=${hasToolResult}`)
+  })
+
+  // Send current state
+  const payload = {
+    event: 'god:state',
     godName,
     history: entry.history,
     sessionId: entry.sessionId,
     streaming: entry.streaming,
-  }))
+    result: entry.result,
+    error: entry.error,
+    exited: entry.exited,
+  }
+  const msg = JSON.stringify(payload)
+  log.log(`Sending god:state to client, payload size: ${msg.length} bytes`)
+  ws.send(msg)
 
   return entry
 }
