@@ -623,7 +623,7 @@ function ServicesDropdown({ connected, services, servicesLoading, onToggle, spea
 
 // System Claudes panel - shows all Claude processes running on the system
 function SystemClaudesPanel() {
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const systemClaudes = useStore(s => s.systemClaudes)
 
   if (!systemClaudes || systemClaudes.length === 0) {

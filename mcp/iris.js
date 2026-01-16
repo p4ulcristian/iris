@@ -209,58 +209,6 @@ if (enabled("terminal")) {
     }
   );
 
-  server.tool(
-    "run_terminal",
-    "Run command in visible terminal, wait for output. Creates terminal if needed. Returns a run_id that can be used with peek_run to get output later.",
-    {
-      command: z.string().describe("Shell command to execute"),
-      god_name: z.string().optional().describe("God name for terminal (default: Hermes)"),
-      raw: z.boolean().default(true).describe("Clean terminal output (default: true). Set false for wrapped mode with file capture."),
-      background: z.boolean().default(false).describe("Run in background and return immediately with run_id. Use peek_run to check output later.")
-    },
-    async ({ command, god_name, raw, background }) => {
-      const god = god_name || GOD_NAME || "Hermes";
-      const timeout = background ? 5000 : 40000; // Short timeout for background mode
-      const result = await apiPost("run", { god, command, raw, background }, timeout);
-
-      if (result.error) {
-        const runId = result.runId ? `\nrun_id: ${result.runId}` : "";
-        return fail(`Command failed: ${result.error}${runId}`);
-      }
-
-      const runId = result.runId || "unknown";
-      const status = result.status || "completed";
-
-      // Background mode - return immediately
-      if (background || status === "background") {
-        return ok(`Running in background (run_id: ${runId})\nUse peek_run("${runId}") to check output.`);
-      }
-
-      const output = result.output || "(no output)";
-
-      if (status === "timeout" || status === "running") {
-        return ok(`Timed out (run_id: ${runId})\nUse peek_run("${runId}") to check output\n\nPartial output:\n${output}`);
-      }
-
-      return ok(`Exit ${result.exitCode ?? "?"}\n${output}`);
-    }
-  );
-
-  server.tool(
-    "peek_run",
-    "Get output from a specific command run by its run_id. Use this after run_terminal times out to see what was captured.",
-    {
-      run_id: z.string().describe("The run_id returned by run_terminal"),
-      lines: z.number().optional().describe("Number of lines to retrieve (default: all)")
-    },
-    async ({ run_id, lines }) => {
-      const result = await apiPost("peek-run", { run_id, lines });
-      if (result.error) return fail(`Failed to peek run: ${result.error}`);
-
-      const status = result.status || "unknown";
-      return ok(`[${status}]\n${result.output || "(no output)"}`);
-    }
-  );
 }
 
 // =============================================================================
