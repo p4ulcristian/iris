@@ -25,8 +25,6 @@ function formatElapsed(ms) {
 
 export default memo(function EntityCard({ entity, isActive, onClick, onClose, onSplit, tabs, activeTabId, onMoveToTab, onMoveToNewTab, staggerIndex = 0, disableAnimation = false, stageId = null, entityIndex = 0 }) {
   const { id, type, name, displayName, color, title, status, mission, readyState, spawnedAt, project, cwd } = entity
-  const loadStage = useStore(s => s.loadStage)
-  const initialLoadDone = useStore(s => s.initialLoadDone)
   const isAltHeld = useStore(s => s.isAltHeld)
   const gitBranches = useStore(s => s.gitBranches)
   const setGitBranch = useStore(s => s.setGitBranch)
@@ -161,52 +159,16 @@ export default memo(function EntityCard({ entity, isActive, onClick, onClose, on
   const statusPill = getStatusPill()
   const isSpawning = readyState === 'spawning'
 
-  // Calculate stagger delay: only apply on initial load before stage 5 (in ms)
-  const staggerDelay = (!initialLoadDone || loadStage < 5) ? staggerIndex * 80 : 0
-  // Should be visible based on load stage (entities appear at stage 4)
-  const shouldShow = loadStage >= 4
-
-  // Enter animation
-  useLayoutEffect(() => {
-    if (disableAnimation || !wrapperRef.current) return
-
-    // Cancel previous animation
-    if (animRef.current) {
-      try { animRef.current.cancel() } catch (e) {}
-    }
-
-    if (shouldShow) {
-      animRef.current = animate(wrapperRef.current,
-        [
-          { opacity: 0, transform: 'translateY(-40px) scale(0.9)', filter: 'blur(8px)' },
-          { opacity: isActive ? 1 : 0.6, transform: 'translateY(0) scale(1)', filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)' }
-        ],
-        {
-          duration: SPRING_DURATION,
-          easing: SPRING_EASING,
-          delay: staggerDelay,
-          fill: 'forwards'
-        }
-      )
-    }
-
-    return () => {
-      if (animRef.current) {
-        try { animRef.current.cancel() } catch (e) {}
-      }
-    }
-  }, [shouldShow, disableAnimation]) // Only run on mount/visibility change
-
-  // Active state animation (separate from enter)
+  // Active state animation
   useEffect(() => {
-    if (disableAnimation || !wrapperRef.current || !shouldShow) return
+    if (disableAnimation || !wrapperRef.current) return
 
     // Quick transition for active state changes
     animate(wrapperRef.current,
       { opacity: isActive ? 1 : 0.6, filter: isActive ? 'blur(0px)' : 'saturate(0.7) blur(0px)' },
       { duration: 200, easing: 'ease-out', fill: 'forwards' }
     )
-  }, [isActive, disableAnimation, shouldShow])
+  }, [isActive, disableAnimation])
 
   return (
     <div

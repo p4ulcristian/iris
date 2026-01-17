@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect, Children, memo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import TileCard from './components/TileCard'
 import TerminalContent from '@entities/god/frontend/View'
@@ -15,146 +15,59 @@ import { useStore } from './store'
 import { WS_URL } from './config'
 import { setupGlobalErrorHandlers } from './utils/error-reporter'
 
-// Animated tab slider using WAAPI (horizontal)
-function TabSlider({ tabs, activeTabId, children }) {
-  const ref = useRef(null)
-  const animRef = useRef(null)
-  const prevIndexRef = useRef(-1)
+// Simple Stage View - shows only the active stage (no animation yet)
+function StageView({ tabs, allStages, activeTabId }) {
+  // Find active tab
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0]
+  if (!activeTab) return <EmptyTabContent />
 
-  useLayoutEffect(() => {
-    if (!ref.current || tabs.length === 0) return
+  // Find active stage for this tab
+  const tabStages = allStages.filter(s => s.tabId === activeTab.id && !s.isEmpty)
 
-    const tabIndex = tabs.findIndex(t => t.id === activeTabId)
-    if (tabIndex === -1) return
+  if (tabStages.length === 0) {
+    return <EmptyTabContent />
+  }
 
-    const toX = -tabIndex * 100
+  // Find the active stage
+  const activeStage = tabStages.find(s => s.stageId === activeTab.activeStageId) || tabStages[0]
 
-    // First render - set position without animation
-    if (prevIndexRef.current === -1) {
-      ref.current.style.transform = `translateX(${toX}vw)`
-      prevIndexRef.current = tabIndex
-      return
-    }
-
-    // No change
-    if (prevIndexRef.current === tabIndex) return
-
-    // Cancel any running animation
-    if (animRef.current) {
-      try { animRef.current.cancel() } catch (e) {}
-    }
-
-    const fromX = -prevIndexRef.current * 100
-
-    // Set final position first - animation overrides during playback, reveals this when done
-    ref.current.style.transform = `translateX(${toX}vw)`
-
-    animRef.current = ref.current.animate(
-      [
-        { transform: `translateX(${fromX}vw)` },
-        { transform: `translateX(${toX}vw)` }
-      ],
-      { duration: 150, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
-    )
-
-    prevIndexRef.current = tabIndex
-  }, [tabs, activeTabId])
-
-  return (
-    <div
-      ref={ref}
-      className="flex h-full"
-      style={{ width: `${tabs.length * 100}vw` }}
-    >
-      {children}
-    </div>
-  )
-}
-
-// Custom comparison for TabStages - only re-render when stage IDs or activeStageId change
-function tabStagesAreEqual(prevProps, nextProps) {
-  if (prevProps.activeStageId !== nextProps.activeStageId) return false
-  if (prevProps.tabId !== nextProps.tabId) return false
-
-  // Compare stage IDs, not object references
-  const prevIds = prevProps.stages.map(s => s.stageId).join(',')
-  const nextIds = nextProps.stages.map(s => s.stageId).join(',')
-  return prevIds === nextIds
-}
-
-// Memoized component for rendering tab stages
-// Prevents re-renders during stage animations
-const TabStages = memo(function TabStages({ stages, activeStageId, tabId }) {
-  // Filter out empty stages
-  const nonEmptyStages = useMemo(
-    () => stages.filter(item => !item.isEmpty),
-    [stages]
-  )
-
-  if (nonEmptyStages.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
-          <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
-        </div>
-        <div className="flex flex-col gap-3 text-sm">
-          <p className="flex items-center gap-3">
-            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
-            <span>Summon a god</span>
-          </p>
-          <p className="flex items-center gap-3">
-            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
-            <span>Open terminal</span>
-          </p>
-          <p className="flex items-center gap-3">
-            <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
-            <span>New realm</span>
-          </p>
-        </div>
-        <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
-      </div>
-    )
+  if (!activeStage) {
+    return <EmptyTabContent />
   }
 
   return (
-    <div className="absolute inset-0">
-      <StageSlider stages={nonEmptyStages} activeStageId={activeStageId}>
-        {nonEmptyStages.map((stageItem) => (
-          <div
-            key={stageItem.stageId}
-            className="w-full h-full py-3"
-          >
-            <Surface
-              node={stageItem.stage.layout}
-              tabId={tabId}
-            />
-          </div>
-        ))}
-      </StageSlider>
+    <div className="h-full w-full py-3">
+      <Surface
+        node={activeStage.stage.layout}
+        tabId={activeTab.id}
+      />
     </div>
   )
-}, tabStagesAreEqual)
+}
 
-// Stage slider - simple CSS transform with transition
-function StageSlider({ stages, activeStageId, children }) {
-  const stageIndex = stages.findIndex(s => s.stageId === activeStageId)
-  const idx = stageIndex === -1 ? 0 : stageIndex
-
+// Empty tab content
+function EmptyTabContent() {
   return (
-    <div className="h-full w-full overflow-hidden">
-      <div
-        className="w-full"
-        style={{
-          height: `${stages.length * 100}vh`,
-          transform: `translateY(${-idx * 100}vh)`,
-          transition: 'transform 200ms ease-out'
-        }}
-      >
-        {Children.map(children, (child) => (
-          <div style={{ height: '100vh' }}>{child}</div>
-        ))}
+    <div className="h-full flex flex-col items-center justify-center gap-6 text-text-secondary max-w-md mx-auto px-4">
+      <div className="text-center">
+        <h1 className="text-2xl font-semibold text-text-primary mb-2">Welcome to Iris</h1>
+        <p className="text-sm opacity-70">Your voice-controlled workspace for AI assistants</p>
       </div>
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="flex items-center gap-3">
+          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+N</kbd>
+          <span>Summon a god</span>
+        </p>
+        <p className="flex items-center gap-3">
+          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+R</kbd>
+          <span>Open terminal</span>
+        </p>
+        <p className="flex items-center gap-3">
+          <kbd className="px-2 py-1 bg-bg-tertiary border border-border rounded font-mono text-xs">Alt+T</kbd>
+          <span>New realm</span>
+        </p>
+      </div>
+      <p className="text-xs opacity-50">Or drag an entity from the sidebar</p>
     </div>
   )
 }
@@ -165,7 +78,7 @@ export default function App() {
   // Get state from store - grouped selector with shallow comparison
   const {
     tabs, activeTabId, entities, focusedEntity, focusedTile, maximizedTile,
-    layoutMode, initialLoadDone, theme, godColors, loadStage
+    layoutMode, initialLoadDone, theme, godColors
   } = useStore(useShallow(s => ({
     tabs: s.tabs,
     activeTabId: s.activeTabId,
@@ -176,8 +89,7 @@ export default function App() {
     layoutMode: s.layoutMode,
     initialLoadDone: s.initialLoadDone,
     theme: s.theme,
-    godColors: s.godColors,
-    loadStage: s.loadStage
+    godColors: s.godColors
   })))
 
   // Get actions from store - these are stable references, single selector
@@ -192,14 +104,13 @@ export default function App() {
     getAllGods: s.getAllGods,
     getAllEntities: s.getAllEntities,
     syncState: s.syncState,
-    triggerStagedReveal: s.triggerStagedReveal,
     getActiveLayout: s.getActiveLayout
   })))
 
   const {
     setConnected, setInitialLoadDone, getActiveEntities, getActiveGods,
     getEntitiesForTab, getGodsForTab, getAllGodNames, getAllGods,
-    getAllEntities, syncState, triggerStagedReveal, getActiveLayout
+    getAllEntities, syncState, getActiveLayout
   } = actions
 
   const [confirmModal, setConfirmModal] = useState(null)
@@ -244,12 +155,8 @@ export default function App() {
     switch (event) {
       // New delta sync protocol
       case 'state:full': {
-        const isFirstLoad = !initialLoadDone
         syncState(data.state)
         setInitialLoadDone(true)
-        if (isFirstLoad) {
-          triggerStagedReveal()
-        }
         break
       }
 
@@ -261,12 +168,8 @@ export default function App() {
 
       // Legacy support
       case 'state:sync': {
-        const isFirstLoad = !initialLoadDone
         syncState(data)
         setInitialLoadDone(true)
-        if (isFirstLoad) {
-          triggerStagedReveal()
-        }
         break
       }
 
@@ -321,7 +224,7 @@ export default function App() {
         console.warn(`⚠️ ${data.message}`, data.hint ? `\n   ${data.hint}` : '')
         break
     }
-  }, [lastMessage, syncState, setInitialLoadDone, focusedEntity, initialLoadDone, triggerStagedReveal])
+  }, [lastMessage, syncState, setInitialLoadDone, focusedEntity, initialLoadDone])
 
   // Get entities for active tab - memoized to prevent drag reset
   const activeEntities = useMemo(() => {
@@ -771,70 +674,50 @@ export default function App() {
       {/* Animated wallpaper - reactive glass background */}
       <Wallpaper />
 
-      {/* Main layout: horizontal sliding tabs */}
-      <div ref={mainContainerRef} className="flex-1 min-h-0 overflow-hidden">
-        <TabSlider tabs={tabs} activeTabId={activeTabId}>
-          {tabs.map((tab) => {
-            const isActiveTab = tab.id === activeTabId
-            const tabStages = allStages.filter(item => item.tabId === tab.id)
+      {/* Main layout: fixed sidebar + grid content */}
+      <div ref={mainContainerRef} className="flex-1 min-h-0 flex pr-3">
+        {/* Sidebar - fixed, doesn't animate */}
+        <Sidebar
+          connected={connected}
+          send={send}
+          tabs={tabs}
+          activeTabId={activeTabId}
+          currentTab={tabs.find(t => t.id === activeTabId) || tabs[0]}
+          onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
+          onTabClose={handleKillTab}
+          onTabNew={() => send({ event: 'tab:add' })}
+          tabStages={allStages.filter(item => item.tabId === activeTabId)}
+          focusedEntity={focusedEntity}
+          initialLoadDone={initialLoadDone}
+          onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
+          onEntityClose={handleKillEntity}
+          onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
+          onMoveToTab={(entityId, tabId) => {
+            send({ event: 'entity:move', entityId, tabId })
+            send({ event: 'tab:select', tabId })
+          }}
+          onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
+          onReorderInStage={(stageId, entityId, targetIndex) => {
+            send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
+          }}
+          onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
+            send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
+          }}
+          onCreateStageAtPosition={(entityId, sourceStageId, position) => {
+            send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
+          }}
+          onSpawnEntity={handleSpawnEntity}
+          onOpenSummonModal={(type = 'god') => setSummonModalType(type)}
+          width={sidebarWidth}
+          onWidthChange={handleSidebarResize}
+        />
 
-            return (
-              <div
-                key={tab.id}
-                className="flex h-full pr-3"
-                style={{ width: '100vw', pointerEvents: isActiveTab ? 'auto' : 'none' }}
-              >
-                {/* Sidebar for this tab */}
-                <Sidebar
-                  connected={connected}
-                  send={send}
-                  tabs={tabs}
-                  activeTabId={activeTabId}
-                  currentTab={tab}
-                  onTabSelect={(tabId) => send({ event: 'tab:select', tabId })}
-                  onTabClose={handleKillTab}
-                  onTabNew={() => send({ event: 'tab:add' })}
-                  tabStages={tabStages}
-                  focusedEntity={focusedEntity}
-                  loadStage={loadStage}
-                  initialLoadDone={initialLoadDone}
-                  onEntityClick={(entityId) => send({ event: 'focus:set', entityId })}
-                  onEntityClose={handleKillEntity}
-                  onEntitySplit={(entityId, stageId) => send({ event: 'stage:split', entityId, stageId })}
-                  onMoveToTab={(entityId, tabId) => {
-                    send({ event: 'entity:move', entityId, tabId })
-                    send({ event: 'tab:select', tabId })
-                  }}
-                  onMoveToNewTab={(entityId) => send({ event: 'entity:move-to-new-tab', entityId })}
-                  onReorderInStage={(stageId, entityId, targetIndex) => {
-                    send({ event: 'stage:reorder-entity', stageId, entityId, targetIndex })
-                  }}
-                  onJoinStage={(entityId, sourceStageId, targetStageId, targetIndex) => {
-                    send({ event: 'stage:join', entityId, sourceStageId, targetStageId, targetIndex })
-                  }}
-                  onCreateStageAtPosition={(entityId, sourceStageId, position) => {
-                    send({ event: 'stage:create-at-position', entityId, sourceStageId, position })
-                  }}
-                  onSpawnEntity={handleSpawnEntity}
-                  onOpenSummonModal={(type = 'god') => setSummonModalType(type)}
-                  width={sidebarWidth}
-                  onWidthChange={handleSidebarResize}
-                />
-
-                {/* Stage for this tab */}
-                <main className="flex-1 min-h-0 overflow-hidden relative">
-                  <RootDropZone tabId={tab.id} hasLayout={!!tab.stages?.length}>
-                    <TabStages
-                      stages={tabStages}
-                      activeStageId={tab.activeStageId}
-                      tabId={tab.id}
-                    />
-                  </RootDropZone>
-                </main>
-              </div>
-            )
-          })}
-        </TabSlider>
+        {/* Main content - grid of all stages */}
+        <main className="flex-1 min-h-0 overflow-hidden relative">
+          <RootDropZone tabId={activeTabId} hasLayout={allStages.some(s => s.tabId === activeTabId && !s.isEmpty)}>
+            <StageView tabs={tabs} allStages={allStages} activeTabId={activeTabId} />
+          </RootDropZone>
+        </main>
       </div>
 
       {/* Hidden gods container - keeps terminals alive when on other tabs */}

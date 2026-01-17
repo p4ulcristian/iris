@@ -46,7 +46,6 @@ export const useStore = create(
 
       connected: false,
       initialLoadDone: false,
-      loadStage: 0,  // 0=loading, 1=shell, 2=structure, 3=surface, 4=entities, 5=ready
       isAltHeld: false,
       layoutMode: 'auto',
       gitBranches: {},  // { [projectPath]: branchName } - fetched per entity
@@ -171,17 +170,6 @@ export const useStore = create(
       setConnected: (connected) => set({ connected }),
 
       setInitialLoadDone: (done) => set({ initialLoadDone: done }),
-
-      setLoadStage: (stage) => set({ loadStage: stage }),
-
-      triggerStagedReveal: () => {
-        const { setLoadStage } = get()
-        setLoadStage(1)
-        setTimeout(() => setLoadStage(2), 100)
-        setTimeout(() => setLoadStage(3), 200)
-        setTimeout(() => setLoadStage(4), 300)
-        setTimeout(() => setLoadStage(5), 500)
-      },
 
       setAltHeld: (held) => set({ isAltHeld: held }),
 

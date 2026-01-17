@@ -746,48 +746,12 @@ function AnimatedTabButton({ tab, isActive, realmColor, onSelect, onClose, tabsL
 }
 
 // Tabs section at top
-function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loadStage, initialLoadDone }) {
-  const addButtonRef = useRef(null)
-  const addAnimRef = useRef(null)
-  const shouldShow = loadStage >= 2
-
-  // Add button enter animation
-  useLayoutEffect(() => {
-    if (!addButtonRef.current) return
-
-    if (addAnimRef.current) {
-      try { addAnimRef.current.cancel() } catch (e) {}
-    }
-
-    if (shouldShow) {
-      const staggerDelay = (!initialLoadDone || loadStage < 5) ? (tabs?.length || 0) * 50 : 0
-      addAnimRef.current = animate(addButtonRef.current,
-        [
-          { opacity: 0, transform: 'scale(0.8)' },
-          { opacity: 1, transform: 'scale(1)' }
-        ],
-        {
-          duration: SPRING_DURATION,
-          easing: SPRING_EASING,
-          delay: staggerDelay,
-          fill: 'forwards'
-        }
-      )
-    }
-
-    return () => {
-      if (addAnimRef.current) {
-        try { addAnimRef.current.cancel() } catch (e) {}
-      }
-    }
-  }, [shouldShow, tabs?.length, initialLoadDone, loadStage])
-
+function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew }) {
   return (
     <div className="sidebar-tabs flex flex-wrap gap-1.5 p-3 border-b border-white/10">
       {tabs?.map((tab, idx) => {
         const isActive = activeTabId === tab.id
         const realmColor = REALM_COLORS[tab.name] || '#888888'
-        const staggerDelay = (!initialLoadDone || loadStage < 5) ? idx * 50 : 0
 
         return (
           <AnimatedTabButton
@@ -798,22 +762,20 @@ function TabsSection({ tabs, activeTabId, onTabSelect, onTabClose, onTabNew, loa
             onSelect={onTabSelect}
             onClose={onTabClose}
             tabsLength={tabs.length}
-            staggerDelay={staggerDelay}
-            shouldShow={shouldShow}
+            staggerDelay={0}
+            shouldShow={true}
           />
         )
       })}
 
       {/* Add tab button */}
-      <div ref={addButtonRef} style={{ opacity: 0 }}>
-        <IconButton
-          icon={faPlus}
-          size="md"
-          variant="glass"
-          onClick={onTabNew}
-          title="New tab (Alt+N)"
-        />
-      </div>
+      <IconButton
+        icon={faPlus}
+        size="md"
+        variant="glass"
+        onClick={onTabNew}
+        title="New tab (Alt+N)"
+      />
     </div>
   )
 }
@@ -1007,8 +969,6 @@ export default function Sidebar({
   onTabNew,
   tabStages,
   focusedEntity,
-  loadStage,
-  initialLoadDone,
   onEntityClick,
   onEntityClose,
   onEntitySplit,
@@ -1073,8 +1033,6 @@ export default function Sidebar({
         onTabSelect={onTabSelect}
         onTabClose={onTabClose}
         onTabNew={onTabNew}
-        loadStage={loadStage}
-        initialLoadDone={initialLoadDone}
       />
 
       {/* System Claudes panel */}
