@@ -8,11 +8,11 @@
 #     "sounddevice",
 #     "soundfile",
 #     "resampy",
-#     "nemo_toolkit[asr]",
 #     "torch",
 #     "torchaudio",
 #     "evdev",
 #     "requests",
+#     "faster-whisper>=1.0.0",
 # ]
 # ///
 """
@@ -62,19 +62,35 @@ from base import setup_logging, create_app, run_server
 logger = setup_logging("hear")
 app = create_app(cors=True)
 
-# Try to import STT, fall back to dummy if nemo not installed
-try:
-    from stt import SpeechToText
-    STT_AVAILABLE = True
-except ImportError:
-    STT_AVAILABLE = False
+# STT version selection via environment variable
+# STT_VERSION=v1 -> Parakeet TDT (English, faster)
+# STT_VERSION=v2 -> Whisper large-v3-hu (Hungarian, more accurate)
+STT_VERSION = os.environ.get("STT_VERSION", "v2")
 
+STT_AVAILABLE = False
+SpeechToText = None
+
+if STT_VERSION == "v2":
+    try:
+        from stt_v2 import SpeechToText
+        STT_AVAILABLE = True
+    except ImportError as e:
+        print(f"Failed to load Whisper STT: {e}")
+
+if not STT_AVAILABLE and STT_VERSION == "v1":
+    try:
+        from stt import SpeechToText
+        STT_AVAILABLE = True
+    except ImportError as e:
+        print(f"Failed to load Parakeet STT: {e}")
+
+if not STT_AVAILABLE:
     class SpeechToText:
-        """Dummy STT when nemo is not installed"""
+        """Dummy STT when no model is available"""
         def __init__(self, *args, **kwargs):
             pass
         def transcribe(self, audio):
-            return "[STT not installed - install nemo_toolkit[asr]]"
+            return "[STT not installed]"
 
 
 # Config - ports from ports.json
@@ -98,9 +114,10 @@ def init_models():
     global stt_model, recorder, chronicle, is_ready
 
     if STT_AVAILABLE:
-        logger.info("Initializing STT model...")
+        version_name = "Faster-Whisper large-v3-hu" if STT_VERSION == "v2" else "Parakeet TDT"
+        logger.info(f"Initializing STT model ({version_name})...")
     else:
-        logger.warning("STT not available (nemo not installed) - using dummy")
+        logger.warning("STT not available - using dummy")
 
     stt_model = SpeechToText()
     recorder = AudioRecorder()
@@ -116,7 +133,8 @@ def init_models():
     is_ready = True
 
     if STT_AVAILABLE:
-        logger.info("STT model initialized and ready")
+        version_name = "Faster-Whisper large-v3-hu" if STT_VERSION == "v2" else "Parakeet TDT"
+        logger.info(f"STT model ready ({version_name})")
     else:
         logger.info("Hear server ready (dummy STT mode)")
 
@@ -223,7 +241,11 @@ def on_ptt_tap():
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint."""
-    result = {"ready": is_ready}
+    result = {
+        "ready": is_ready,
+        "stt_version": STT_VERSION,
+        "stt_model": "faster-whisper-large-v3-hu" if STT_VERSION == "v2" else "parakeet-tdt-0.6b-v3"
+    }
     if chronicle:
         result["chronicle"] = chronicle.status()
     if ptt_listener:

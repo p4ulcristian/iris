@@ -32,3 +32,4 @@ Thumbs.db
 # Local data
 memory/
 .playwright-mcp/
+powers/hear/models/
