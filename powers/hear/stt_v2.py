@@ -80,10 +80,12 @@ class SpeechToText:
             audio = audio / np.abs(audio).max()
 
         # Transcribe with Hungarian language hint
+        # initial_prompt encourages punctuation (?, !, .)
         segments, info = self.model.transcribe(
             audio,
             language="hu",
             task="transcribe",
+            initial_prompt="Szia! Hogy vagy? Jól vagyok, köszönöm.",
             vad_filter=True,  # Filter out non-speech
             vad_parameters=dict(
                 min_silence_duration_ms=500,
