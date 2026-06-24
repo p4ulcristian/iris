@@ -33,3 +33,8 @@ Thumbs.db
 memory/
 .playwright-mcp/
 powers/hear/models/
+
+# iris secrets & local browser profile (excluded from public repo)
+config/telegram.env
+config/telegram-chat-id
+skills/camoufox-profile/

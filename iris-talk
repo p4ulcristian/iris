@@ -1,0 +1,983 @@
+#!/usr/bin/env python3
+"""
+iris-talk — a spoken voice companion that watches your Hyprland desktop.
+
+It closes the loop the existing `iris` voice layer left open:
+
+    you speak  ->  STT (iris-comms /stt/transcribe)
+              ->  gather context (active window, terminal cwd + git,
+                  your live Claude Code session, a screenshot)
+              ->  think  (Claude via `claude -p`, conversation kept with --resume)
+              ->  iris-say (iris-comms /tts/stream) speaks the reply
+
+Trigger model (phase 1): a single toggle. Tap the key (or click the waybar
+eye) once to start listening, tap again to send + hear the reply. State is
+mirrored to a waybar module so the eye shows idle / listening / thinking /
+speaking.
+
+Subcommands:
+    iris-talk            toggle (start if idle, else stop+answer)  [default]
+    iris-talk start      begin recording
+    iris-talk stop       stop recording, answer
+    iris-talk cancel     drop the in-progress recording, say nothing
+    iris-talk waybar     print the waybar module JSON for the current state
+    iris-talk reset      forget the conversation (start a fresh session)
+    iris-talk --text "…" skip the mic; feed text straight to the brain (debug)
+
+Reuses the iris-comms endpoints and API key already configured for iris-ptt.
+"""
+import base64
+import glob
+import io
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import wave
+
+# Launched from Hyprland/waybar, the session PATH is minimal and usually lacks
+# ~/.local/bin — so resolve binaries ourselves instead of trusting PATH.
+for _d in (os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.claude/local")):
+    if _d not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = _d + ":" + os.environ.get("PATH", "")
+
+
+def _find_claude():
+    cand = os.environ.get("IRIS_CLAUDE_BIN") or shutil.which("claude")
+    if cand and os.path.exists(cand):
+        return cand
+    for p in ("~/.local/bin/claude", "~/.claude/local/claude"):
+        p = os.path.expanduser(p)
+        if os.path.exists(p):
+            return p
+    return "claude"  # last resort; will surface a clear error if missing
+
+
+CLAUDE_BIN = _find_claude()
+IRIS_SAY = os.path.expanduser("~/.local/bin/iris-say")
+
+# Live web panel (iris-panel) — best-effort; if it's down, voice still works.
+import urllib.request  # noqa: E402
+PANEL_URL = os.environ.get("IRIS_PANEL_URL", "http://127.0.0.1:4270")
+
+
+def panel_post(event):
+    try:
+        req = urllib.request.Request(
+            PANEL_URL + "/event",
+            data=json.dumps(event).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=1).read()
+    except Exception:                            # noqa: BLE001 — panel is optional
+        pass
+
+# --- config -----------------------------------------------------------------
+STT_ENDPOINT = os.environ.get("IRIS_PTT_ENDPOINT", "http://10.99.0.2:4260/stt/transcribe")
+API_KEY_FILE = os.path.expanduser("~/.config/iris-ptt/api_key")
+# Pin to the Mac's built-in DSP mic, never the system default (matches iris-ptt).
+SOURCE = os.environ.get("IRIS_PTT_SOURCE", "effect_output.j413-mic")
+LANGUAGE = os.environ.get("IRIS_PTT_LANG", "")
+
+# The brain runs from a FIXED dir so iris's own conversation transcripts never
+# land inside (and pollute) the user's project folders under ~/.claude/projects.
+BRAIN_CWD = os.path.expanduser("~/work/iris")
+# Model for the brain. sonnet keeps voice turns snappy; override via IRIS_MODEL
+# (e.g. "opus" for harder questions, "" to fall back to the Claude Code default).
+MODEL = os.environ.get("IRIS_MODEL", "sonnet")
+BRAIN_TIMEOUT = int(os.environ.get("IRIS_BRAIN_TIMEOUT", "120"))
+HOME = os.path.expanduser("~")
+IRIS_WORKER = os.path.expanduser("~/.local/bin/iris-worker")
+# Edge mode: the brain runs on Olympus. This thin daemon ships the recorded mic
+# audio up and plays the reply audio that streams back down the SSH pipe.
+OLYMPUS_SSH = os.environ.get("IRIS_OLYMPUS_SSH", "olympus-local")
+IRIS_BRAIN = os.environ.get("IRIS_BRAIN_BIN", "~/.local/bin/iris-brain")  # path ON Olympus
+TTS_SINK = os.environ.get("IRIS_TTS_SINK", "audio_effect.j413-convolver")
+TTS_RATE = 24000
+# Idle auto-compact: once the conversation has grown a little and you've been
+# quiet for a bit, compact the front-desk session in the background so live
+# turns never pay the compaction cost.
+IDLE_COMPACT_SECS = int(os.environ.get("IRIS_IDLE_COMPACT_SECS", "45"))
+MIN_TURNS_COMPACT = int(os.environ.get("IRIS_MIN_TURNS_COMPACT", "3"))
+
+# State / scratch.
+STATE_DIR = os.path.expanduser("~/.cache/iris-talk")
+REC_WAV = os.path.join(STATE_DIR, "recording.wav")
+REC_PID = os.path.join(STATE_DIR, "recording.pid")
+STATE_FILE = os.path.join(STATE_DIR, "state")          # idle|listening|thinking|speaking|error
+SESSION_FILE = os.path.join(STATE_DIR, "session.id")   # claude --resume id
+HISTORY_FILE = os.path.join(STATE_DIR, "history.jsonl") # {ts, role, text} per turn
+WORKER_JSON = os.path.join(STATE_DIR, "worker.json")    # iris-worker status
+SHOT = os.path.join(STATE_DIR, "screen.png")
+POPUP_CLASS = "iris-popup"   # Hyprland floats windows of this class (see hyprland.lua)
+MIN_HOLD_S = 0.3
+
+# Hold-to-talk trigger: the Apple Fn/Globe key emits keycode 254 on the keyd
+# virtual keyboard (verified via evdev). Hold it to talk, release to answer.
+FN_CODE = int(os.environ.get("IRIS_FN_CODE", "254"))
+KBD_NAME = os.environ.get("IRIS_KBD_NAME", "keyd virtual keyboard")
+
+WAYBAR_SIGNAL = "RTMIN+9"   # custom/iris module uses "signal": 9
+
+# waybar glyphs (JetBrainsMono Nerd Font) + CSS class per state.
+GLYPHS = {
+    "idle":      ("󰈈", "idle",      "iris — tap to talk"),
+    "listening": ("󰍬", "listening", "iris is listening…"),
+    "thinking":  ("󰔟", "thinking",  "iris is working… (transcribing / thinking)"),
+    "speaking":  ("󰓃", "speaking",  "iris is speaking…"),
+    "error":     ("󰈉", "error",     "iris — error (see notification)"),
+}
+
+FRONT_PERSONA = (
+    "You are iris, Paul's voice companion and front desk. You run on Gaia, his "
+    "Asahi-Linux Hyprland laptop (the earthly body); your voice — speech-in and "
+    "speech-out — is served from the Olympus server. You are the rainbow between "
+    "them. Your ONLY jobs are to TALK with Paul and to "
+    "DISPATCH work to your background worker. You never do the heavy work "
+    "yourself — the worker does it and you narrate. The code that runs you lives "
+    "in ~/work/iris; this project is you.\n\n"
+    "Each turn you are given the worker's current status, light context about "
+    "what Paul is doing, and what he just said out loud. Decide ONE action and "
+    "reply.\n\n"
+    "Respond with ONLY a JSON object and nothing else:\n"
+    '{"say": "<your spoken reply: 1-2 short natural sentences, no markdown, no '
+    'emoji>", "action": "chat" | "dispatch" | "stop", "task": "<ONLY for '
+    'dispatch: a clear, self-contained instruction for the worker, including any '
+    'path/target>"}\n\n'
+    "Choosing the action:\n"
+    "- chat: smalltalk, a question you can answer yourself, or a status question. "
+    "If Paul asks what you're doing or how it's going, answer from the WORKER "
+    "STATUS you were given.\n"
+    "- dispatch: Paul wants something done, built, fixed, found or figured out. "
+    "Hand the worker a clear task. If the worker is already running, dispatching "
+    "replaces its task. Your 'say' should be a brief acknowledgement like \"on "
+    "it\" — never claim it's already done.\n"
+    "- stop: Paul wants the worker to stop.\n\n"
+    "Keep 'say' spoken and short. Output nothing outside the JSON object."
+)
+
+
+# --- small helpers ----------------------------------------------------------
+def notify(msg, urgency="low"):
+    try:
+        subprocess.run(["notify-send", "-u", urgency, "-t", "2500",
+                        "👁 iris", msg], check=False)
+    except FileNotFoundError:
+        pass
+
+
+def load_api_key():
+    with open(API_KEY_FILE) as f:
+        return f.read().strip()
+
+
+def read_file(path, default=""):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+
+def set_state(state):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(STATE_FILE, "w") as f:
+        f.write(state)
+    # Nudge waybar to re-run the module immediately.
+    subprocess.run(["pkill", f"-{WAYBAR_SIGNAL}", "waybar"], check=False,
+                   stderr=subprocess.DEVNULL)
+    panel_post({"type": "state", "state": state})
+
+
+def get_state():
+    return read_file(STATE_FILE, "idle") or "idle"
+
+
+def log_history(role, text):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(HISTORY_FILE, "a") as f:
+        f.write(json.dumps({"ts": time.time(), "role": role, "text": text}) + "\n")
+
+
+# --- recording --------------------------------------------------------------
+def recording_proc_alive():
+    pid = read_file(REC_PID)
+    if not pid:
+        return None
+    try:
+        pid = int(pid)
+        os.kill(pid, 0)
+        return pid
+    except (ValueError, ProcessLookupError, PermissionError):
+        return None
+
+
+def start_recording():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    if recording_proc_alive():
+        return  # already recording
+    cmd = ["pw-record", "--rate", "16000", "--channels", "1", "--format", "s16"]
+    if SOURCE:
+        cmd += ["--target", SOURCE]
+    cmd.append(REC_WAV)
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    with open(REC_PID, "w") as f:
+        f.write(str(proc.pid))
+    with open(os.path.join(STATE_DIR, "rec.start"), "w") as f:
+        f.write(str(time.time()))
+    set_state("listening")
+
+
+def stop_recording():
+    pid = recording_proc_alive()
+    if pid:
+        try:
+            os.kill(pid, signal.SIGINT)
+            for _ in range(30):
+                time.sleep(0.1)
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    break
+            else:
+                os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        os.unlink(REC_PID)
+    except FileNotFoundError:
+        pass
+    held = time.time() - float(read_file(os.path.join(STATE_DIR, "rec.start"), "0") or 0)
+    return held
+
+
+def transcribe():
+    api_key = load_api_key()
+    cmd = ["curl", "-sS", "-m", "60", "-X", "POST",
+           "-H", f"X-API-Key: {api_key}", "-F", f"audio=@{REC_WAV}"]
+    if LANGUAGE:
+        cmd += ["-F", f"language={LANGUAGE}"]
+    cmd.append(STT_ENDPOINT)
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=70)
+    if out.returncode != 0:
+        raise RuntimeError(f"STT curl failed: {out.stderr.strip()}")
+    return json.loads(out.stdout).get("text", "").strip()
+
+
+# --- context gathering ------------------------------------------------------
+def _proc_field(pid, name):
+    return read_file(f"/proc/{pid}/{name}")
+
+
+def _children(pid):
+    raw = read_file(f"/proc/{pid}/task/{pid}/children")
+    return [int(x) for x in raw.split()] if raw else []
+
+
+def _descendants(pid):
+    """All descendant pids of `pid`, plus per-pid (comm, cmdline, cwd)."""
+    found = {}
+    stack = [pid]
+    seen = set()
+    while stack:
+        p = stack.pop()
+        if p in seen:
+            continue
+        seen.add(p)
+        kids = _children(p)
+        comm = _proc_field(p, "comm")
+        cmdline = read_file(f"/proc/{p}/cmdline").replace("\x00", " ").strip()
+        try:
+            cwd = os.readlink(f"/proc/{p}/cwd")
+        except OSError:
+            cwd = ""
+        found[p] = {"comm": comm, "cmdline": cmdline, "cwd": cwd, "kids": kids}
+        stack.extend(kids)
+    return found
+
+
+def focused_context():
+    """Return a dict describing the active window and the work behind it."""
+    ctx = {"window": None, "cwd": "", "cc_running": False}
+    try:
+        aw = json.loads(subprocess.run(["hyprctl", "activewindow", "-j"],
+                                       capture_output=True, text=True, timeout=2).stdout)
+    except Exception:
+        return ctx
+    if not aw:
+        return ctx
+    ctx["window"] = {
+        "class": aw.get("class", ""),
+        "title": aw.get("title", ""),
+        "workspace": (aw.get("workspace") or {}).get("name", ""),
+    }
+    pid = aw.get("pid")
+    if not pid or pid < 0:
+        return ctx
+
+    tree = _descendants(pid)
+    # cwd of the deepest meaningful descendant. Prefer a running `claude`,
+    # then a shell, then any leaf with a readable cwd.
+    claude_cwd = shell_cwd = leaf_cwd = ""
+    for p, info in tree.items():
+        comm, cwd = info["comm"], info["cwd"]
+        if not cwd:
+            continue
+        if comm == "claude" or "claude" in info["cmdline"].split(" ")[0]:
+            claude_cwd = cwd
+            ctx["cc_running"] = True
+        elif comm in ("zsh", "bash", "fish", "sh"):
+            shell_cwd = cwd
+        if not info["kids"]:
+            leaf_cwd = cwd
+    ctx["cwd"] = claude_cwd or shell_cwd or leaf_cwd
+    return ctx
+
+
+def git_context(cwd):
+    if not cwd or not os.path.isdir(cwd):
+        return ""
+    def g(*args):
+        r = subprocess.run(["git", "-C", cwd, *args],
+                           capture_output=True, text=True, timeout=4)
+        return r.stdout.strip() if r.returncode == 0 else None
+    branch = g("rev-parse", "--abbrev-ref", "HEAD")
+    if branch is None:
+        return ""  # not a repo
+    status = g("status", "--porcelain") or ""
+    changed = len([l for l in status.splitlines() if l.strip()])
+    last = g("log", "-1", "--pretty=%s") or ""
+    bits = [f"branch {branch}"]
+    bits.append(f"{changed} uncommitted file(s)" if changed else "clean")
+    if last:
+        bits.append(f'last commit: "{last}"')
+    return "; ".join(bits)
+
+
+def cc_session_tail(cwd, n=6):
+    """Tail of the live Claude Code session for this cwd, so iris knows the work."""
+    if not cwd:
+        return ""
+    slug = cwd.replace("/", "-")
+    proj = os.path.expanduser(f"~/.claude/projects/{slug}")
+    files = sorted(glob.glob(os.path.join(proj, "*.jsonl")), key=os.path.getmtime)
+    if not files:
+        return ""
+    msgs = []
+    try:
+        with open(files[-1]) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                role = ev.get("type") or (ev.get("message") or {}).get("role")
+                if role not in ("user", "assistant"):
+                    continue
+                content = (ev.get("message") or {}).get("content", ev.get("content"))
+                text = ""
+                if isinstance(content, str):
+                    text = content
+                elif isinstance(content, list):
+                    text = " ".join(
+                        b.get("text", "") for b in content
+                        if isinstance(b, dict) and b.get("type") == "text")
+                text = " ".join(text.split())
+                if text:
+                    msgs.append(f"{role}: {text[:400]}")
+    except OSError:
+        return ""
+    return "\n".join(msgs[-n:])
+
+
+def take_screenshot():
+    """Grab the focused monitor; return the path or '' on failure."""
+    try:
+        mons = json.loads(subprocess.run(["hyprctl", "monitors", "-j"],
+                                         capture_output=True, text=True, timeout=2).stdout)
+        focused = next((m["name"] for m in mons if m.get("focused")), None)
+    except Exception:
+        focused = None
+    cmd = ["grim"]
+    if focused:
+        cmd += ["-o", focused]
+    cmd.append(SHOT)
+    r = subprocess.run(cmd, capture_output=True, timeout=8)
+    return SHOT if r.returncode == 0 and os.path.exists(SHOT) else ""
+
+
+def build_context_block():
+    ctx = focused_context()
+    lines = ["CONTEXT (what Paul is doing right now):"]
+    w = ctx["window"]
+    if w:
+        lines.append(f"- active window: {w['class']} — \"{w['title']}\" (workspace {w['workspace']})")
+    if ctx["cwd"]:
+        lines.append(f"- focused terminal dir: {ctx['cwd']}")
+        gc = git_context(ctx["cwd"])
+        if gc:
+            lines.append(f"- git: {gc}")
+    if ctx["cc_running"]:
+        tail = cc_session_tail(ctx["cwd"])
+        if tail:
+            lines.append("- his live Claude Code session (most recent messages):")
+            lines.append(tail)
+    shot = take_screenshot()
+    if shot:
+        lines.append(f"- a screenshot of the screen is at {shot} "
+                     "(open it with the Read tool only if you need to see it)")
+    return "\n".join(lines), shot
+
+
+# --- barge-in: interrupt whatever iris is doing -----------------------------
+# Each Fn press bumps the turn generation; a turn whose generation is stale
+# (because a newer press interrupted it) must not speak or touch shared state.
+_active_brain = None          # the running claude Popen, if mid-think
+_turn_gen = 0
+_pipeline = None              # the running ssh|pw-cat edge turn (for barge-in)
+
+# Idle auto-compact bookkeeping. _session_lock serializes access to the
+# front-desk session so a live turn and a background compaction never collide.
+_session_lock = threading.Lock()
+_last_activity = time.time()
+_turns_since_compact = 0
+
+
+def compact_session():
+    """Compact the front-desk session in place (run during idle time)."""
+    global _turns_since_compact
+    sid = read_file(SESSION_FILE)
+    if not sid:
+        return
+    cmd = [CLAUDE_BIN, "-p", "/compact", "--resume", sid,
+           "--output-format", "json", "--permission-mode", "bypassPermissions"]
+    if MODEL:
+        cmd += ["--model", MODEL]
+    with _session_lock:
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True,
+                                 cwd=BRAIN_CWD, timeout=120)
+        except Exception:                        # noqa: BLE001
+            return
+    if out.returncode == 0:
+        try:
+            nsid = json.loads(out.stdout).get("session_id")
+            if nsid:
+                with open(SESSION_FILE, "w") as f:
+                    f.write(nsid)
+        except Exception:                        # noqa: BLE001
+            pass
+        _turns_since_compact = 0
+        notify("compacted the conversation", "low")
+        panel_post({"type": "note", "text": "✓ compacted the conversation"})
+
+
+def idle_watcher():
+    """Background: compact the session once you've gone quiet for a while."""
+    while True:
+        time.sleep(10)
+        try:
+            if (_turns_since_compact >= MIN_TURNS_COMPACT
+                    and (time.time() - _last_activity) >= IDLE_COMPACT_SECS
+                    and get_state() == "idle"
+                    and read_file(SESSION_FILE)):
+                compact_session()
+        except Exception:                        # noqa: BLE001
+            pass
+
+
+def interrupt_active():
+    """Stop any speech now playing and kill any in-flight brain think."""
+    subprocess.run([IRIS_SAY, "--stop"], check=False)
+    p = _active_brain
+    if p is not None and p.poll() is None:
+        try:
+            p.kill()
+        except Exception:                        # noqa: BLE001
+            pass
+    pl = _pipeline                               # edge mode: kill the ssh|pw-cat turn
+    if pl is not None and pl.poll() is None:
+        try:
+            os.killpg(os.getpgid(pl.pid), signal.SIGTERM)
+        except Exception:                        # noqa: BLE001
+            pass
+
+
+# --- front desk: route each utterance ---------------------------------------
+def front_context():
+    """Light, text-only context for the front desk (no screenshot, no tools)."""
+    ctx = focused_context()
+    lines = ["What Paul is doing right now (for your awareness):"]
+    w = ctx["window"]
+    if w:
+        lines.append(f'- active window: {w["class"]} — "{w["title"]}" (workspace {w["workspace"]})')
+    if ctx["cwd"]:
+        lines.append(f"- terminal dir: {ctx['cwd']}")
+        gc = git_context(ctx["cwd"])
+        if gc:
+            lines.append(f"- git: {gc}")
+    if ctx["cc_running"]:
+        tail = cc_session_tail(ctx["cwd"], 4)
+        if tail:
+            lines.append("- his live Claude Code session:\n" + tail)
+    return "\n".join(lines)
+
+
+def worker_status_summary():
+    try:
+        with open(WORKER_JSON) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return "idle — no worker has run yet"
+    s = st.get("status", "idle")
+    task = (st.get("task") or "")[:140]
+    if s == "running":
+        return f'RUNNING task "{task}" — right now: {st.get("last_step", "working…")}'
+    if s == "done":
+        return f'just FINISHED "{task}": {(st.get("summary") or "")[:240]}'
+    if s == "error":
+        return f'ERRORED on "{task}": {(st.get("summary") or "")[:240]}'
+    return "idle — nothing running"
+
+
+def _parse_decision(text):
+    import re
+    text = (text or "").strip()
+    m = re.search(r"\{.*\}", text, re.S)
+    raw = m.group(0) if m else text
+    try:
+        d = json.loads(raw)
+        if isinstance(d, dict):
+            return d
+    except Exception:                            # noqa: BLE001
+        pass
+    return {"say": text, "action": "chat"}
+
+
+def ask_frontdesk(user_text):
+    """Fast, tool-less router. Returns {say, action, task}."""
+    global _active_brain
+    prompt = (f"{front_context()}\n\n"
+              f"WORKER STATUS: {worker_status_summary()}\n\n"
+              f"Paul just said, out loud:\n\"{user_text}\"")
+    # Hold the session lock so a background compaction can't run on this session
+    # at the same moment (it would briefly wait for us, or we for it).
+    with _session_lock:
+        session_id = read_file(SESSION_FILE)
+        cmd = [CLAUDE_BIN, "-p", prompt,
+               "--output-format", "json", "--allowed-tools", "",
+               "--permission-mode", "bypassPermissions",
+               "--append-system-prompt", FRONT_PERSONA]
+        if MODEL:
+            cmd += ["--model", MODEL]
+        if session_id:
+            cmd += ["--resume", session_id]
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, cwd=BRAIN_CWD)
+        _active_brain = proc
+        timer = threading.Timer(BRAIN_TIMEOUT, proc.kill)
+        timer.start()
+        try:
+            out, errout = proc.communicate()
+        finally:
+            timer.cancel()
+            _active_brain = None
+
+    rc = proc.returncode
+    if rc and rc < 0:                            # interrupted (barge-in) / timeout
+        return {"say": "", "action": "chat"}
+    try:
+        data = json.loads(out)
+    except (ValueError, TypeError):
+        raise RuntimeError((errout or out or "front-desk failed").strip()[:200])
+    if data.get("is_error"):
+        raise RuntimeError((data.get("result") or "front-desk error")[:200])
+    sid = data.get("session_id")
+    if sid:
+        with open(SESSION_FILE, "w") as f:
+            f.write(sid)
+    return _parse_decision(data.get("result"))
+
+
+def speak(text):
+    if not text:
+        return
+    # Cap playback so a wedged TTS stream can't pin the eye on "speaking" forever
+    # (Fn/barge-in also stops it; this is the backstop).
+    try:
+        subprocess.run([IRIS_SAY], input=text, text=True, timeout=120, check=False)
+    except subprocess.TimeoutExpired:
+        subprocess.run([IRIS_SAY, "--stop"], check=False)
+
+
+# --- orchestration ----------------------------------------------------------
+def do_turn(user_text, gen=None):
+    # gen lets a barge-in interrupt this turn: if a newer Fn press bumped the
+    # generation, this (now stale) turn must not speak or reset the eye state.
+    global _last_activity, _turns_since_compact
+
+    def stale():
+        return gen is not None and gen != _turn_gen
+
+    _last_activity = time.time()
+    if not user_text:
+        notify("(didn't catch that)")
+        if not stale():
+            set_state("idle")
+        return
+    panel_post({"type": "turn", "role": "you", "text": user_text})
+    set_state("thinking")
+    notify(f"you: {user_text}")
+    log_history("you", user_text)
+    try:
+        decision = ask_frontdesk(user_text)
+        _turns_since_compact += 1
+    except Exception as e:                     # noqa: BLE001
+        if stale():
+            return
+        notify(f"iris: {e}", "critical")
+        panel_post({"type": "reply", "text": f"⚠ {e}"})
+        set_state("error")
+        time.sleep(2)
+        set_state("idle")
+        return
+    if stale():                                # interrupted while thinking
+        return
+
+    say = (decision.get("say") or "").strip()
+    action = decision.get("action", "chat")
+    task = (decision.get("task") or "").strip()
+
+    # Act on the decision — these are quick and non-blocking (the worker runs
+    # detached), so iris stays responsive.
+    if action == "dispatch" and task:
+        cwd = focused_context().get("cwd") or HOME
+        subprocess.run([IRIS_WORKER, "dispatch", task, cwd], check=False)
+    elif action == "stop":
+        subprocess.run([IRIS_WORKER, "stop"], check=False)
+
+    if not say:
+        _last_activity = time.time()
+        set_state("idle")
+        return
+    log_history("iris", say)
+    panel_post({"type": "reply", "text": say})
+    set_state("speaking")
+    speak(say)                                 # blocks until playback finishes
+    _last_activity = time.time()               # idle-compact timer starts now
+    if stale():                                # interrupted while speaking
+        return
+    set_state("idle")
+
+
+def cmd_stop(gen=None):
+    def stale():
+        return gen is not None and gen != _turn_gen
+    set_state("thinking")                        # flip mic -> loading the instant Fn is released
+    held = stop_recording()                      # (this can take a moment to flush)
+    if held < MIN_HOLD_S:
+        if not stale():                          # a barge-in tap just to stop voice
+            notify("(too short)")
+            set_state("idle")
+        return
+    try:
+        text = transcribe()
+    except Exception as e:                      # noqa: BLE001
+        if stale():
+            return
+        notify(f"stt: {e}", "critical")
+        set_state("error")
+        time.sleep(2)
+        set_state("idle")
+        return
+    if stale():
+        return
+    do_turn(text, gen)
+
+
+def cmd_toggle():
+    if recording_proc_alive():
+        cmd_stop()
+    else:
+        start_recording()
+
+
+def cmd_cancel():
+    stop_recording()
+    subprocess.run([IRIS_SAY, "--stop"], check=False)
+    set_state("idle")
+
+
+def cmd_waybar():
+    glyph, klass, tip = GLYPHS.get(get_state(), GLYPHS["idle"])
+    # Tooltip previews the last exchange so a hover shows the gist; click = popup.
+    last = ""
+    try:
+        with open(HISTORY_FILE) as f:
+            rows = [json.loads(l) for l in f if l.strip()][-2:]
+        last = "\r" + "\n".join(f"{r['role']}: {r['text'][:80]}" for r in rows)
+    except OSError:
+        pass
+    print(json.dumps({"text": glyph, "class": klass, "tooltip": tip + last}))
+
+
+def cmd_history():
+    """Print the conversation transcript (used inside the popup window)."""
+    import textwrap
+    C = {"you": "\033[1;36m", "iris": "\033[1;35m"}      # cyan / magenta
+    DIM, RST = "\033[2m", "\033[0m"
+    width = min(int(os.environ.get("COLUMNS", "80")), 100)
+    try:
+        with open(HISTORY_FILE) as f:
+            rows = [json.loads(l) for l in f if l.strip()]
+    except OSError:
+        rows = []
+    if not rows:
+        print("  (no conversation yet — tap the eye's keybind and say hi)")
+        return
+    print(f"\033[1m  👁  iris — conversation\033[0m\n")
+    for r in rows:
+        t = time.strftime("%H:%M", time.localtime(r.get("ts", 0)))
+        col = C.get(r["role"], "")
+        label = f"{col}{r['role']:>4}{RST} {DIM}{t}{RST}  "
+        body = textwrap.fill(r["text"], width=width - 12,
+                             subsequent_indent=" " * 12)
+        print(f"{label}{body}\n")
+
+
+def cmd_history_popup():
+    """Open the transcript in a floating terminal window (the waybar click)."""
+    inner = ("iris-talk history; "
+             "printf '\\n\\033[2m  q to close\\033[0m\\n'; "
+             "read -k1 -s 2>/dev/null || read -n1 -s")
+    for term in (
+        ["kitty", "--class", POPUP_CLASS, "--title", "iris chat",
+         "-o", "remember_window_size=no", "-o", "initial_window_width=80c",
+         "-o", "initial_window_height=30c", "zsh", "-ic", inner],
+        ["foot", "--app-id", POPUP_CLASS, "--title", "iris chat", "zsh", "-ic", inner],
+    ):
+        try:
+            subprocess.Popen(term)
+            return
+        except FileNotFoundError:
+            continue
+
+
+def find_keyboard():
+    import evdev
+    for path in evdev.list_devices():
+        try:
+            d = evdev.InputDevice(path)
+        except OSError:
+            continue
+        if d.name == KBD_NAME:
+            return d
+    return None
+
+
+def cmd_daemon():
+    """Resident hold-to-talk listener with barge-in.
+
+    Hold Fn (keycode 254) to talk; release to get the answer. Press Fn again at
+    any time to interrupt — it stops iris mid-speech (or mid-think) and starts
+    listening for your next thing. Answers run on a worker thread so the loop
+    stays responsive while iris is talking.
+    """
+    global _turn_gen, _last_activity
+    import evdev
+    from evdev import ecodes
+    dev = find_keyboard()
+    if dev is None:
+        notify(f"no '{KBD_NAME}' device found", "critical")
+        sys.exit(1)
+    print(f"iris-talk daemon: hold Fn (code {FN_CODE}) on {dev.path} to talk; "
+          f"press again to interrupt", flush=True)
+    set_state("idle")
+    threading.Thread(target=idle_watcher, daemon=True).start()
+    for ev in dev.read_loop():
+        if ev.type != ecodes.EV_KEY or ev.code != FN_CODE:
+            continue
+        if ev.value == 1:                       # Fn down -> barge-in + listen
+            _last_activity = time.time()
+            interrupt_active()                  # stop any speech / in-flight think
+            _turn_gen += 1                       # invalidate the previous turn
+            start_recording()
+        elif ev.value == 0:                     # Fn up -> answer off-thread
+            if recording_proc_alive():
+                gen = _turn_gen
+                set_state("thinking")           # instant mic -> loading on release
+                threading.Thread(target=cmd_stop, args=(gen,),
+                                 daemon=True).start()
+        # ev.value == 2 (autorepeat) ignored
+
+
+def remote_turn(gen=None):
+    """Edge mode: ship the recorded mic audio to the Olympus brain and play the
+    reply audio it streams back. The brain does STT + front desk + TTS up there;
+    the worker (if dispatched) runs back here on Gaia."""
+    global _pipeline
+
+    def stale():
+        return gen is not None and gen != _turn_gen
+
+    held = stop_recording()
+    if held < MIN_HOLD_S:
+        if not stale():
+            notify("(too short)")
+            set_state("idle")
+        return
+    fc = focused_context()
+    ctx = {"context": front_context(),
+           "worker_status": worker_status_summary(),
+           "cwd": fc.get("cwd") or HOME}
+    b64 = __import__("base64").b64encode(json.dumps(ctx).encode()).decode()
+    cmd = (f'ssh -o BatchMode=yes -o ConnectTimeout=8 {OLYMPUS_SSH} '
+           f'"{IRIS_BRAIN} turn --ctx {b64}" < "{REC_WAV}" | '
+           f'pw-cat --playback --raw --format s16 --rate {TTS_RATE} '
+           f'--channels 1 --target {TTS_SINK} -')
+    try:
+        _pipeline = subprocess.Popen(cmd, shell=True, start_new_session=True)
+        _pipeline.wait()
+    except Exception as e:                        # noqa: BLE001
+        if not stale():
+            notify(f"edge: {e}", "critical")
+    finally:
+        _pipeline = None
+    if not stale():
+        set_state("idle")
+
+
+def cmd_text_turn(msg):
+    """Typed turn — gather Gaia context and send the text to the Olympus brain
+    (same routing/dispatch as voice). The brain posts the reply to the panel."""
+    msg = (msg or "").strip()
+    if not msg:
+        return
+    fc = focused_context()
+    ctx = {"context": front_context(),
+           "worker_status": worker_status_summary(),
+           "cwd": fc.get("cwd") or HOME}
+    b64 = __import__("base64").b64encode(json.dumps(ctx).encode()).decode()
+    subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                    OLYMPUS_SSH, f"{IRIS_BRAIN} text --speak --ctx {b64}"],
+                   input=msg, text=True, check=False)
+
+
+def cmd_edge_daemon():
+    """Thin Fn daemon — the brain lives on Olympus. Hold Fn to talk; the audio
+    goes up, the reply comes back. Press Fn again to interrupt."""
+    global _turn_gen
+    import evdev
+    from evdev import ecodes
+    dev = find_keyboard()
+    if dev is None:
+        notify(f"no '{KBD_NAME}' device found", "critical")
+        sys.exit(1)
+    print(f"iris-talk EDGE daemon: brain on Olympus ({OLYMPUS_SSH}); "
+          f"hold Fn (code {FN_CODE}) to talk", flush=True)
+    set_state("idle")
+    # SIGUSR1 = "interrupt now" (the panel sends it when you type, so a typed
+    # message also cuts off a voice reply that's mid-playback). Publish our pid so
+    # the signal targets exactly this process (no fragile pkill -f matching).
+    signal.signal(signal.SIGUSR1, lambda *_: interrupt_active())
+    with open(os.path.join(STATE_DIR, "edge.pid"), "w") as f:
+        f.write(str(os.getpid()))
+    for ev in dev.read_loop():
+        if ev.type != ecodes.EV_KEY or ev.code != FN_CODE:
+            continue
+        if ev.value == 1:                       # Fn down -> barge-in + listen
+            interrupt_active()
+            _turn_gen += 1
+            start_recording()
+        elif ev.value == 0:                     # Fn up -> ship to Olympus brain
+            if recording_proc_alive():
+                gen = _turn_gen
+                set_state("thinking")
+                threading.Thread(target=remote_turn, args=(gen,),
+                                 daemon=True).start()
+
+
+def _panel_window_open():
+    try:
+        clients = json.loads(subprocess.run(["hyprctl", "clients", "-j"],
+                             capture_output=True, text=True, timeout=2).stdout)
+        return any(c.get("class", "").startswith("chrome-127") for c in clients)
+    except Exception:                            # noqa: BLE001
+        return False
+
+
+def cmd_panel():
+    """Toggle the live web panel — click the eye to open it, click again to close.
+
+    Open: a DEDICATED chromium instance (own --user-data-dir) shows the panel as a
+    floating window (Hyprland rule on its chrome-127.* class). Close: tell the page
+    to window.close() itself (Hyprland's focus/close-by-window is unreliable here).
+    """
+    if _panel_window_open():
+        try:
+            req = urllib.request.Request(PANEL_URL + "/close", data=b"", method="POST")
+            urllib.request.urlopen(req, timeout=1).read()
+        except Exception:                        # noqa: BLE001
+            pass
+        return
+    profile = os.path.join(STATE_DIR, "chromium-profile")
+    subprocess.Popen(
+        ["chromium", "--app=" + PANEL_URL + "/",
+         "--user-data-dir=" + profile, "--no-first-run",
+         "--no-default-browser-check"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True)
+
+
+def cmd_reset():
+    try:
+        os.unlink(SESSION_FILE)
+    except FileNotFoundError:
+        pass
+    try:
+        os.unlink(HISTORY_FILE)
+    except FileNotFoundError:
+        pass
+    try:
+        req = urllib.request.Request(PANEL_URL + "/reset", data=b"", method="POST")
+        urllib.request.urlopen(req, timeout=1).read()
+    except Exception:                            # noqa: BLE001
+        pass
+    notify("conversation reset")
+
+
+def main():
+    args = sys.argv[1:]
+    if "--text" in args:
+        i = args.index("--text")
+        text = " ".join(args[i + 1:]).strip()
+        do_turn(text)
+        return
+    if args and args[0] == "text-turn":          # typed message -> Olympus brain
+        cmd_text_turn(" ".join(args[1:]))
+        return
+    cmd = args[0] if args else "toggle"
+    {
+        "toggle": cmd_toggle,
+        "start": start_recording,
+        "stop": cmd_stop,
+        "cancel": cmd_cancel,
+        "waybar": cmd_waybar,
+        "history": cmd_history,
+        "history-popup": cmd_history_popup,
+        "panel": cmd_panel,
+        "daemon": cmd_daemon,
+        "edge-daemon": cmd_edge_daemon,
+        "reset": cmd_reset,
+    }.get(cmd, cmd_toggle)()
+
+
+if __name__ == "__main__":
+    main()

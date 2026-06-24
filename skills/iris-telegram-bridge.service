@@ -1,0 +1,13 @@
+[Unit]
+Description=iris Telegram bridge — bidirectional Telegram <-> iris (inbound /chat + outbound /stream)
+After=network-online.target iris-panel.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u %h/work/iris/skills/telegram-bridge.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

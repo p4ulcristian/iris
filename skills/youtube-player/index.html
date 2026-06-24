@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iris youtube</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      background: #000;
+      overflow: hidden;
+    }
+    #player {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    /* faint placeholder before anything is loaded */
+    #idle {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: #333;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <div id="idle">iris youtube</div>
+  <div id="player"></div>
+
+  <script>
+    // Loaded by the YouTube IFrame API once it is ready.
+    let player = null;
+    let ready = false;
+    let lastSeen = 0;          // version of the last command we applied
+    let pendingVideo = null;   // video to load once the player is ready
+
+    // 1) Pull in the IFrame API.
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+
+    // 2) The API calls this global when it has loaded.
+    window.onYouTubeIframeAPIReady = function () {
+      player = new YT.Player('player', {
+        width: '100%',
+        height: '100%',
+        playerVars: {
+          autoplay: 1,
+          controls: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1
+        },
+        events: {
+          onReady: function () {
+            ready = true;
+            if (pendingVideo) {
+              loadVideo(pendingVideo);
+              pendingVideo = null;
+            }
+          }
+        }
+      });
+    };
+
+    function loadVideo(id) {
+      document.getElementById('idle').style.display = 'none';
+      if (!ready || !player) { pendingVideo = id; return; }
+      player.loadVideoById(id);
+      player.playVideo();
+    }
+
+    function applyCommand(cmd) {
+      if (!cmd || typeof cmd.action !== 'string') return;
+      switch (cmd.action) {
+        case 'play':
+          if (cmd.v) loadVideo(cmd.v);
+          break;
+        case 'pause':
+          if (ready && player) player.pauseVideo();
+          break;
+        case 'resume':
+          if (ready && player) player.playVideo();
+          break;
+        case 'stop':
+          if (ready && player) player.stopVideo();
+          break;
+      }
+    }
+
+    // 3) Poll the server for the latest command. The server hands back a
+    //    monotonically increasing version so we only act on new commands.
+    async function poll() {
+      try {
+        const res = await fetch('/command?since=' + lastSeen, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.version > lastSeen) {
+            lastSeen = data.version;
+            applyCommand(data.command);
+          }
+        }
+      } catch (e) {
+        /* server momentarily unavailable — try again next tick */
+      } finally {
+        setTimeout(poll, 700);
+      }
+    }
+    poll();
+  </script>
+</body>
+</html>

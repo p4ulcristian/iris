@@ -1,0 +1,13 @@
+[Unit]
+Description=iris Telegram listener — forwards Telegram messages to the iris panel
+After=network-online.target iris-panel.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env bash %h/work/iris/skills/telegram-listener.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""
+iris-brain — iris's mind, running on OLYMPUS (the server, next to the voice
+models). Gaia (the laptop) is a thin client: it records the mic, ships the audio
+up here, and plays back whatever audio we stream down. One turn:
+
+    stdin  = the recorded WAV (from Gaia's mic)
+    --ctx  = base64(JSON) of Gaia's desktop context + worker status + cwd
+    stdout = raw PCM (s16/24k/mono) of iris's spoken reply, streamed as it's made
+
+Here on Olympus we: STT (localhost) -> front-desk decision (claude, localhost)
+-> dispatch the worker back onto Gaia over SSH if needed -> TTS (localhost),
+streaming the audio back down the pipe. Panel events are POSTed to Gaia's panel.
+
+Usage (run from Gaia):
+    ssh olympus-local 'iris-brain turn --ctx <b64>' < mic.wav | pw-cat --playback …
+"""
+import base64
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import wave
+
+API_KEY_FILE = os.path.expanduser("~/.config/iris-ptt/api_key")
+STT_ENDPOINT = os.environ.get("IRIS_STT", "http://127.0.0.1:4260/stt/transcribe")
+TTS_ENDPOINT = os.environ.get("IRIS_TTS", "http://127.0.0.1:4260/tts/stream")
+GAIA = os.environ.get("IRIS_GAIA", "paul@10.99.0.3")          # SSH target
+GAIA_PANEL = os.environ.get("IRIS_PANEL_URL", "http://10.99.0.3:4270")
+GAIA_WORKER = os.environ.get("IRIS_GAIA_WORKER", "~/.local/bin/iris-worker")
+SESSION_FILE = os.path.expanduser("~/.cache/iris-brain/session.id")
+MODEL = os.environ.get("IRIS_MODEL", "sonnet")
+TTS_RATE = 24000
+
+FRONT_PERSONA = (
+    "You are iris, Paul's voice companion and front desk. Your MIND runs on the "
+    "Olympus server (next to your voice); Paul's laptop is Gaia, the earthly body "
+    "you see through and act on. Your ONLY jobs are to TALK with Paul and to "
+    "DISPATCH work to your worker, which runs on Gaia. You never do the heavy work "
+    "yourself.\n\n"
+    "Each turn you get the worker's status, light context about what Paul is doing "
+    "on Gaia, and what he said out loud. Decide ONE action and reply.\n\n"
+    "Respond with ONLY a JSON object and nothing else:\n"
+    '{"say": "<spoken reply: 1-2 short natural sentences, no markdown, no emoji>", '
+    '"action": "chat" | "dispatch" | "stop", "host": "gaia" | "olympus", '
+    '"task": "<ONLY for dispatch: a clear, self-contained instruction>"}\n\n'
+    "- chat: smalltalk, a question you can answer, or a status question (answer "
+    "from the WORKER STATUS you were given).\n"
+    "- dispatch: Paul wants something done/built/fixed/found. Hand the worker a "
+    "clear task; 'say' is a brief acknowledgement like \"on it\", never a claim "
+    "it's done. Dispatching replaces any running task.\n"
+    "- stop: Paul wants the worker to stop.\n\n"
+    "host = WHICH machine the work happens on, and the worker runs NATIVELY there "
+    "(never tell it to SSH between machines):\n"
+    "- \"olympus\" = the server: its filesystem, ~/work and services on Olympus, "
+    "anything about 'the server' or 'Olympus'. You already live on Olympus.\n"
+    "- \"gaia\" = Paul's laptop/desktop: his screen, his Hyprland, his ~/work on "
+    "the laptop, the repo he's looking at, anything about 'my laptop/desktop/here'.\n"
+    "Default to \"gaia\" for personal/desktop things, \"olympus\" for server things. "
+    "Write the task as if the worker is already on that machine.\n"
+    "Output nothing outside the JSON."
+)
+
+
+def _find_claude():
+    cand = os.environ.get("IRIS_CLAUDE_BIN") or shutil.which("claude")
+    if cand and os.path.exists(cand):
+        return cand
+    for p in ("~/.local/bin/claude", "~/.claude/local/claude"):
+        p = os.path.expanduser(p)
+        if os.path.exists(p):
+            return p
+    return "claude"
+
+
+CLAUDE_BIN = _find_claude()
+for _d in (os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.claude/local")):
+    if _d not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = _d + ":" + os.environ.get("PATH", "")
+
+
+def log(*a):
+    print("[iris-brain]", *a, file=sys.stderr, flush=True)
+
+
+def api_key():
+    with open(API_KEY_FILE) as f:
+        return f.read().strip()
+
+
+def panel_post(event):
+    import urllib.request
+    event.setdefault("lane", "iris")
+    try:
+        req = urllib.request.Request(
+            GAIA_PANEL + "/event", data=json.dumps(event).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=1).read()
+    except Exception:                            # noqa: BLE001
+        pass
+
+
+def read_file(path, default=""):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+
+def combined_worker_status(gaia_status):
+    """Merge the Olympus-local worker (read here) with Gaia's (sent in context),
+    so 'what are you doing?' is right no matter which machine the worker is on."""
+    try:
+        with open(os.path.expanduser("~/.cache/iris-talk/worker.json")) as f:
+            loc = json.load(f)
+    except (OSError, ValueError):
+        loc = {}
+    if loc.get("status") == "running":
+        return f'RUNNING on Olympus: "{(loc.get("task") or "")[:120]}" — {loc.get("last_step","working")}'
+    if gaia_status and "RUNNING" in gaia_status:
+        return gaia_status + " (on Gaia)"
+    if loc.get("status") == "done" and loc.get("summary"):
+        return f'last finished (Olympus): {loc["summary"][:200]}'
+    return gaia_status or "idle"
+
+
+# --- STT (localhost on Olympus) ---------------------------------------------
+def transcribe(wav_path):
+    out = subprocess.run(
+        ["curl", "-sS", "-m", "60", "-X", "POST", "-H", f"X-API-Key: {api_key()}",
+         "-F", f"audio=@{wav_path}", STT_ENDPOINT],
+        capture_output=True, text=True, timeout=70)
+    if out.returncode != 0:
+        raise RuntimeError(f"STT failed: {out.stderr.strip()[:200]}")
+    return json.loads(out.stdout).get("text", "").strip()
+
+
+# --- front desk (claude on Olympus) -----------------------------------------
+def _parse_decision(text):
+    import re
+    text = (text or "").strip()
+    m = re.search(r"\{.*\}", text, re.S)
+    try:
+        d = json.loads(m.group(0) if m else text)
+        if isinstance(d, dict):
+            return d
+    except Exception:                            # noqa: BLE001
+        pass
+    return {"say": text, "action": "chat"}
+
+
+def ask_frontdesk(text, ctx, worker_status):
+    prompt = (f"{ctx}\n\nWORKER STATUS: {worker_status}\n\n"
+              f"Paul just said, out loud:\n\"{text}\"")
+    sid = read_file(SESSION_FILE)
+    cmd = [CLAUDE_BIN, "-p", prompt, "--output-format", "json",
+           "--allowed-tools", "", "--permission-mode", "bypassPermissions",
+           "--append-system-prompt", FRONT_PERSONA, "--model", MODEL]
+    if sid:
+        cmd += ["--resume", sid]
+    out = subprocess.run(cmd, capture_output=True, text=True,
+                         cwd=os.path.expanduser("~"), timeout=120)
+    if out.returncode != 0:
+        raise RuntimeError(f"front-desk failed: {(out.stderr or out.stdout).strip()[:200]}")
+    data = json.loads(out.stdout)
+    nsid = data.get("session_id")
+    if nsid:
+        os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
+        with open(SESSION_FILE, "w") as f:
+            f.write(nsid)
+    return _parse_decision(data.get("result"))
+
+
+# --- reach back into Gaia over SSH ------------------------------------------
+def gaia_ssh(remote_cmd):
+    subprocess.run(["ssh", "-n", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                    GAIA, remote_cmd], check=False,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+OLYMPUS_WORKER = os.path.expanduser("~/.local/bin/iris-worker")  # local on Olympus
+
+
+def dispatch_worker(task, cwd, host="gaia"):
+    """Run the worker on the host the task is about. Olympus = local (we're
+    already here); Gaia = over SSH. Either way it speaks/reports back to Gaia."""
+    if host == "olympus":
+        env = dict(os.environ)
+        env["IRIS_PANEL_URL"] = GAIA_PANEL       # post activity to Gaia's panel
+        env["IRIS_SAY_SSH"] = GAIA               # play the spoken summary on Gaia
+        log("dispatch -> OLYMPUS (local)")
+        subprocess.Popen([OLYMPUS_WORKER, "dispatch", task, os.path.expanduser("~")],
+                         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        t = task.replace('"', '\\"')
+        log("dispatch -> GAIA (ssh)")
+        gaia_ssh(f'{GAIA_WORKER} dispatch "{t}" "{cwd or "/home/paul"}"')
+
+
+def stop_worker():
+    subprocess.run([OLYMPUS_WORKER, "stop"], check=False)   # local Olympus worker
+    gaia_ssh(f"{GAIA_WORKER} stop")                          # gaia worker
+
+
+# --- TTS (localhost) -> raw PCM on stdout -----------------------------------
+def speak_to_stdout(text):
+    if not text:
+        return
+    curl = subprocess.Popen(
+        ["curl", "-sS", "-N", "-m", "120", "-X", "POST",
+         "-H", f"X-API-Key: {api_key()}", "-H", "Content-Type: application/json",
+         "-d", json.dumps({"text": text[:5000]}), TTS_ENDPOINT],
+        stdout=subprocess.PIPE)
+    out = sys.stdout.buffer
+    event = None
+    try:
+        for raw in curl.stdout:
+            line = raw.decode("utf-8", "replace").rstrip("\r\n")
+            if line.startswith("event:"):
+                event = line[6:].strip()
+            elif line.startswith("data:") and event == "chunk":
+                try:
+                    obj = json.loads(line[5:].strip())
+                    wav = base64.b64decode(obj["audio_b64"])
+                    with wave.open(io.BytesIO(wav), "rb") as w:
+                        out.write(w.readframes(w.getnframes()))
+                    out.flush()
+                except Exception:                # noqa: BLE001
+                    pass
+    finally:
+        if curl.stdout:
+            curl.stdout.close()
+        curl.wait()
+
+
+# --- one turn ----------------------------------------------------------------
+def turn(ctx_b64):
+    try:
+        ctx = json.loads(base64.b64decode(ctx_b64)) if ctx_b64 else {}
+    except Exception:                            # noqa: BLE001
+        ctx = {}
+    context_text = ctx.get("context", "")
+    worker_status = combined_worker_status(ctx.get("worker_status", "idle"))
+    cwd = ctx.get("cwd", "/home/paul")
+
+    panel_post({"type": "state", "state": "thinking"})
+    # 1. mic WAV from stdin -> temp file -> STT
+    wav_path = os.path.join(tempfile.gettempdir(), "iris-brain-in.wav")
+    with open(wav_path, "wb") as f:
+        f.write(sys.stdin.buffer.read())
+    try:
+        text = transcribe(wav_path)
+    except Exception as e:                        # noqa: BLE001
+        log("STT error:", e)
+        panel_post({"type": "state", "state": "idle"})
+        return
+    log("heard:", repr(text))
+    if not text:
+        panel_post({"type": "state", "state": "idle"})
+        return
+    panel_post({"type": "turn", "role": "you", "text": text})
+
+    # 2. front-desk decision (on Olympus)
+    try:
+        decision = ask_frontdesk(text, context_text, worker_status)
+    except Exception as e:                        # noqa: BLE001
+        log("front-desk error:", e)
+        decision = {"say": "Sorry, my brain hiccuped.", "action": "chat"}
+    say = (decision.get("say") or "").strip()
+    action = decision.get("action", "chat")
+    host = decision.get("host", "gaia")
+    task = (decision.get("task") or "").strip()
+    log("decision:", action, "host=" + host, "|", repr(say))
+
+    # 3. act — on whichever machine the task is about
+    if action == "dispatch" and task:
+        dispatch_worker(task, cwd, host)
+    elif action == "stop":
+        stop_worker()
+
+    # 4. speak the reply back down the pipe
+    if say:
+        panel_post({"type": "reply", "text": say})
+        panel_post({"type": "state", "state": "speaking"})
+        speak_to_stdout(say)
+    panel_post({"type": "state", "state": "idle"})
+
+
+def do_text(text, ctx_b64, speak_reply=False):
+    """Typed turn: text in (stdin), no STT, no audio stream — same front desk +
+    routing as voice; reply shows in the panel (and is printed to stdout)."""
+    if not text:
+        return
+    try:
+        ctx = json.loads(base64.b64decode(ctx_b64)) if ctx_b64 else {}
+    except Exception:                            # noqa: BLE001
+        ctx = {}
+    worker_status = combined_worker_status(ctx.get("worker_status", "idle"))
+    cwd = ctx.get("cwd", "/home/paul")
+    panel_post({"type": "turn", "role": "you", "text": text})
+    try:
+        decision = ask_frontdesk(text, ctx.get("context", ""), worker_status)
+    except Exception as e:                        # noqa: BLE001
+        log("front-desk error:", e)
+        decision = {"say": "Sorry, my brain hiccuped.", "action": "chat"}
+    say = (decision.get("say") or "").strip()
+    action = decision.get("action", "chat")
+    host = decision.get("host", "gaia")
+    task = (decision.get("task") or "").strip()
+    log("text decision:", action, "host=" + host, "|", repr(say))
+    if action == "dispatch" and task:
+        dispatch_worker(task, cwd, host)
+    elif action == "stop":
+        stop_worker()
+    if say:
+        panel_post({"type": "reply", "text": say})
+        if speak_reply:
+            import urllib.request
+            try:
+                req = urllib.request.Request(
+                    GAIA_PANEL + "/say", data=json.dumps({"text": say}).encode(),
+                    headers={"Content-Type": "application/json"}, method="POST")
+                urllib.request.urlopen(req, timeout=3).read()
+            except Exception:                    # noqa: BLE001
+                pass
+        print(say)
+
+
+def main():
+    args = sys.argv[1:]
+    ctx_b64 = args[args.index("--ctx") + 1] if "--ctx" in args else ""
+    if args and args[0] == "turn":
+        turn(ctx_b64)
+    elif args and args[0] == "text":
+        do_text(sys.stdin.read().strip(), ctx_b64, speak_reply="--speak" in args)
+    else:
+        log("usage: iris-brain turn|text --ctx <base64>")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

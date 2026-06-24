@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""
+iris-worker — the background "hands" of iris.
+
+iris (the front desk, in iris-talk) never does heavy work; she dispatches it
+here. This runs ONE background Claude session at a time, streams its steps to
+the panel's worker lane, and keeps a status file the front desk reads so she can
+tell Paul what the worker is doing — all without ever blocking the voice loop.
+
+The worker is a FULL agent (edits files, runs commands, completes tasks) running
+headless with bypassed permissions. iris narrates its steps; she does none of it.
+
+    iris-worker dispatch "<task>" [cwd]   start a fresh task (replaces any running)
+    iris-worker steer "<message>" [cwd]   stop, then resume the session with a nudge
+    iris-worker stop                      halt the worker
+    iris-worker status                    print the worker status (JSON)
+    iris-worker _run "<task>" <cwd> <resume0|1>   internal: the streaming body
+"""
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import urllib.request
+
+STATE_DIR = os.path.expanduser("~/.cache/iris-talk")
+WORKER_JSON = os.path.join(STATE_DIR, "worker.json")
+WORKER_PID = os.path.join(STATE_DIR, "worker.pid")
+WORKER_SESSION = os.path.join(STATE_DIR, "worker-session.id")
+PANEL_URL = os.environ.get("IRIS_PANEL_URL", "http://127.0.0.1:4270")
+IRIS_SAY = os.path.expanduser("~/.local/bin/iris-say")
+# If set, this worker speaks by SSHing to that host's iris-say (so a worker
+# running on Olympus still plays its voice on Gaia, where Paul is).
+SAY_SSH = os.environ.get("IRIS_SAY_SSH", "")
+BRAIN_CWD = os.path.expanduser("~/work/iris")   # isolate worker session storage
+if not os.path.isdir(BRAIN_CWD):                # (Olympus has no ~/work/iris)
+    BRAIN_CWD = os.path.expanduser("~")
+MODEL = os.environ.get("IRIS_WORKER_MODEL", "opus")
+HOME = os.path.expanduser("~")
+
+WORKER_PERSONA = (
+    "You are iris's worker — a background agent on Gaia, Paul's Asahi-Linux "
+    "Hyprland laptop. You DO the actual work his voice companion iris hands you: "
+    "edit files, run commands, build things, carry the task to completion. "
+    "Narrate each step in a short plain phrase as you go (iris relays these to "
+    "Paul by voice, so keep them spoken and brief — 'editing the waybar config', "
+    "'running the tests'). When finished, end with ONE short spoken-friendly "
+    "sentence summarizing what you did — no markdown, no lists, just a sentence."
+)
+
+
+def _find_claude():
+    cand = os.environ.get("IRIS_CLAUDE_BIN") or shutil.which("claude")
+    if cand and os.path.exists(cand):
+        return cand
+    for p in ("~/.local/bin/claude", "~/.claude/local/claude"):
+        p = os.path.expanduser(p)
+        if os.path.exists(p):
+            return p
+    return "claude"
+
+
+CLAUDE_BIN = _find_claude()
+for _d in (os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.claude/local")):
+    if _d not in os.environ.get("PATH", "").split(":"):
+        os.environ["PATH"] = _d + ":" + os.environ.get("PATH", "")
+
+
+def panel_post(event):
+    event.setdefault("lane", "worker")
+    try:
+        req = urllib.request.Request(
+            PANEL_URL + "/event", data=json.dumps(event).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=1).read()
+    except Exception:                            # noqa: BLE001
+        pass
+
+
+def spoken_summary(final):
+    """Pick a clean, speakable sentence from the worker's result — the worker is
+    told to END with a one-sentence spoken summary, so prefer the LAST prose line
+    (skip markdown headers/lists/code/tables)."""
+    if not final:
+        return "Done with that."
+    lines = [l.strip() for l in final.splitlines() if l.strip()]
+    prose = [l for l in lines if l[0] not in "#`*->|+" and not l.startswith("```")]
+    return (prose[-1] if prose else lines[-1])[:300]
+
+
+def speak(text):
+    """Speak via the panel's /say — it runs in Gaia's graphical session and can
+    reach PipeWire, unlike this worker (spawned over SSH, no audio access)."""
+    if not text:
+        return
+    try:
+        req = urllib.request.Request(
+            PANEL_URL + "/say", data=json.dumps({"text": text}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=3).read()
+        return
+    except Exception:                            # noqa: BLE001 — fall back to local
+        pass
+    env = dict(os.environ)
+    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    subprocess.run([IRIS_SAY], input=text, text=True, env=env, check=False)
+
+
+def read_status():
+    try:
+        with open(WORKER_JSON) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"status": "idle"}
+
+
+def write_status(**kw):
+    cur = read_status()
+    cur.update(kw)
+    tmp = WORKER_JSON + ".tmp"
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(tmp, "w") as f:
+        json.dump(cur, f)
+    os.replace(tmp, WORKER_JSON)
+    return cur
+
+
+# --- lifecycle --------------------------------------------------------------
+def _running_pid():
+    try:
+        with open(WORKER_PID) as f:
+            pid = int(f.read().strip())
+        os.killpg(pid, 0)
+        return pid
+    except (OSError, ValueError, ProcessLookupError):
+        return None
+
+
+def stop(announce=False):
+    pid = _running_pid()
+    if pid:
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    try:
+        os.unlink(WORKER_PID)
+    except FileNotFoundError:
+        pass
+    if read_status().get("status") == "running":
+        write_status(status="idle")
+        panel_post({"type": "state", "lane": "worker", "state": "idle"})
+
+
+def dispatch(task, cwd, resume=False):
+    stop()
+    cwd = cwd or HOME
+    write_status(status="running", task=task, cwd=cwd,
+                 started=time.time(), last_step="starting…", summary="")
+    panel_post({"type": "turn", "lane": "worker", "role": "task", "text": task})
+    panel_post({"type": "state", "lane": "worker", "state": "thinking"})
+    logf = open(os.path.join(STATE_DIR, "worker.log"), "a")   # so failures aren't silent
+    child = subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__), "_run", task, cwd,
+         "1" if resume else "0"],
+        stdout=logf, stderr=logf, start_new_session=True)
+    with open(WORKER_PID, "w") as f:
+        f.write(str(os.getpgid(child.pid)))
+
+
+def _summarize_tool_input(name, inp):
+    if isinstance(inp, dict):
+        for k in ("file_path", "path", "pattern", "command", "query", "url"):
+            if inp.get(k):
+                v = str(inp[k])
+                return os.path.basename(v) if k.endswith("path") else v
+    return ""
+
+
+def run(task, cwd, resume):
+    """The streaming worker body (runs in the detached child process)."""
+    session_id = ""
+    if resume:
+        try:
+            with open(WORKER_SESSION) as f:
+                session_id = f.read().strip()
+        except OSError:
+            pass
+
+    # Load iris's skills manifest (the README handles them): the worker should
+    # PREFER an existing skill over reinventing a desktop action by hand.
+    skills = ""
+    sp = os.path.expanduser("~/work/iris/skills/README.md")
+    if os.path.isfile(sp):
+        try:
+            with open(sp) as f:
+                skills = (
+                    "\n\nYOUR SKILLS — reusable helpers in ~/work/iris/skills/. "
+                    "PREFER running one of these over doing the same thing by hand; "
+                    "run with bash, e.g. `bash ~/work/iris/skills/type-into-window.sh "
+                    "<args>`. If a needed skill is missing, you may add a new script "
+                    "there and document it in this README.\n\n" + f.read())
+        except OSError:
+            pass
+
+    prompt = (f"Paul's current working directory is {cwd}.\n\n"
+              f"Task from Paul (via iris):\n{task}{skills}")
+    cmd = [CLAUDE_BIN, "-p", prompt,
+           "--output-format", "stream-json", "--verbose",
+           "--permission-mode", "bypassPermissions",   # full agent, headless
+           "--append-system-prompt", WORKER_PERSONA,
+           "--add-dir", cwd, "--add-dir", HOME,
+           "--model", MODEL]
+    if session_id:
+        cmd += ["--resume", session_id]
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, cwd=BRAIN_CWD)
+    final, sid, err = "", session_id, None
+    try:
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            t = ev.get("type")
+            if t == "system":
+                sid = ev.get("session_id", sid)
+            elif t == "assistant":
+                for b in (ev.get("message") or {}).get("content", []):
+                    if b.get("type") == "text" and b.get("text", "").strip():
+                        panel_post({"type": "assistant_text", "text": b["text"]})
+                        write_status(last_step=b["text"].strip()[:140])
+                    elif b.get("type") == "tool_use":
+                        s = _summarize_tool_input(b.get("name"), b.get("input"))
+                        panel_post({"type": "tool", "name": b.get("name", "tool"),
+                                    "summary": s, "input": b.get("input")})
+                        write_status(last_step=f"{b.get('name','reading')} {s}".strip()[:140])
+            elif t == "result":
+                final = (ev.get("result") or "").strip()
+                sid = ev.get("session_id", sid)
+                if ev.get("is_error"):
+                    err = final or "worker error"
+    finally:
+        proc.wait()
+
+    if sid:
+        with open(WORKER_SESSION, "w") as f:
+            f.write(sid)
+    try:
+        os.unlink(WORKER_PID)
+    except FileNotFoundError:
+        pass
+
+    spoken = spoken_summary(final)
+    if err and (not final):
+        write_status(status="error", summary=err[:300], last_step="error")
+        panel_post({"type": "reply", "text": f"⚠ {err[:200]}"})
+        panel_post({"type": "state", "lane": "worker", "state": "idle"})
+        # surface the failure in the iris conversation + speak it
+        panel_post({"type": "reply", "lane": "iris", "text": f"That ran into trouble: {err[:200]}"})
+        speak(f"That ran into trouble. {err[:160]}")
+        return
+    write_status(status="done", summary=final, last_step="done")
+    panel_post({"type": "reply", "text": final or "(done)"})        # worker lane: full detail
+    panel_post({"type": "state", "lane": "worker", "state": "idle"})
+    # Surface the result AS IRIS ANSWERING — full text in the iris conversation so
+    # you SEE it, and a clean one-sentence spoken summary so you HEAR the answer
+    # (not the markdown header).
+    panel_post({"type": "reply", "lane": "iris", "text": final or "(done)"})
+    speak(spoken)
+
+
+def status_cli():
+    print(json.dumps(read_status()))
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        status_cli(); return
+    cmd = args[0]
+    if cmd == "dispatch":
+        dispatch(args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else HOME)
+    elif cmd == "steer":
+        dispatch(args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else HOME,
+                 resume=True)
+    elif cmd == "stop":
+        stop()
+    elif cmd == "status":
+        status_cli()
+    elif cmd == "_run":
+        run(args[1], args[2], args[3] == "1")
+    else:
+        status_cli()
+
+
+if __name__ == "__main__":
+    main()

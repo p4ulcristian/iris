@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""
+iris-panel — a tiny local web server that renders, in real time, what iris (and
+the Claude brain behind it) is doing. iris-talk POSTs events here as a turn
+unfolds; the browser page subscribes over Server-Sent Events and draws a block
+per event (what you said, the context gathered, each tool call, the reply).
+
+Dependency-free (stdlib only). Served at http://127.0.0.1:4270/ and shown in a
+floating `chromium --app=` window opened from the waybar eye.
+
+Routes:
+    GET  /          the panel page (HTML/CSS/JS, all inline)
+    GET  /stream    SSE: replays the current turn's events, then streams live
+    POST /event     ingest one event  {type, ...}  (from iris-talk)
+    POST /reset     clear the panel for a fresh turn
+    GET  /health    {"ok": true}
+"""
+import json
+import os
+import queue
+import signal
+import subprocess
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# iris-panel runs as a Gaia user service (in the graphical session), so it can
+# reach PipeWire — unlike an SSH-spawned worker. So workers POST their spoken
+# summary here and we play it locally with proper audio access.
+IRIS_SAY = os.path.expanduser("~/.local/bin/iris-say")
+IRIS_TALK = os.path.expanduser("~/.local/bin/iris-talk")   # for typed turns → brain
+
+# Bind on all interfaces so the brain on Olympus can POST events over WireGuard.
+HOST = os.environ.get("IRIS_PANEL_HOST", "0.0.0.0")
+PORT = int(os.environ.get("IRIS_PANEL_PORT", "4270"))
+STATE_DIR = os.path.expanduser("~/.cache/iris-talk")
+HISTORY_FILE = os.path.join(STATE_DIR, "panel-events.json")
+MAX_EVENTS = 600
+
+_lock = threading.Lock()
+_events = []                 # ordered list of event dicts (current view)
+_clients = []                # list of queue.Queue, one per SSE connection
+_chat_proc = None            # the in-flight typed turn (so a new one can disrupt it)
+
+
+def _load():
+    global _events
+    try:
+        with open(HISTORY_FILE) as f:
+            _events = json.load(f)[-MAX_EVENTS:]
+    except (OSError, ValueError):
+        _events = []
+
+
+def _persist():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    tmp = HISTORY_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(_events[-MAX_EVENTS:], f)
+    os.replace(tmp, HISTORY_FILE)
+
+
+def publish(event):
+    """Append an event and fan it out to every connected browser."""
+    with _lock:
+        _events.append(event)
+        del _events[:-MAX_EVENTS]
+        _persist()
+        clients = list(_clients)
+    for q in clients:
+        try:
+            q.put_nowait(event)
+        except queue.Full:
+            pass
+
+
+def reset():
+    with _lock:
+        _events.clear()
+        _persist()
+        clients = list(_clients)
+    for q in clients:
+        try:
+            q.put_nowait({"type": "reset"})
+        except queue.Full:
+            pass
+
+
+def interrupt_speech():
+    """Stop whatever iris is saying/doing right now — the in-flight typed reply,
+    any iris-say playback, and (via the edge daemon) a voice reply mid-stream."""
+    global _chat_proc
+    if _chat_proc and _chat_proc.poll() is None:
+        try:
+            os.killpg(os.getpgid(_chat_proc.pid), signal.SIGTERM)
+        except Exception:                        # noqa: BLE001
+            pass
+        _chat_proc = None
+    subprocess.run([IRIS_SAY, "--stop"], check=False)
+    try:
+        with open(os.path.expanduser("~/.cache/iris-talk/edge.pid")) as f:
+            os.kill(int(f.read().strip()), signal.SIGUSR1)
+    except Exception:                            # noqa: BLE001
+        pass
+
+
+PAGE = r"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iris</title>
+<style>
+  :root{
+    --bg:#0a1614; --panel:#0f211e; --card:#13302b; --line:#1d4640;
+    --aqua:#5fe3cf; --aqua-dim:#2fd9bf; --ink:#dffaf4; --muted:#7fb3a9;
+    --you:#7fdcff; --iris:#b69cff; --tool:#dbbc7f; --warn:#e67e80;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);
+    font-family:'JetBrainsMono Nerd Font','JetBrains Mono',ui-monospace,monospace;
+    font-size:14px;line-height:1.5;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:10px;padding:12px 18px;
+    background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0}
+  header .eye{font-size:20px}
+  header h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.5px}
+  header .state{margin-left:auto;display:flex;align-items:center;gap:8px;
+    color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+  .dot.listening{background:var(--warn);animation:pulse 1s infinite alternate}
+  .dot.thinking{background:var(--tool);animation:pulse .8s infinite alternate}
+  .dot.speaking{background:var(--aqua);box-shadow:0 0 10px var(--aqua)}
+  .dot.idle{background:var(--aqua-dim)}
+  @keyframes pulse{to{opacity:.3}}
+  .spin{display:none;width:12px;height:12px;border:2px solid var(--line);
+    border-top-color:var(--aqua);border-radius:50%;animation:rot .7s linear infinite;
+    vertical-align:middle}
+  .spin.on{display:inline-block}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  main{flex:1;display:flex;min-height:0}
+  .pane{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:0}
+  .pane.worker{flex:0 0 42%;border-left:1px solid var(--line);background:#0b1a17}
+  .pane h2{position:sticky;top:-16px;margin:-16px -16px 6px;padding:9px 16px;z-index:1;
+    background:var(--panel);border-bottom:1px solid var(--line);font-size:11px;
+    text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);
+    display:flex;align-items:center;gap:8px}
+  .turn-sep{height:1px;background:var(--line);margin:8px 0 2px}
+  .note{align-self:center;color:var(--muted);font-size:11px;letter-spacing:.5px;
+    border:1px solid var(--line);border-radius:11px;padding:2px 11px;opacity:.85;margin:2px 0}
+  .task{background:#221f12;border-color:#4a4127}  .task .lbl{color:var(--tool)}
+  .wreply .lbl{color:var(--aqua)}  .wreply .body{font-size:14.5px}
+  .block{border:1px solid var(--line);border-radius:12px;padding:10px 14px;
+    background:var(--card);animation:rise .18s ease-out}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+  .block .lbl{display:flex;align-items:center;gap:8px;font-size:11px;
+    text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  .block .body{white-space:pre-wrap;word-break:break-word}
+  .you{border-color:#2a4a5a}   .you .lbl{color:var(--you)}
+  .iris{border-color:#3a2f5a}  .iris .lbl{color:var(--iris)}
+  .iris .body{font-size:15px}
+  .context{background:#0e2622}  .context .lbl{color:var(--aqua)}
+  .context .body{color:var(--muted);font-size:12.5px}
+  .tool{background:#221f12;border-color:#4a4127}  .tool .lbl{color:var(--tool)}
+  .tool pre{margin:6px 0 0;padding:8px;background:#0c0c08;border-radius:8px;
+    overflow-x:auto;font-size:12px;color:#cdbc8f}
+  pre.code{margin:6px 0 0;padding:10px;background:#08110f;border-radius:8px;
+    overflow-x:auto;border:1px solid var(--line)}
+  .empty{color:var(--muted);text-align:center;margin:auto;font-size:13px}
+  form#chatbar{display:flex;gap:8px;padding:10px 14px;background:var(--panel);border-top:1px solid var(--line)}
+  #chatin{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;
+    color:var(--ink);padding:9px 12px;font:inherit;outline:none}
+  #chatin:focus{border-color:var(--aqua)}
+  #chatbar button{background:var(--aqua-dim);color:#06201c;border:none;border-radius:10px;
+    padding:0 16px;font:inherit;font-weight:700;cursor:pointer}
+  #chatbar button:hover{background:var(--aqua)}
+  main::-webkit-scrollbar{width:9px} main::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
+</style></head>
+<body>
+  <header>
+    <span class="eye">👁</span><h1>iris</h1>
+    <span class="state"><span id="spin" class="spin"></span><span id="dot" class="dot idle"></span><span id="stateText">idle</span></span>
+  </header>
+  <main>
+    <section class="pane" id="pane-iris">
+      <h2>🗣 conversation</h2>
+      <div class="empty" id="empty">hold Fn and say something</div>
+    </section>
+    <section class="pane worker" id="pane-worker">
+      <h2><span id="wdot" class="dot idle"></span> worker <span id="wspin" class="spin"></span></h2>
+      <div class="empty" id="wempty">idle — nothing dispatched</div>
+    </section>
+  </main>
+  <form id="chatbar"><input id="chatin" placeholder="text iris…  (or hold Fn to talk)" autocomplete="off"><button>send</button></form>
+<script>
+const panes={iris:document.getElementById('pane-iris'),worker:document.getElementById('pane-worker')};
+const empties={iris:document.getElementById('empty'),worker:document.getElementById('wempty')};
+const dots={iris:document.getElementById('dot'),worker:document.getElementById('wdot')};
+const texts={iris:document.getElementById('stateText'),worker:null};
+const spins={iris:document.getElementById('spin'),worker:document.getElementById('wspin')};
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function fmt(s){
+  s=esc(s);
+  s=s.replace(/```(\w*)\n?([\s\S]*?)```/g,(m,l,c)=>`<pre class="code">${c.replace(/\n$/,'')}</pre>`);
+  return s;
+}
+function atBottom(p){ return p.scrollHeight-p.scrollTop-p.clientHeight < 80; }
+function add(lane,el){
+  const p=panes[lane]||panes.iris, e=empties[lane];
+  if(e&&e.parentNode) e.remove();
+  const stick=atBottom(p); p.appendChild(el); if(stick) p.scrollTop=p.scrollHeight;
+  return el;
+}
+function block(lane,cls,label,icon,bodyHtml){
+  const d=document.createElement('div'); d.className='block '+cls;
+  d.innerHTML=`<div class="lbl">${icon||''} ${label}</div><div class="body">${bodyHtml}</div>`;
+  return add(lane,d);
+}
+function setState(lane,s){ const dot=dots[lane]; if(dot) dot.className='dot '+s;
+  if(texts[lane]) texts[lane].textContent=s;
+  const sp=spins[lane]; if(sp) sp.className='spin'+(['thinking','listening','running'].includes(s)?' on':''); }
+const live={iris:null,worker:null};   // streaming text accumulator per lane
+function handle(ev){
+  const lane=ev.lane||'iris', worker=lane==='worker';
+  switch(ev.type){
+    case 'reset':
+      panes.iris.innerHTML='<div class="empty">cleared — hold Fn and say something</div>';
+      panes.worker.innerHTML='<div class="empty">idle</div>';
+      live.iris=null; live.worker=null; break;
+    case 'turn':
+      if(panes[lane].querySelector('.block')){const s=document.createElement('div');s.className='turn-sep';add(lane,s);}
+      live[lane]=null;
+      block(lane, worker?'task':'you', worker?'task':'you', worker?'🛠':'🗣', fmt(ev.text)); break;
+    case 'context':
+      block(lane,'context','context','👁',fmt(ev.block)); break;
+    case 'tool':{
+      let inp = ev.input? `<pre>${esc(typeof ev.input==='string'?ev.input:JSON.stringify(ev.input,null,2))}</pre>`:'';
+      block(lane,'tool','tool · '+esc(ev.name),'🔧',`<span>${esc(ev.summary||'')}</span>${inp}`); break;}
+    case 'assistant_text':
+      if(!live[lane]) live[lane]=block(lane, worker?'wreply':'iris', worker?'worker':'iris', worker?'🛠':'💬','');
+      live[lane].querySelector('.body').innerHTML += fmt(ev.text);
+      if(atBottom(panes[lane])) panes[lane].scrollTop=panes[lane].scrollHeight; break;
+    case 'reply':
+      if(live[lane]){ live[lane].querySelector('.body').innerHTML=fmt(ev.text); live[lane]=null; }
+      else block(lane, worker?'wreply':'iris', worker?'worker':'iris', worker?'🛠':'💬', fmt(ev.text)); break;
+    case 'note':{ const d=document.createElement('div'); d.className='note'; d.textContent=ev.text; add(lane,d); break; }
+    case 'state': setState(lane, ev.state); break;
+    case 'close': window.close(); break;
+  }
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') window.close(); });
+const chatbar=document.getElementById('chatbar'), chatin=document.getElementById('chatin');
+let typedInterrupt=false;
+chatin.addEventListener('input',()=>{                 // stop iris the moment you start typing
+  if(chatin.value && !typedInterrupt){ typedInterrupt=true; fetch('/interrupt',{method:'POST'}); }
+  if(!chatin.value) typedInterrupt=false;
+});
+chatbar.addEventListener('submit',e=>{ e.preventDefault(); const t=chatin.value.trim(); if(!t) return;
+  chatin.value=''; typedInterrupt=false;
+  fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:t})}); });
+const es=new EventSource('/stream');
+es.onmessage=e=>{ try{ handle(JSON.parse(e.data)); }catch(_){} };
+es.onerror=()=>{};
+</script></body></html>
+"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):           # quiet
+        pass
+
+    def _send(self, code, body=b"", ctype="text/plain"):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path == "/" or self.path.startswith("/index"):
+            self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+        elif self.path == "/health":
+            self._send(200, b'{"ok":true}', "application/json")
+        elif self.path == "/stream":
+            self._stream()
+        else:
+            self._send(404)
+
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length", 0))
+        raw = self.rfile.read(n) if n else b"{}"
+        if self.path == "/reset":
+            reset()
+            self._send(200, b'{"ok":true}', "application/json")
+            return
+        if self.path == "/close":
+            for q in list(_clients):
+                try:
+                    q.put_nowait({"type": "close"})
+                except queue.Full:
+                    pass
+            self._send(200, b'{"ok":true}', "application/json")
+            return
+        if self.path == "/interrupt":            # fired the moment you start typing
+            interrupt_speech()
+            self._send(200, b'{"ok":true}', "application/json")
+            return
+        if self.path == "/chat":
+            global _chat_proc
+            try:
+                text = json.loads(raw).get("text", "")
+            except ValueError:
+                text = ""
+            if text:
+                interrupt_speech()               # replace whatever iris was doing
+                _chat_proc = subprocess.Popen(
+                    [IRIS_TALK, "text-turn", text],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True)
+            self._send(200, b'{"ok":true}', "application/json")
+            return
+        if self.path == "/say":
+            try:
+                text = json.loads(raw).get("text", "")
+            except ValueError:
+                text = ""
+            if text:
+                # play in the background so the POST returns immediately
+                def _play(t):
+                    p = subprocess.Popen([IRIS_SAY], stdin=subprocess.PIPE, text=True)
+                    try:
+                        p.communicate(t, timeout=120)
+                    except Exception:        # noqa: BLE001
+                        pass
+                threading.Thread(target=_play, args=(text,), daemon=True).start()
+            self._send(200, b'{"ok":true}', "application/json")
+            return
+        if self.path == "/event":
+            try:
+                publish(json.loads(raw))
+                self._send(200, b'{"ok":true}', "application/json")
+            except ValueError:
+                self._send(400, b'{"error":"bad json"}', "application/json")
+            return
+        self._send(404)
+
+    def _stream(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        q = queue.Queue(maxsize=1000)
+        with _lock:
+            backlog = list(_events)
+            _clients.append(q)
+        try:
+            for ev in backlog:
+                self._write_event(ev)
+            while True:
+                try:
+                    ev = q.get(timeout=20)
+                    self._write_event(ev)
+                except queue.Empty:
+                    self.wfile.write(b": ping\n\n")   # keep-alive
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            with _lock:
+                if q in _clients:
+                    _clients.remove(q)
+
+    def _write_event(self, ev):
+        self.wfile.write(b"data: " + json.dumps(ev).encode("utf-8") + b"\n\n")
+        self.wfile.flush()
+
+
+def main():
+    _load()
+    srv = ThreadingHTTPServer((HOST, PORT), Handler)
+    srv.daemon_threads = True
+    print(f"iris-panel: http://{HOST}:{PORT}/  ({len(_events)} events loaded)", flush=True)
+    srv.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

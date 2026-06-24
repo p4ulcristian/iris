@@ -1,0 +1,3 @@
+# Overview
+
+iris (iris-talk) is a spoken voice companion for Paul's Hyprland desktop that listens, understands what's on screen, and talks back. It captures speech via push-to-talk, transcribes it with a remote STT service, and enriches each request with live desktop context — the active window, the focused terminal's working directory and git state, your running Claude Code session, and an on-demand screenshot. That context is sent to a Claude Code subscription in print mode as the "brain," which thinks with vision and file access before replying, and the answer is spoken aloud through a remote TTS service. You drive it with Super+I or a waybar eye that shows whether iris is idle, listening, thinking, or speaking.
