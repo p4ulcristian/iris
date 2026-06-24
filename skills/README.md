@@ -53,12 +53,6 @@ host/port with the `CDP_HOST` / `CDP_PORT` env vars.
 - **type-into-window.sh** `<window-address> <string>` — focus a Hyprland window
   (via the `hl.dsp.focus` Lua API), type the string with `wtype`, press Enter.
 
-- **play-youtube.sh** `[youtube-url | video-id | search terms]` — open Chrome
-  (or Chromium) with remote debugging on port 9222 (launching it if needed),
-  open the requested YouTube URL, and force autoplay via the DevTools protocol.
-  With no argument it plays a default music video; a bare 11-char id becomes a
-  watch URL; free text becomes a search.
-
 - **play-youtube-cdp.sh** `<youtube-url | video-id | search terms>` — play a
   video by driving an **already-running** Chromium via the DevTools Protocol
   (port 9222). Finds the open YouTube tab through `http://localhost:9222/json`
@@ -67,11 +61,7 @@ host/port with the `CDP_HOST` / `CDP_PORT` env vars.
   autoplay (unmute + play). A bare 11-char id becomes a watch URL; free text
   becomes a search. **Requirement:** Chromium must already be running with
   `--remote-debugging-port=9222 --remote-allow-origins=*` — this script does
-  *not* launch the browser (use `play-youtube.sh` for that). Needs `curl` + `jq`.
-
-- **test-play-youtube.sh** `[same args as play-youtube]` — run `play-youtube.sh`
-  then verify via the DevTools API that the debug endpoint is live and a YouTube
-  tab is open. Use it to sanity-check the skill.
+  *not* launch the browser. Needs `curl` + `jq`.
 
 - **youtube-player/** — a self-contained YouTube player webapp iris can control.
   A tiny local server (`server.py`, default port 8745) serves a full-page,
@@ -86,26 +76,6 @@ host/port with the `CDP_HOST` / `CDP_PORT` env vars.
     mode (`--app=http://localhost:8745 --window-size=800,600`). Idempotent.
   - REST API (all `GET`): `/play?v=VIDEO_ID`, `/pause`, `/resume`, `/stop`.
     Override the port with the `IRIS_YT_PORT` env var.
-
-- **play-camoufox-yt.py** — minimal headful Camoufox script: opens a YouTube
-  watch URL in the shared `camoufox-profile/` and holds the window open ~60s.
-  Run with the venv python. **Two gotchas on Gaia (both handled in
-  camoufox-report.md):** (1) headful needs the Wayland env exported —
-  `WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/user/1000 MOZ_ENABLE_WAYLAND=1`
-  — or it dies with "no XServer"; (2) the bundled Playwright 1.60 Firefox driver
-  crashes on YouTube watch pages (`pageError.location` undefined) until the
-  coreBundle.js patch is applied.
-
-- **browser-test.py** + **camoufox-venv/** — stealth browser automation via
-  [Camoufox](https://camoufox.com) (anti-fingerprint Firefox driven by
-  Playwright). Use it when a task needs a **logged-in** session or must avoid
-  bot detection. Run scripts with the dedicated venv python:
-  `~/work/iris/skills/camoufox-venv/bin/python <script.py>`. The smoke test
-  `camoufox-venv/bin/python browser-test.py [--headed] [--url U]` launches
-  Camoufox, opens YouTube, and prints the title. Camoufox uses its **own**
-  persistent profile at `camoufox-profile/` (log in once with `--headed`, then
-  drive it headless) — it cannot attach to Chrome's profile. Full notes,
-  including the one-time login flow, in **camoufox-report.md**.
 
 ### Telegram (bot @irishelpsme_bot)
 
