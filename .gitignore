@@ -34,6 +34,10 @@ memory/
 .playwright-mcp/
 powers/hear/models/
 
+# Worker registry (runtime state written next to the brain scripts)
+brain/workers.json
+brain/workers.json.*
+
 # iris secrets & local browser profile (excluded from public repo)
 config/telegram.env
 config/telegram-chat-id

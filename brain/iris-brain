@@ -46,13 +46,22 @@ FRONT_PERSONA = (
     "Respond with ONLY a JSON object and nothing else:\n"
     '{"say": "<spoken reply: 1-2 short natural sentences, no markdown, no emoji>", '
     '"action": "chat" | "dispatch" | "stop", "host": "gaia" | "olympus", '
+    '"worker": <optional worker number to target>, '
     '"task": "<ONLY for dispatch: a clear, self-contained instruction>"}\n\n'
     "- chat: smalltalk, a question you can answer, or a status question (answer "
     "from the WORKER STATUS you were given).\n"
-    "- dispatch: Paul wants something done/built/fixed/found. Hand the worker a "
+    "- dispatch: Paul wants something done/built/fixed/found. Hand a worker a "
     "clear task; 'say' is a brief acknowledgement like \"on it\", never a claim "
-    "it's done. Dispatching replaces any running task.\n"
-    "- stop: Paul wants the worker to stop.\n\n"
+    "it's done.\n"
+    "- stop: Paul wants a worker to stop.\n\n"
+    "WORKERS: you have several numbered workers (worker-1, worker-2, …) that run "
+    "in PARALLEL — each its own task and conversation. The WORKER STATUS lists "
+    "them. For dispatch/stop you MAY set \"worker\" to a number:\n"
+    "- If Paul names one (\"worker two\", \"the second one\"), target that number.\n"
+    "- For dispatch with no number, OMIT \"worker\" — a free worker is auto-"
+    "assigned and a busy one is NOT interrupted (a new task runs alongside).\n"
+    "- For stop with no number, OMIT \"worker\" to stop them all; set a number to "
+    "stop just one.\n\n"
     "host = WHICH machine the work happens on, and the worker runs NATIVELY there "
     "(never tell it to SSH between machines):\n"
     "- \"olympus\" = the server: its filesystem, ~/work and services on Olympus, "
@@ -111,21 +120,37 @@ def read_file(path, default=""):
         return default
 
 
-def combined_worker_status(gaia_status):
-    """Merge the Olympus-local worker (read here) with Gaia's (sent in context),
-    so 'what are you doing?' is right no matter which machine the worker is on."""
+def _olympus_registry():
+    """The Olympus-local worker registry, wherever the worker writes it."""
+    cand = os.path.expanduser("~/work/iris/brain/workers.json")
+    if not os.path.isdir(os.path.dirname(cand)):
+        cand = os.path.expanduser("~/.cache/iris-talk/workers.json")
     try:
-        with open(os.path.expanduser("~/.cache/iris-talk/worker.json")) as f:
-            loc = json.load(f)
+        with open(cand) as f:
+            return json.load(f)
     except (OSError, ValueError):
-        loc = {}
-    if loc.get("status") == "running":
-        return f'RUNNING on Olympus: "{(loc.get("task") or "")[:120]}" — {loc.get("last_step","working")}'
-    if gaia_status and "RUNNING" in gaia_status:
-        return gaia_status + " (on Gaia)"
-    if loc.get("status") == "done" and loc.get("summary"):
-        return f'last finished (Olympus): {loc["summary"][:200]}'
-    return gaia_status or "idle"
+        return {}
+
+
+def combined_worker_status(gaia_status):
+    """Summarize every numbered worker so 'what are you doing?' is right no matter
+    which machine each runs on. Merges the Olympus-local registry (read here) with
+    Gaia's status (sent in context)."""
+    reg = _olympus_registry()
+    lines = []
+    for k in sorted(reg, key=lambda x: int(x) if str(x).isdigit() else 0):
+        v = reg[k]
+        st = v.get("status", "idle")
+        task = (v.get("task") or "")[:100]
+        if st == "running":
+            lines.append(f'worker-{k} (Olympus) RUNNING: "{task}" — {v.get("last_step","working")}')
+        elif st == "done" and v.get("summary"):
+            lines.append(f'worker-{k} (Olympus) last finished: {v["summary"][:150]}')
+        else:
+            lines.append(f'worker-{k} (Olympus) {st}')
+    if gaia_status and gaia_status not in ("idle", "unknown"):
+        lines.append(f'{gaia_status} (on Gaia)')
+    return "\n".join(lines) if lines else (gaia_status or "idle")
 
 
 # --- STT (localhost on Olympus) ---------------------------------------------
@@ -151,6 +176,16 @@ def _parse_decision(text):
     except Exception:                            # noqa: BLE001
         pass
     return {"say": text, "action": "chat"}
+
+
+def _worker_num(decision):
+    """Coerce the optional 'worker' field to a positive int, else None (auto)."""
+    w = decision.get("worker")
+    try:
+        n = int(w)
+        return n if n > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 def ask_frontdesk(text, ctx, worker_status):
@@ -185,25 +220,32 @@ def gaia_ssh(remote_cmd):
 OLYMPUS_WORKER = os.path.expanduser("~/.local/bin/iris-worker")  # local on Olympus
 
 
-def dispatch_worker(task, cwd, host="gaia"):
-    """Run the worker on the host the task is about. Olympus = local (we're
-    already here); Gaia = over SSH. Either way it speaks/reports back to Gaia."""
+def dispatch_worker(task, cwd, host="gaia", worker=None):
+    """Run a worker on the host the task is about. Olympus = local (we're already
+    here); Gaia = over SSH. A worker number targets a specific lane; omit it to
+    auto-assign the next free worker. Either way it reports back to Gaia."""
+    wflag = ["-w", str(worker)] if worker else []
     if host == "olympus":
         env = dict(os.environ)
         env["IRIS_PANEL_URL"] = GAIA_PANEL       # post activity to Gaia's panel
         env["IRIS_SAY_SSH"] = GAIA               # play the spoken summary on Gaia
-        log("dispatch -> OLYMPUS (local)")
-        subprocess.Popen([OLYMPUS_WORKER, "dispatch", task, os.path.expanduser("~")],
+        log("dispatch -> OLYMPUS (local) worker=", worker or "auto")
+        subprocess.Popen([OLYMPUS_WORKER, "dispatch", task,
+                          os.path.expanduser("~")] + wflag,
                          env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         t = task.replace('"', '\\"')
-        log("dispatch -> GAIA (ssh)")
-        gaia_ssh(f'{GAIA_WORKER} dispatch "{t}" "{cwd or "/home/paul"}"')
+        log("dispatch -> GAIA (ssh) worker=", worker or "auto")
+        wf = f" -w {int(worker)}" if worker else ""
+        gaia_ssh(f'{GAIA_WORKER} dispatch "{t}" "{cwd or "/home/paul"}"{wf}')
 
 
-def stop_worker():
-    subprocess.run([OLYMPUS_WORKER, "stop"], check=False)   # local Olympus worker
-    gaia_ssh(f"{GAIA_WORKER} stop")                          # gaia worker
+def stop_worker(worker=None):
+    """Stop a specific worker number on both hosts, or all workers when omitted."""
+    wf = ["-w", str(int(worker))] if worker else ["--all"]
+    sw = f" -w {int(worker)}" if worker else " --all"
+    subprocess.run([OLYMPUS_WORKER, "stop"] + wf, check=False)   # local Olympus
+    gaia_ssh(f"{GAIA_WORKER} stop{sw}")                          # gaia
 
 
 # --- TTS (localhost) -> raw PCM on stdout -----------------------------------
@@ -274,13 +316,14 @@ def turn(ctx_b64):
     action = decision.get("action", "chat")
     host = decision.get("host", "gaia")
     task = (decision.get("task") or "").strip()
-    log("decision:", action, "host=" + host, "|", repr(say))
+    worker = _worker_num(decision)
+    log("decision:", action, "host=" + host, "worker=" + str(worker), "|", repr(say))
 
     # 3. act — on whichever machine the task is about
     if action == "dispatch" and task:
-        dispatch_worker(task, cwd, host)
+        dispatch_worker(task, cwd, host, worker)
     elif action == "stop":
-        stop_worker()
+        stop_worker(worker)
 
     # 4. speak the reply back down the pipe
     if say:
@@ -311,11 +354,12 @@ def do_text(text, ctx_b64, speak_reply=False):
     action = decision.get("action", "chat")
     host = decision.get("host", "gaia")
     task = (decision.get("task") or "").strip()
-    log("text decision:", action, "host=" + host, "|", repr(say))
+    worker = _worker_num(decision)
+    log("text decision:", action, "host=" + host, "worker=" + str(worker), "|", repr(say))
     if action == "dispatch" and task:
-        dispatch_worker(task, cwd, host)
+        dispatch_worker(task, cwd, host, worker)
     elif action == "stop":
-        stop_worker()
+        stop_worker(worker)
     if say:
         panel_post({"type": "reply", "text": say})
         if speak_reply:

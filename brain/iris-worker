@@ -3,32 +3,56 @@
 iris-worker — the background "hands" of iris.
 
 iris (the front desk, in iris-talk) never does heavy work; she dispatches it
-here. This runs ONE background Claude session at a time, streams its steps to
-the panel's worker lane, and keeps a status file the front desk reads so she can
-tell Paul what the worker is doing — all without ever blocking the voice loop.
+here. Each task runs as a numbered worker (worker-1, worker-2, …) — an
+independent background Claude session with its own identity, task, and
+conversation. Workers run in PARALLEL: dispatching a second task spins up a
+second worker rather than replacing the first. Every worker streams its steps
+to the panel's worker lane and records its state in a shared registry the front
+desk and panel read.
 
-The worker is a FULL agent (edits files, runs commands, completes tasks) running
+A worker is a FULL agent (edits files, runs commands, completes tasks) running
 headless with bypassed permissions. iris narrates its steps; she does none of it.
 
-    iris-worker dispatch "<task>" [cwd]   start a fresh task (replaces any running)
-    iris-worker steer "<message>" [cwd]   stop, then resume the session with a nudge
-    iris-worker stop                      halt the worker
-    iris-worker status                    print the worker status (JSON)
-    iris-worker _run "<task>" <cwd> <resume0|1>   internal: the streaming body
+    iris-worker dispatch "<task>" [cwd] [-w N]   start a task on worker N
+                                                 (auto-assigns the next free
+                                                 worker when -w is omitted)
+    iris-worker steer "<message>" [cwd] [-w N]   resume worker N with a nudge
+    iris-worker stop [-w N | --all]              halt one worker (default: all)
+    iris-worker status [-w N]                    print worker N's status, or the
+                                                 whole registry as JSON
+    iris-worker workers                          print the registry (JSON list)
+    iris-worker cleanup [--force] [--json]       stop workers idle >10 min;
+                                                 ones with history need --force
+    iris-worker _run "<task>" <cwd> <resume0|1> <num>   internal: streaming body
+
+The registry lives at ~/work/iris/brain/workers.json (override with
+IRIS_WORKERS_JSON); per-worker runtime files live under ~/.cache/iris-talk/workers/.
 """
+import contextlib
+import fcntl
 import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
 import urllib.request
 
 STATE_DIR = os.path.expanduser("~/.cache/iris-talk")
-WORKER_JSON = os.path.join(STATE_DIR, "worker.json")
-WORKER_PID = os.path.join(STATE_DIR, "worker.pid")
-WORKER_SESSION = os.path.join(STATE_DIR, "worker-session.id")
+WORKERS_DIR = os.path.join(STATE_DIR, "workers")
+# The registry is the shared, consolidated view every worker, the panel, and the
+# brain read. Default to the in-repo path Paul asked for; fall back to the cache
+# dir on hosts without ~/work/iris (e.g. Olympus).
+_reg_default = os.path.expanduser("~/work/iris/brain/workers.json")
+if not os.path.isdir(os.path.dirname(_reg_default)):
+    _reg_default = os.path.join(STATE_DIR, "workers.json")
+REGISTRY = os.environ.get("IRIS_WORKERS_JSON", _reg_default)
+# Legacy single-worker status file — kept mirrored from worker-1 so older readers
+# (status-loop.sh, the brain's fallback) keep working.
+LEGACY_JSON = os.path.join(STATE_DIR, "worker.json")
+
 PANEL_URL = os.environ.get("IRIS_PANEL_URL", "http://127.0.0.1:4270")
 IRIS_SAY = os.path.expanduser("~/.local/bin/iris-say")
 # If set, this worker speaks by SSHing to that host's iris-say (so a worker
@@ -39,16 +63,22 @@ if not os.path.isdir(BRAIN_CWD):                # (Olympus has no ~/work/iris)
     BRAIN_CWD = os.path.expanduser("~")
 MODEL = os.environ.get("IRIS_WORKER_MODEL", "opus")
 HOME = os.path.expanduser("~")
+HOST = socket.gethostname().split(".")[0]
+IDLE_SECS = int(os.environ.get("IRIS_WORKER_IDLE_SECS", "600"))   # 10 min
 
-WORKER_PERSONA = (
-    "You are iris's worker — a background agent on Gaia, Paul's Asahi-Linux "
-    "Hyprland laptop. You DO the actual work his voice companion iris hands you: "
-    "edit files, run commands, build things, carry the task to completion. "
-    "Narrate each step in a short plain phrase as you go (iris relays these to "
-    "Paul by voice, so keep them spoken and brief — 'editing the waybar config', "
-    "'running the tests'). When finished, end with ONE short spoken-friendly "
-    "sentence summarizing what you did — no markdown, no lists, just a sentence."
-)
+
+def worker_persona(num):
+    return (
+        f"You are iris's worker-{num} — background agent #{num}, one of several "
+        "iris can run in parallel on Gaia, Paul's Asahi-Linux Hyprland laptop. "
+        f"You are worker-{num}; you own this task and this conversation alone — "
+        "other workers have their own. You DO the actual work iris hands you: "
+        "edit files, run commands, build things, carry the task to completion. "
+        "Narrate each step in a short plain phrase as you go (iris relays these "
+        "to Paul by voice, so keep them spoken and brief — 'editing the waybar "
+        "config', 'running the tests'). When finished, end with ONE short "
+        "spoken-friendly sentence summarizing what you did — no markdown, no "
+        "lists, just a sentence.")
 
 
 def _find_claude():
@@ -68,8 +98,118 @@ for _d in (os.path.expanduser("~/.local/bin"), os.path.expanduser("~/.claude/loc
         os.environ["PATH"] = _d + ":" + os.environ.get("PATH", "")
 
 
-def panel_post(event):
-    event.setdefault("lane", "worker")
+# --- per-worker runtime paths -----------------------------------------------
+def pid_path(num):
+    return os.path.join(WORKERS_DIR, f"worker-{num}.pid")
+
+
+def session_path(num):
+    return os.path.join(WORKERS_DIR, f"worker-{num}-session.id")
+
+
+def lane(num):
+    return f"worker-{num}"
+
+
+# --- registry (locked read-modify-write) ------------------------------------
+@contextlib.contextmanager
+def _locked_registry():
+    """Yield the registry dict for in-place mutation, then persist it atomically.
+    A flock on a sidecar file serializes parallel workers writing the registry."""
+    os.makedirs(os.path.dirname(REGISTRY), exist_ok=True)
+    lf = open(REGISTRY + ".lock", "w")
+    fcntl.flock(lf, fcntl.LOCK_EX)
+    try:
+        try:
+            with open(REGISTRY) as f:
+                reg = json.load(f)
+        except (OSError, ValueError):
+            reg = {}
+        yield reg
+        tmp = REGISTRY + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(reg, f, indent=2)
+        os.replace(tmp, REGISTRY)
+    finally:
+        fcntl.flock(lf, fcntl.LOCK_UN)
+        lf.close()
+
+
+def read_registry():
+    try:
+        with open(REGISTRY) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def get_worker(num):
+    return read_registry().get(str(num), {})
+
+
+def update_worker(num, **kw):
+    """Patch worker N's registry entry. Mirrors worker-1 to the legacy file."""
+    with _locked_registry() as reg:
+        entry = reg.get(str(num)) or {}
+        entry["num"] = num
+        entry.update(kw)
+        reg[str(num)] = entry
+    if int(num) == 1:
+        _write_legacy(entry)
+    return entry
+
+
+def remove_worker(num):
+    with _locked_registry() as reg:
+        reg.pop(str(num), None)
+
+
+def _write_legacy(entry):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        tmp = LEGACY_JSON + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(entry, f)
+        os.replace(tmp, LEGACY_JSON)
+    except OSError:
+        pass
+
+
+def pid_alive(pid):
+    if not pid:
+        return False
+    try:
+        os.killpg(int(pid), 0)
+        return True
+    except (OSError, ProcessLookupError, ValueError):
+        return False
+
+
+def is_running(entry):
+    return entry.get("status") == "running" and pid_alive(entry.get("pid"))
+
+
+def next_worker_num():
+    """Least-busy idle slot if one exists, else the next free number."""
+    reg = read_registry()
+    busy = {int(k) for k, v in reg.items() if is_running(v)}
+    # Reuse the lowest existing-but-idle worker so we don't accumulate slots.
+    for n in sorted(int(k) for k in reg):
+        if n not in busy:
+            return n
+    n = 1
+    while n in busy:
+        n += 1
+    return n
+
+
+# --- panel + voice ----------------------------------------------------------
+def panel_post(event, num=None):
+    if num is not None:
+        event.setdefault("lane", lane(num))
+        event.setdefault("worker", int(num))
+    else:
+        event.setdefault("lane", "worker")
     try:
         req = urllib.request.Request(
             PANEL_URL + "/event", data=json.dumps(event).encode("utf-8"),
@@ -108,66 +248,58 @@ def speak(text):
     subprocess.run([IRIS_SAY], input=text, text=True, env=env, check=False)
 
 
-def read_status():
-    try:
-        with open(WORKER_JSON) as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {"status": "idle"}
-
-
-def write_status(**kw):
-    cur = read_status()
-    cur.update(kw)
-    tmp = WORKER_JSON + ".tmp"
-    os.makedirs(STATE_DIR, exist_ok=True)
-    with open(tmp, "w") as f:
-        json.dump(cur, f)
-    os.replace(tmp, WORKER_JSON)
-    return cur
-
-
 # --- lifecycle --------------------------------------------------------------
-def _running_pid():
-    try:
-        with open(WORKER_PID) as f:
-            pid = int(f.read().strip())
-        os.killpg(pid, 0)
-        return pid
-    except (OSError, ValueError, ProcessLookupError):
-        return None
-
-
-def stop(announce=False):
-    pid = _running_pid()
+def stop(num, announce=False):
+    """Halt worker N; keep its registry entry (and session) so it can be steered
+    or inspected. cleanup() is what actually removes a worker."""
+    entry = get_worker(num)
+    pid = entry.get("pid")
+    if not pid:
+        try:
+            with open(pid_path(num)) as f:
+                pid = int(f.read().strip())
+        except (OSError, ValueError):
+            pid = None
     if pid:
         try:
-            os.killpg(pid, signal.SIGTERM)
-        except ProcessLookupError:
+            os.killpg(int(pid), signal.SIGTERM)
+        except (OSError, ProcessLookupError, ValueError):
             pass
-    try:
-        os.unlink(WORKER_PID)
-    except FileNotFoundError:
-        pass
-    if read_status().get("status") == "running":
-        write_status(status="idle")
-        panel_post({"type": "state", "lane": "worker", "state": "idle"})
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(pid_path(num))
+    if entry.get("status") == "running":
+        update_worker(num, status="idle", pid=None, last_active=time.time(),
+                      last_step="stopped")
+        panel_post({"type": "state", "state": "idle"}, num)
 
 
-def dispatch(task, cwd, resume=False):
-    stop()
+def stop_all():
+    for k in list(read_registry().keys()):
+        stop(int(k))
+
+
+def dispatch(num, task, cwd, resume=False):
     cwd = cwd or HOME
-    write_status(status="running", task=task, cwd=cwd,
-                 started=time.time(), last_step="starting…", summary="")
-    panel_post({"type": "turn", "lane": "worker", "role": "task", "text": task})
-    panel_post({"type": "state", "lane": "worker", "state": "thinking"})
-    logf = open(os.path.join(STATE_DIR, "worker.log"), "a")   # so failures aren't silent
+    if num is None:
+        num = next_worker_num()
+    stop(num)                                    # replace whatever was on this slot
+    now = time.time()
+    update_worker(num, status="running", task=task, cwd=cwd, host=HOST,
+                  started=now, last_active=now, last_step="starting…",
+                  summary="", pid=None)
+    panel_post({"type": "turn", "role": "task", "text": task}, num)
+    panel_post({"type": "state", "state": "thinking"}, num)
+    os.makedirs(WORKERS_DIR, exist_ok=True)
+    logf = open(os.path.join(WORKERS_DIR, f"worker-{num}.log"), "a")   # not silent
     child = subprocess.Popen(
         [sys.executable, os.path.abspath(__file__), "_run", task, cwd,
-         "1" if resume else "0"],
+         "1" if resume else "0", str(num)],
         stdout=logf, stderr=logf, start_new_session=True)
-    with open(WORKER_PID, "w") as f:
-        f.write(str(os.getpgid(child.pid)))
+    pgid = os.getpgid(child.pid)
+    with open(pid_path(num), "w") as f:
+        f.write(str(pgid))
+    update_worker(num, pid=pgid)
+    return num
 
 
 def _summarize_tool_input(name, inp):
@@ -179,12 +311,12 @@ def _summarize_tool_input(name, inp):
     return ""
 
 
-def run(task, cwd, resume):
+def run(task, cwd, resume, num):
     """The streaming worker body (runs in the detached child process)."""
     session_id = ""
     if resume:
         try:
-            with open(WORKER_SESSION) as f:
+            with open(session_path(num)) as f:
                 session_id = f.read().strip()
         except OSError:
             pass
@@ -210,7 +342,7 @@ def run(task, cwd, resume):
     cmd = [CLAUDE_BIN, "-p", prompt,
            "--output-format", "stream-json", "--verbose",
            "--permission-mode", "bypassPermissions",   # full agent, headless
-           "--append-system-prompt", WORKER_PERSONA,
+           "--append-system-prompt", worker_persona(num),
            "--add-dir", cwd, "--add-dir", HOME,
            "--model", MODEL]
     if session_id:
@@ -234,13 +366,16 @@ def run(task, cwd, resume):
             elif t == "assistant":
                 for b in (ev.get("message") or {}).get("content", []):
                     if b.get("type") == "text" and b.get("text", "").strip():
-                        panel_post({"type": "assistant_text", "text": b["text"]})
-                        write_status(last_step=b["text"].strip()[:140])
+                        panel_post({"type": "assistant_text", "text": b["text"]}, num)
+                        update_worker(num, last_step=b["text"].strip()[:140],
+                                      last_active=time.time())
                     elif b.get("type") == "tool_use":
                         s = _summarize_tool_input(b.get("name"), b.get("input"))
                         panel_post({"type": "tool", "name": b.get("name", "tool"),
-                                    "summary": s, "input": b.get("input")})
-                        write_status(last_step=f"{b.get('name','reading')} {s}".strip()[:140])
+                                    "summary": s, "input": b.get("input")}, num)
+                        update_worker(num,
+                                      last_step=f"{b.get('name','reading')} {s}".strip()[:140],
+                                      last_active=time.time())
             elif t == "result":
                 final = (ev.get("result") or "").strip()
                 sid = ev.get("session_id", sid)
@@ -250,34 +385,113 @@ def run(task, cwd, resume):
         proc.wait()
 
     if sid:
-        with open(WORKER_SESSION, "w") as f:
+        os.makedirs(WORKERS_DIR, exist_ok=True)
+        with open(session_path(num), "w") as f:
             f.write(sid)
-    try:
-        os.unlink(WORKER_PID)
-    except FileNotFoundError:
-        pass
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(pid_path(num))
 
     spoken = spoken_summary(final)
     if err and (not final):
-        write_status(status="error", summary=err[:300], last_step="error")
-        panel_post({"type": "reply", "text": f"⚠ {err[:200]}"})
-        panel_post({"type": "state", "lane": "worker", "state": "idle"})
+        update_worker(num, status="error", summary=err[:300], last_step="error",
+                      session=sid, pid=None, last_active=time.time())
+        panel_post({"type": "reply", "text": f"⚠ {err[:200]}"}, num)
+        panel_post({"type": "state", "state": "idle"}, num)
         # surface the failure in the iris conversation + speak it
-        panel_post({"type": "reply", "lane": "iris", "text": f"That ran into trouble: {err[:200]}"})
-        speak(f"That ran into trouble. {err[:160]}")
+        panel_post({"type": "reply", "lane": "iris",
+                    "text": f"worker-{num} ran into trouble: {err[:200]}"})
+        speak(f"Worker {num} ran into trouble. {err[:160]}")
         return
-    write_status(status="done", summary=final, last_step="done")
-    panel_post({"type": "reply", "text": final or "(done)"})        # worker lane: full detail
-    panel_post({"type": "state", "lane": "worker", "state": "idle"})
+    update_worker(num, status="done", summary=final, last_step="done",
+                  session=sid, pid=None, last_active=time.time())
+    panel_post({"type": "reply", "text": final or "(done)"}, num)   # worker lane
+    panel_post({"type": "state", "state": "idle"}, num)
     # Surface the result AS IRIS ANSWERING — full text in the iris conversation so
-    # you SEE it, and a clean one-sentence spoken summary so you HEAR the answer
-    # (not the markdown header).
+    # you SEE it, and a clean one-sentence spoken summary so you HEAR the answer.
     panel_post({"type": "reply", "lane": "iris", "text": final or "(done)"})
     speak(spoken)
 
 
-def status_cli():
-    print(json.dumps(read_status()))
+# --- cleanup ----------------------------------------------------------------
+def cleanup(force=False, idle_secs=IDLE_SECS):
+    """Stop + remove workers idle longer than idle_secs. A worker that holds a
+    session (real conversation history) is preserved unless force=True, and is
+    reported under needs_confirm so iris can ask Paul before discarding it."""
+    now = time.time()
+    removed, needs_confirm, skipped = [], [], []
+    for k, v in read_registry().items():
+        num = int(k)
+        if is_running(v):
+            continue                             # never touch an active worker
+        last = v.get("last_active") or v.get("started") or now
+        idle = now - last
+        if idle < idle_secs:
+            skipped.append(num)
+            continue
+        has_history = bool(v.get("session"))
+        if has_history and not force:
+            needs_confirm.append({"num": num, "idle_min": round(idle / 60, 1),
+                                  "task": (v.get("task") or "")[:80]})
+            continue
+        stop(num)
+        remove_worker(num)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(session_path(num))
+        removed.append(num)
+    return {"removed": removed, "needs_confirm": needs_confirm,
+            "skipped_active_or_recent": skipped, "idle_secs": idle_secs}
+
+
+# --- CLI --------------------------------------------------------------------
+def _parse_worker_flag(args):
+    """Pull -w/--worker N and --all out of args; return (num_or_None, all_flag,
+    rest). num is None when not specified."""
+    num, all_flag, rest = None, False, []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-w", "--worker") and i + 1 < len(args):
+            try:
+                num = int(args[i + 1])
+            except ValueError:
+                pass
+            i += 2
+            continue
+        if a == "--all":
+            all_flag = True
+            i += 1
+            continue
+        rest.append(a)
+        i += 1
+    return num, all_flag, rest
+
+
+def status_cli(num=None):
+    if num is not None:
+        print(json.dumps(get_worker(num) or {"status": "idle", "num": num}))
+        return
+    reg = read_registry()
+    if not reg:                                  # legacy fallback for old readers
+        try:
+            with open(LEGACY_JSON) as f:
+                print(f.read())
+                return
+        except OSError:
+            pass
+    print(json.dumps(reg))
+
+
+def workers_cli():
+    reg = read_registry()
+    now = time.time()
+    out = []
+    for k in sorted(reg, key=lambda x: int(x)):
+        v = dict(reg[k])
+        v["alive"] = is_running(v)
+        last = v.get("last_active") or v.get("started") or now
+        v["idle_secs"] = round(now - last) if not v["alive"] else 0
+        out.append(v)
+    print(json.dumps(out))
 
 
 def main():
@@ -285,17 +499,33 @@ def main():
     if not args:
         status_cli(); return
     cmd = args[0]
+    if cmd == "_run":                            # _run <task> <cwd> <resume> <num>
+        run(args[1], args[2], args[3] == "1", int(args[4]))
+        return
+    num, all_flag, rest = _parse_worker_flag(args[1:])
     if cmd == "dispatch":
-        dispatch(args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else HOME)
+        dispatch(num, rest[0] if rest else "", rest[1] if len(rest) > 1 else HOME)
     elif cmd == "steer":
-        dispatch(args[1] if len(args) > 1 else "", args[2] if len(args) > 2 else HOME,
+        # steer targets a specific worker; default to worker-1 if unspecified.
+        dispatch(num if num is not None else 1,
+                 rest[0] if rest else "", rest[1] if len(rest) > 1 else HOME,
                  resume=True)
     elif cmd == "stop":
-        stop()
+        if all_flag or num is None:
+            stop_all()
+        else:
+            stop(num)
     elif cmd == "status":
-        status_cli()
-    elif cmd == "_run":
-        run(args[1], args[2], args[3] == "1")
+        status_cli(num)
+    elif cmd == "workers":
+        workers_cli()
+    elif cmd == "cleanup":
+        res = cleanup(force=("--force" in rest))
+        if "--json" in rest:
+            print(json.dumps(res))
+        else:
+            print(f"removed {res['removed']}, needs confirm "
+                  f"{[c['num'] for c in res['needs_confirm']]}")
     else:
         status_cli()
 

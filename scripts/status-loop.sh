@@ -28,20 +28,29 @@ INTERVAL="${IRIS_STATUS_INTERVAL:-60}"
 
 # Build the brief status string.
 build_status() {
-  local ver commit workers wjson
+  local ver commit workers wjson reg
   ver="$(cat "$IRIS_DIR/VERSION" 2>/dev/null || echo '?')"
   commit="$(git -C "$IRIS_DIR" log -1 --pretty='%h %s' 2>/dev/null || echo '?')"
 
+  # Count active (running) workers from the registry; fall back to the legacy
+  # single-worker file for older deploys.
   workers="unknown"
+  reg="$IRIS_DIR/brain/workers.json"
+  [ -f "$reg" ] || reg="$HOME/.cache/iris-talk/workers.json"
   wjson="$HOME/.cache/iris-talk/worker.json"
-  if [ -f "$wjson" ] && command -v jq >/dev/null 2>&1; then
-    local st task
+  if command -v jq >/dev/null 2>&1 && [ -f "$reg" ]; then
+    local n task
+    n="$(jq -r '[.[] | select(.status=="running")] | length' "$reg" 2>/dev/null || echo 0)"
+    task="$(jq -r 'first(.[] | select(.status=="running") | .task) // ""' "$reg" 2>/dev/null || echo '')"
+    if [ "${n:-0}" -gt 0 ]; then
+      workers="${n} active — ${task:0:60}"
+    else
+      workers="none"
+    fi
+  elif [ -f "$wjson" ] && command -v jq >/dev/null 2>&1; then
+    local st
     st="$(jq -r '.status // "idle"' "$wjson" 2>/dev/null || echo idle)"
-    task="$(jq -r '.task // ""' "$wjson" 2>/dev/null || echo '')"
-    case "$st" in
-      working|busy|dispatch) workers="1 active — ${task:0:60}" ;;
-      *)                     workers="none (${st})" ;;
-    esac
+    [ "$st" = "running" ] && workers="1 active" || workers="none (${st})"
   fi
 
   # Strip single quotes so the message survives SSH single-quote wrapping.

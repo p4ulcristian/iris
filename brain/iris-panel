@@ -19,9 +19,12 @@ Endpoints:
     GET  /            the panel UI
     GET  /stream      Server-Sent Events: every event, as ``data: {json}``
     GET  /usage       token usage + cost JSON (cached ~30s)
+    GET  /workers     live worker registry: one entry per numbered worker
     POST /event       brain -> panel: {type, ...}
     POST /chat        text in: {text} -> forwarded to the brain
     POST /say         {text} -> spoken aloud on Gaia (best-effort TTS)
+    POST /workers/cleanup  {force?} -> stop workers idle >10 min (force kills
+                           ones that still hold history)
     POST /reset       clear the conversation/history
     POST /close       ask the open panel window to close itself
 
@@ -31,6 +34,10 @@ Env:
     IRIS_BRAIN_BIN    brain binary on Olympus (default "iris-brain")
     IRIS_SAY_CMD      command that speaks stdin aloud on Gaia (default "iris-say")
     USAGE_TRACKER     path to usage-tracker.py (default: next to this script)
+    IRIS_WORKER_BIN   iris-worker binary for the /workers/cleanup sweep
+    IRIS_WORKERS_JSON worker registry path (default: ../brain/workers.json by the
+                      worker; the panel reads whatever the worker writes)
+    IRIS_WORKER_SWEEP idle-cleanup sweep interval in seconds (0 disables)
 """
 import json
 import os
@@ -47,6 +54,14 @@ BRAIN_BIN = os.environ.get("IRIS_BRAIN_BIN", "iris-brain")
 SAY_CMD = os.environ.get("IRIS_SAY_CMD", "iris-say")
 HERE = os.path.dirname(os.path.abspath(__file__))
 USAGE_TRACKER = os.environ.get("USAGE_TRACKER", os.path.join(HERE, "usage-tracker.py"))
+WORKER_BIN = os.environ.get("IRIS_WORKER_BIN",
+                            os.path.expanduser("~/.local/bin/iris-worker"))
+# The registry the worker writes (mirror its default so /workers reads it directly).
+_reg = os.path.expanduser("~/work/iris/brain/workers.json")
+if not os.path.isdir(os.path.dirname(_reg)):
+    _reg = os.path.expanduser("~/.cache/iris-talk/workers.json")
+WORKERS_JSON = os.environ.get("IRIS_WORKERS_JSON", _reg)
+SWEEP_SECS = int(os.environ.get("IRIS_WORKER_SWEEP", "120"))   # 0 disables
 
 HISTORY_MAX = 200
 _history = []                       # recent events (turns/replies/notes)
@@ -93,6 +108,61 @@ def usage():
     return data
 
 
+def _pid_alive(pid):
+    if not pid:
+        return False
+    try:
+        os.killpg(int(pid), 0)
+        return True
+    except (OSError, ProcessLookupError, ValueError):
+        return False
+
+
+def workers():
+    """Read the worker registry and decorate each entry with liveness + idle age,
+    sorted by worker number — the shape the /workers UI row consumes."""
+    try:
+        with open(WORKERS_JSON) as f:
+            reg = json.load(f)
+    except (OSError, ValueError):
+        reg = {}
+    now = time.time()
+    out = []
+    for k in sorted(reg, key=lambda x: int(x) if str(x).isdigit() else 0):
+        v = dict(reg[k])
+        alive = v.get("status") == "running" and _pid_alive(v.get("pid"))
+        v["alive"] = alive
+        last = v.get("last_active") or v.get("started") or now
+        v["idle_secs"] = 0 if alive else round(now - last)
+        out.append(v)
+    return out
+
+
+def worker_cleanup(force=False):
+    """Shell out to iris-worker cleanup; returns its JSON (removed/needs_confirm)."""
+    try:
+        cmd = [WORKER_BIN, "cleanup", "--json"] + (["--force"] if force else [])
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return json.loads(out.stdout) if out.stdout.strip() else {"error": out.stderr[:200]}
+    except Exception as e:                        # noqa: BLE001
+        return {"error": str(e)}
+
+
+def sweep_loop():
+    """Periodically retire workers idle >10 min. Never force: ones that still
+    hold history are surfaced as a note so iris can ask Paul before discarding."""
+    while True:
+        time.sleep(SWEEP_SECS)
+        res = worker_cleanup(force=False)
+        if res.get("removed"):
+            broadcast({"type": "note", "lane": "iris",
+                       "text": f"retired idle workers {res['removed']}"})
+        for c in res.get("needs_confirm", []):
+            broadcast({"type": "note", "lane": "iris",
+                       "text": f"worker-{c['num']} idle {c['idle_min']}m "
+                               f"(“{c['task']}”) — say “stop worker {c['num']}” to clear it"})
+
+
 def forward_to_brain(text):
     """Hand a typed message to the brain on Olympus; its reply comes back to us
     over /event (the brain posts the reply itself), so we just fire it off."""
@@ -133,6 +203,15 @@ header{padding:10px 16px;border-bottom:1px solid #1d2230;display:flex;
 #usage{margin-left:auto;display:flex;gap:18px;font-size:12px;color:#9aa3b8}
 #usage b{color:#e6e8ee;font-weight:600}
 #usage .cost{color:#6ee7a8}
+#workers{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px}
+#workers:empty{display:none}
+#workers .w{font-size:12px;padding:6px 10px;border-radius:10px;background:#141926;
+  border:1px solid #1d2230;display:flex;gap:8px;align-items:center;max-width:340px}
+#workers .w .dot{width:8px;height:8px;border-radius:50%;flex:none;background:#5b647a}
+#workers .w.run .dot{background:#6ee7a8}
+#workers .w.err .dot{background:#e07a7a}
+#workers .w .id{color:#e6e8ee;font-weight:600}
+#workers .w .t{color:#8b93a7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #log{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
 .msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word}
 .you{align-self:flex-end;background:#243049}
@@ -153,6 +232,7 @@ button{padding:10px 16px;border-radius:10px;border:0;background:#3358e0;
     <span id=u-models style="color:#7c869c"></span>
   </div>
 </header>
+<div id=workers></div>
 <div id=log></div>
 <footer>
   <input id=box placeholder="type to iris…" autocomplete=off>
@@ -172,7 +252,7 @@ function setState(s){document.getElementById('state').textContent=s;
   document.getElementById('eye').style.opacity=s==='idle'?0.5:1;}
 const es=new EventSource('/stream');
 es.onmessage=e=>{let ev;try{ev=JSON.parse(e.data)}catch(_){return}
-  if(ev.lane==='worker')return;
+  if(ev.lane&&ev.lane.indexOf('worker')===0){if(ev.type!=='state')refreshWorkers();return;}
   if(ev.type==='turn')add(ev.role==='you'?'you':'iris',ev.text);
   else if(ev.type==='reply')add('iris',ev.text);
   else if(ev.type==='note')add('note',ev.text);
@@ -193,6 +273,22 @@ async function refreshUsage(){try{const r=await fetch('/usage');const u=await r.
   document.getElementById('u-models').textContent=parts.join('  ·  ');
 }catch(_){}}
 refreshUsage();setInterval(refreshUsage,30000);
+const wbox=document.getElementById('workers');
+async function refreshWorkers(){try{const r=await fetch('/workers');const ws=await r.json();
+  wbox.innerHTML='';
+  ws.forEach(w=>{
+    const d=document.createElement('div');
+    const st=w.alive?'run':(w.status==='error'?'err':'');
+    d.className='w'+(st?' '+st:'');
+    const idle=w.alive?'':' · idle '+Math.round((w.idle_secs||0)/60)+'m';
+    const label=w.alive?(w.last_step||'working'):(w.status||'idle');
+    d.innerHTML='<span class=dot></span><span class=id>worker-'+w.num+'</span>'+
+      '<span class=t>'+(label+idle).replace(/[<>&]/g,'')+'</span>';
+    d.title=(w.task||'')+'\n'+(w.host||'')+' · '+(w.status||'');
+    wbox.appendChild(d);
+  });
+}catch(_){}}
+refreshWorkers();setInterval(refreshWorkers,10000);
 </script></body></html>"""
 
 
@@ -226,6 +322,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, PAGE, "text/html; charset=utf-8")
         elif self.path == "/usage":
             self._send(200, json.dumps(usage()))
+        elif self.path == "/workers":
+            self._send(200, json.dumps(workers()))
         elif self.path == "/stream":
             self._stream()
         elif self.path == "/health":
@@ -249,6 +347,9 @@ class Handler(BaseHTTPRequestHandler):
             if text:
                 say_aloud(text)
             self._send(200, b'{"ok":true}')
+        elif self.path == "/workers/cleanup":
+            res = worker_cleanup(force=bool(body.get("force")))
+            self._send(200, json.dumps(res))
         elif self.path == "/reset":
             with _lock:
                 _history.clear()
@@ -293,6 +394,9 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    if SWEEP_SECS > 0:
+        threading.Thread(target=sweep_loop, daemon=True).start()
+        log(f"idle-worker sweep every {SWEEP_SECS}s (bin={WORKER_BIN})")
     log(f"listening on :{PORT}  (brain ssh={BRAIN_SSH}, usage={USAGE_TRACKER})")
     try:
         srv.serve_forever()

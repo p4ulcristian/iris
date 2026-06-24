@@ -64,6 +64,15 @@ State lives in `~/.cache/iris-talk/` (session id, history, screenshot, state).
 - The voice endpoints are served by the **iris-stt** repo (`~/work/iris-stt`) on
   the iris-comms box (`10.99.0.2:4260`).
 
+## Workers (v1.0)
+
+Heavy work is done by **numbered workers** (`worker-1`, `worker-2`, …) that run in
+parallel — each an independent `claude -p` session with its own task and identity.
+iris auto-assigns the next free worker, or you can name one ("worker two, …").
+Live state is in `brain/workers.json`; the panel shows a row per worker at
+`/workers` and retires ones idle past 10 minutes. See `CLAUDE.md` for the CLI
+(`iris-worker dispatch|stop|status|workers|cleanup`).
+
 ## Roadmap
 
 - **Phase 1 (done):** push-to-talk-style toggle, context watcher, waybar eye + history.
