@@ -45,7 +45,7 @@ else
 fi
 
 # 4. core entry scripts exist and compile (catches a broken pull)
-for f in iris-brain iris-worker; do
+for f in brain/iris-brain brain/iris-worker; do
   if [ -f "$f" ]; then
     if python3 -m py_compile "$f" 2>/dev/null; then
       ok "$f compiles"
