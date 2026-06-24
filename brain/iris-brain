@@ -32,7 +32,7 @@ GAIA = os.environ.get("IRIS_GAIA", "paul@10.99.0.3")          # SSH target
 GAIA_PANEL = os.environ.get("IRIS_PANEL_URL", "http://10.99.0.3:4270")
 GAIA_WORKER = os.environ.get("IRIS_GAIA_WORKER", "~/.local/bin/iris-worker")
 SESSION_FILE = os.path.expanduser("~/.cache/iris-brain/session.id")
-MODEL = os.environ.get("IRIS_MODEL", "sonnet")
+MODEL = os.environ.get("IRIS_MODEL", "opus")     # claude-opus-4-8 (latest Opus)
 TTS_RATE = 24000
 
 FRONT_PERSONA = (

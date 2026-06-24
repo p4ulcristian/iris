@@ -47,7 +47,7 @@ iris-talk --text "…" # skip the mic; feed text straight to the brain (debug)
 
 | var | default | meaning |
 |-----|---------|---------|
-| `IRIS_MODEL` | `sonnet` | brain model; `opus` for harder questions, `""` for the CC default |
+| `IRIS_MODEL` | `opus` | brain model (`claude-opus-4-8`); `sonnet` to save cost, `""` for the CC default |
 | `IRIS_PTT_SOURCE` | `effect_output.j413-mic` | mic source (Mac built-in DSP) |
 | `IRIS_PTT_ENDPOINT` | `http://10.99.0.2:4260/stt/transcribe` | STT |
 | `IRIS_BRAIN_TIMEOUT` | `120` | seconds before the brain call is abandoned |

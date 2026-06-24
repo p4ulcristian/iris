@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""
+iris-panel — the live web panel for iris, running on GAIA (Paul's laptop).
+
+This is the small HTTP service the rest of iris already talks to on port 4270:
+
+  * the brain (on Olympus) POSTs turn/reply/state events to ``/event`` and
+    spoken replies to ``/say``;
+  * the Telegram bridge POSTs incoming messages to ``/chat`` and subscribes to
+    the ``/stream`` SSE feed to relay replies back;
+  * the waybar eye opens ``/`` in a chromium app window to show the live UI.
+
+It keeps a short in-memory history, fans every event out to ``/stream`` (SSE),
+and serves a single-page UI. New in v0.9: a **usage** panel — ``/usage`` runs
+``usage-tracker.py`` and returns today's token + cost numbers as JSON, which the
+UI shows in a header strip.
+
+Endpoints:
+    GET  /            the panel UI
+    GET  /stream      Server-Sent Events: every event, as ``data: {json}``
+    GET  /usage       token usage + cost JSON (cached ~30s)
+    POST /event       brain -> panel: {type, ...}
+    POST /chat        text in: {text} -> forwarded to the brain
+    POST /say         {text} -> spoken aloud on Gaia (best-effort TTS)
+    POST /reset       clear the conversation/history
+    POST /close       ask the open panel window to close itself
+
+Env:
+    IRIS_PANEL_PORT   default 4270
+    IRIS_BRAIN_SSH    ssh host for the Olympus brain (default "olympus-local")
+    IRIS_BRAIN_BIN    brain binary on Olympus (default "iris-brain")
+    IRIS_SAY_CMD      command that speaks stdin aloud on Gaia (default "iris-say")
+    USAGE_TRACKER     path to usage-tracker.py (default: next to this script)
+"""
+import json
+import os
+import queue
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+PORT = int(os.environ.get("IRIS_PANEL_PORT", "4270"))
+BRAIN_SSH = os.environ.get("IRIS_BRAIN_SSH", "olympus-local")
+BRAIN_BIN = os.environ.get("IRIS_BRAIN_BIN", "iris-brain")
+SAY_CMD = os.environ.get("IRIS_SAY_CMD", "iris-say")
+HERE = os.path.dirname(os.path.abspath(__file__))
+USAGE_TRACKER = os.environ.get("USAGE_TRACKER", os.path.join(HERE, "usage-tracker.py"))
+
+HISTORY_MAX = 200
+_history = []                       # recent events (turns/replies/notes)
+_state = {"state": "idle"}
+_subscribers = []                   # list[queue.Queue] for SSE
+_lock = threading.Lock()
+
+# /usage is expensive (scans every transcript) — cache the result briefly.
+_usage_cache = {"at": 0.0, "data": None}
+_USAGE_TTL = 30.0
+
+
+def log(*a):
+    print("[iris-panel]", *a, file=sys.stderr, flush=True)
+
+
+def broadcast(event):
+    """Record an event in history and push it to every SSE subscriber."""
+    with _lock:
+        if event.get("type") in ("turn", "reply", "note"):
+            _history.append(event)
+            del _history[:-HISTORY_MAX]
+        if event.get("type") == "state":
+            _state["state"] = event.get("state", "idle")
+        subs = list(_subscribers)
+    for q in subs:
+        try:
+            q.put_nowait(event)
+        except queue.Full:
+            pass
+
+
+def usage():
+    now = time.monotonic()
+    if _usage_cache["data"] is not None and now - _usage_cache["at"] < _USAGE_TTL:
+        return _usage_cache["data"]
+    try:
+        out = subprocess.run([sys.executable, USAGE_TRACKER, "--json"],
+                             capture_output=True, text=True, timeout=60)
+        data = json.loads(out.stdout) if out.returncode == 0 else {"error": out.stderr[:200]}
+    except Exception as e:                        # noqa: BLE001
+        data = {"error": str(e)}
+    _usage_cache.update(at=now, data=data)
+    return data
+
+
+def forward_to_brain(text):
+    """Hand a typed message to the brain on Olympus; its reply comes back to us
+    over /event (the brain posts the reply itself), so we just fire it off."""
+    def run():
+        try:
+            subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+                            BRAIN_SSH, f"{BRAIN_BIN} text"],
+                           input=text, text=True, timeout=180,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:                    # noqa: BLE001
+            log("brain forward failed:", e)
+            broadcast({"type": "note", "lane": "iris",
+                       "text": f"⚠ couldn't reach the brain: {e}"})
+    threading.Thread(target=run, daemon=True).start()
+
+
+def say_aloud(text):
+    def run():
+        try:
+            subprocess.run(SAY_CMD.split(), input=text, text=True, timeout=120,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as e:                    # noqa: BLE001
+            log("say failed:", e)
+    threading.Thread(target=run, daemon=True).start()
+
+
+PAGE = """<!doctype html><html><head><meta charset=utf-8>
+<title>iris</title><meta name=viewport content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,sans-serif;background:#0d0f14;color:#e6e8ee;
+  display:flex;flex-direction:column;height:100vh}
+header{padding:10px 16px;border-bottom:1px solid #1d2230;display:flex;
+  align-items:center;gap:14px;flex-wrap:wrap}
+#eye{font-size:20px}
+#state{color:#8b93a7;font-size:13px;text-transform:capitalize}
+#usage{margin-left:auto;display:flex;gap:18px;font-size:12px;color:#9aa3b8}
+#usage b{color:#e6e8ee;font-weight:600}
+#usage .cost{color:#6ee7a8}
+#log{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:80%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word}
+.you{align-self:flex-end;background:#243049}
+.iris{align-self:flex-start;background:#1a2030}
+.note{align-self:center;color:#8b93a7;font-size:12px;background:none}
+.role{font-size:11px;color:#7c869c;margin-bottom:2px}
+footer{padding:12px 16px;border-top:1px solid #1d2230;display:flex;gap:8px}
+input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid #2a3142;
+  background:#11141c;color:#e6e8ee;font:inherit}
+button{padding:10px 16px;border-radius:10px;border:0;background:#3358e0;
+  color:#fff;font:inherit;cursor:pointer}
+</style></head><body>
+<header>
+  <span id=eye>👁</span><span id=state>idle</span>
+  <div id=usage>
+    <span>today <b id=u-tok>—</b> tok</span>
+    <span>cost <b class=cost id=u-cost>—</b></span>
+    <span id=u-models style="color:#7c869c"></span>
+  </div>
+</header>
+<div id=log></div>
+<footer>
+  <input id=box placeholder="type to iris…" autocomplete=off>
+  <button id=send>send</button>
+</footer>
+<script>
+const log=document.getElementById('log'),box=document.getElementById('box');
+function add(role,text){
+  const d=document.createElement('div');
+  d.className='msg '+(role==='you'?'you':role==='note'?'note':'iris');
+  if(role!=='note'){const r=document.createElement('div');r.className='role';
+    r.textContent=role==='you'?'you':'iris';d.appendChild(r);}
+  d.appendChild(document.createTextNode(text));log.appendChild(d);
+  log.scrollTop=log.scrollHeight;
+}
+function setState(s){document.getElementById('state').textContent=s;
+  document.getElementById('eye').style.opacity=s==='idle'?0.5:1;}
+const es=new EventSource('/stream');
+es.onmessage=e=>{let ev;try{ev=JSON.parse(e.data)}catch(_){return}
+  if(ev.lane==='worker')return;
+  if(ev.type==='turn')add(ev.role==='you'?'you':'iris',ev.text);
+  else if(ev.type==='reply')add('iris',ev.text);
+  else if(ev.type==='note')add('note',ev.text);
+  else if(ev.type==='state')setState(ev.state);
+  else if(ev.type==='close')window.close();
+};
+function send(){const t=box.value.trim();if(!t)return;box.value='';add('you',t);
+  fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:t})});}
+document.getElementById('send').onclick=send;
+box.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+async function refreshUsage(){try{const r=await fetch('/usage');const u=await r.json();
+  const s=u.today_summary;if(!s)return;
+  document.getElementById('u-tok').textContent=(s.total_tokens||0).toLocaleString();
+  document.getElementById('u-cost').textContent='$'+(s.cost_usd||0).toFixed(2);
+  const m=s.by_model||{};const parts=Object.keys(m).sort()
+    .map(k=>k+' $'+(m[k].cost_usd||0).toFixed(2));
+  document.getElementById('u-models').textContent=parts.join('  ·  ');
+}catch(_){}}
+refreshUsage();setInterval(refreshUsage,30000);
+</script></body></html>"""
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):                    # quiet
+        pass
+
+    def _send(self, code, body=b"", ctype="application/json"):
+        if isinstance(body, str):
+            body = body.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _body(self):
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        if not n:
+            return {}
+        try:
+            return json.loads(self.rfile.read(n) or b"{}")
+        except ValueError:
+            return {}
+
+    def do_GET(self):
+        if self.path == "/" or self.path.startswith("/index"):
+            self._send(200, PAGE, "text/html; charset=utf-8")
+        elif self.path == "/usage":
+            self._send(200, json.dumps(usage()))
+        elif self.path == "/stream":
+            self._stream()
+        elif self.path == "/health":
+            self._send(200, json.dumps({"ok": True, "state": _state["state"]}))
+        else:
+            self._send(404, json.dumps({"error": "not found"}))
+
+    def do_POST(self):
+        body = self._body()
+        if self.path == "/event":
+            body.setdefault("lane", "iris")
+            broadcast(body)
+            self._send(200, b'{"ok":true}')
+        elif self.path == "/chat":
+            text = (body.get("text") or "").strip()
+            if text:
+                forward_to_brain(text)
+            self._send(200, b'{"ok":true}')
+        elif self.path == "/say":
+            text = (body.get("text") or "").strip()
+            if text:
+                say_aloud(text)
+            self._send(200, b'{"ok":true}')
+        elif self.path == "/reset":
+            with _lock:
+                _history.clear()
+            broadcast({"type": "note", "lane": "iris", "text": "— conversation reset —"})
+            self._send(200, b'{"ok":true}')
+        elif self.path == "/close":
+            broadcast({"type": "close"})
+            self._send(200, b'{"ok":true}')
+        else:
+            self._send(404, json.dumps({"error": "not found"}))
+
+    def _stream(self):
+        q = queue.Queue(maxsize=100)
+        with _lock:
+            _subscribers.append(q)
+            backlog = list(_history)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        try:
+            for ev in backlog:
+                self.wfile.write(f"data: {json.dumps(ev)}\n\n".encode())
+            self.wfile.write(f"data: {json.dumps({'type':'state','state':_state['state']})}\n\n".encode())
+            self.wfile.flush()
+            while True:
+                try:
+                    ev = q.get(timeout=20)
+                    self.wfile.write(f"data: {json.dumps(ev)}\n\n".encode())
+                except queue.Empty:
+                    self.wfile.write(b": keepalive\n\n")   # comment frame
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            with _lock:
+                if q in _subscribers:
+                    _subscribers.remove(q)
+
+
+def main():
+    srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    log(f"listening on :{PORT}  (brain ssh={BRAIN_SSH}, usage={USAGE_TRACKER})")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

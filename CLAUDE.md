@@ -11,7 +11,9 @@ just records why a terse, voice-shaped answer is correct here.
 
 Repo layout:
 - `brain/` — iris's executable mind & hands: `iris-brain` (front desk, runs on
-  Olympus) and `iris-worker` (background agent, runs on Gaia).
+  Olympus) and `iris-worker` (background agent, runs on Gaia). Also `iris-panel`
+  (the port-4270 web panel on Gaia: `/event` `/stream` `/chat` `/say` `/usage`)
+  and `usage-tracker.py` (scrapes `~/.claude/projects/` JSONL for token+cost).
 - `personality/` — canonical, human-readable persona prompts (`persona.md`). The
   live copies are embedded in the `brain/` scripts; keep the two in sync.
 - `memories/` — durable long-term facts iris carries between conversations.
