@@ -9,6 +9,9 @@ Two directions, two threads, stdlib only:
             Long-polls getUpdates (30s long poll). Each incoming text message
             from Paul is POSTed to the iris panel's `POST /chat` endpoint —
             exactly what the panel text box does — so iris's brain processes it.
+            Voice notes are downloaded (getFile), converted ogg->wav with
+            ffmpeg, transcribed by the Parakeet STT service (the same endpoint
+            iris-talk's PTT uses), and the transcript is forwarded as if typed.
 
   OUTBOUND  iris -> Telegram
             Subscribes to the panel's `GET /stream` Server-Sent Events feed and
@@ -33,6 +36,7 @@ or install iris-telegram-bridge.service as a systemd --user unit.
 """
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -44,6 +48,15 @@ ENV_FILE = os.path.join(IRIS_DIR, "config", "telegram.env")
 CHAT_ID_FILE = os.path.join(IRIS_DIR, "config", "telegram-chat-id")
 OFFSET_FILE = os.path.expanduser("~/.cache/iris-talk/telegram-offset")
 PANEL_URL = os.environ.get("IRIS_PANEL_URL", "http://127.0.0.1:4270").rstrip("/")
+
+# Voice transcription: download the Telegram voice note, convert ogg->wav with
+# ffmpeg, and POST it to the same Parakeet STT service iris-talk uses for PTT.
+STT_ENDPOINT = os.environ.get("IRIS_PTT_ENDPOINT",
+                              "http://10.99.0.2:4260/stt/transcribe")
+STT_API_KEY_FILE = os.path.expanduser("~/.config/iris-ptt/api_key")
+STT_LANGUAGE = os.environ.get("IRIS_PTT_LANG", "")
+VOICE_OGG = "/tmp/tg-voice.ogg"
+VOICE_WAV = "/tmp/tg-voice.wav"
 
 # How long after (re)connecting to /stream we treat events as historical backlog
 # (the panel replays the current turn on connect) and skip them, so we don't
@@ -128,6 +141,48 @@ def panel_chat(text):
     urllib.request.urlopen(req, timeout=10).read()
 
 
+# --- VOICE: Telegram voice note -> text (Parakeet STT) -----------------------
+
+def tg_download_file(file_id, dest):
+    """Resolve a Telegram file_id via getFile and download it to `dest`."""
+    q = urllib.parse.urlencode({"file_id": file_id})
+    req = urllib.request.Request(API + "/getFile?" + q)
+    resp = json.loads(urllib.request.urlopen(req, timeout=20).read())
+    if not resp.get("ok"):
+        raise RuntimeError(f"getFile failed: {resp}")
+    file_path = resp["result"]["file_path"]
+    url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+    with urllib.request.urlopen(url, timeout=60) as r, open(dest, "wb") as f:
+        f.write(r.read())
+
+
+def load_stt_key():
+    try:
+        with open(STT_API_KEY_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def transcribe_voice(file_id):
+    """Download a voice note, convert to wav, and return its STT transcript."""
+    tg_download_file(file_id, VOICE_OGG)
+    conv = subprocess.run(
+        ["ffmpeg", "-y", "-i", VOICE_OGG, "-ar", "16000", "-ac", "1", VOICE_WAV],
+        capture_output=True, text=True)
+    if conv.returncode != 0:
+        raise RuntimeError(f"ffmpeg failed: {conv.stderr.strip()[-300:]}")
+    cmd = ["curl", "-sS", "-m", "60", "-X", "POST",
+           "-H", f"X-API-Key: {load_stt_key()}", "-F", f"audio=@{VOICE_WAV}"]
+    if STT_LANGUAGE:
+        cmd += ["-F", f"language={STT_LANGUAGE}"]
+    cmd.append(STT_ENDPOINT)
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=70)
+    if out.returncode != 0:
+        raise RuntimeError(f"STT curl failed: {out.stderr.strip()}")
+    return json.loads(out.stdout).get("text", "").strip()
+
+
 # --- INBOUND: Telegram -> iris ----------------------------------------------
 
 def read_offset():
@@ -169,6 +224,19 @@ def inbound_loop():
             if cid is None:
                 continue
             remember_chat_id(cid)
+            # Voice note: transcribe it, then treat the transcript as text.
+            voice = msg.get("voice") or msg.get("audio") or msg.get("video_note")
+            if not text and voice and voice.get("file_id"):
+                try:
+                    text = transcribe_voice(voice["file_id"])
+                except Exception as e:     # noqa: BLE001
+                    log(f"inbound: voice transcription failed: {e}")
+                    tg_send(cid, f"⚠ couldn't transcribe voice message: {e}")
+                    continue
+                if not text:
+                    tg_send(cid, "⚠ I couldn't make out that voice message.")
+                    continue
+                log(f"inbound: transcribed voice -> {text!r}")
             if not text:
                 continue
             if text == "/start":
