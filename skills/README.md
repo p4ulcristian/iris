@@ -99,7 +99,11 @@ outbound messaging.
     text to the panel's `POST /chat` (`http://127.0.0.1:4270`, override with
     `IRIS_PANEL_URL`) — exactly like the panel text box. Records the sender's
     chat ID on first contact, replies to `/start`, persists the update offset in
-    `~/.cache/iris-talk/telegram-offset`.
+    `~/.cache/iris-talk/telegram-offset`. **Voice notes** are transcribed first:
+    the bridge downloads the `.ogg` (getFile), converts it to 16k mono wav with
+    `ffmpeg`, POSTs it to the Parakeet STT service (the same
+    `IRIS_PTT_ENDPOINT` / `X-API-Key` iris-talk's PTT uses), then forwards the
+    transcript to `/chat` exactly like a typed message.
   - *outbound* subscribes to the panel's `GET /stream` SSE feed and relays every
     iris **reply** event back to Telegram. Because *every* turn — voice or
     typed — emits `{"type":"reply"}` to the panel, this one hook covers voice
