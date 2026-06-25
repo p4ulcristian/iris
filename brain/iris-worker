@@ -219,6 +219,20 @@ def panel_post(event, num=None):
         pass
 
 
+def push_workers_update():
+    """Fan a workers-update SSE so the panel's worker cards refresh the instant a
+    worker starts, finishes or stops — instead of waiting for its 5s poll. We
+    re-read the panel's own decorated /workers list so the pushed payload matches
+    exactly what a poll would render."""
+    workers = []
+    try:
+        with urllib.request.urlopen(PANEL_URL + "/workers", timeout=1) as r:
+            workers = json.loads(r.read().decode("utf-8"))
+    except Exception:                            # noqa: BLE001
+        pass
+    panel_post({"type": "workers-update", "workers": workers})
+
+
 def spoken_summary(final):
     """Pick a clean, speakable sentence from the worker's result — the worker is
     told to END with a one-sentence spoken summary, so prefer the LAST prose line
@@ -271,6 +285,7 @@ def stop(num, announce=False):
         update_worker(num, status="idle", pid=None, last_active=time.time(),
                       last_step="stopped")
         panel_post({"type": "state", "state": "idle"}, num)
+        push_workers_update()
 
 
 def stop_all():
@@ -299,6 +314,7 @@ def dispatch(num, task, cwd, resume=False):
     with open(pid_path(num), "w") as f:
         f.write(str(pgid))
     update_worker(num, pid=pgid)
+    push_workers_update()                        # card appears immediately
     return num
 
 
@@ -395,6 +411,7 @@ def run(task, cwd, resume, num):
     if err and (not final):
         update_worker(num, status="error", summary=err[:300], last_step="error",
                       session=sid, pid=None, last_active=time.time())
+        push_workers_update()
         panel_post({"type": "reply", "text": f"⚠ {err[:200]}"}, num)
         panel_post({"type": "state", "state": "idle"}, num)
         # surface the failure in the iris conversation + speak it
@@ -404,6 +421,7 @@ def run(task, cwd, resume, num):
         return
     update_worker(num, status="done", summary=final, last_step="done",
                   session=sid, pid=None, last_active=time.time())
+    push_workers_update()
     panel_post({"type": "reply", "text": final or "(done)"}, num)   # worker lane
     panel_post({"type": "state", "state": "idle"}, num)
     # Surface the result AS IRIS ANSWERING — full text in the iris conversation so
@@ -438,6 +456,8 @@ def cleanup(force=False, idle_secs=IDLE_SECS):
         with contextlib.suppress(FileNotFoundError):
             os.unlink(session_path(num))
         removed.append(num)
+    if removed:
+        push_workers_update()                    # clear retired cards from the panel
     return {"removed": removed, "needs_confirm": needs_confirm,
             "skipped_active_or_recent": skipped, "idle_secs": idle_secs}
 
